@@ -296,11 +296,11 @@
 :root[data-theme*='light'] .flat-button,
 :root[data-theme*='light'] .transfer-segments button,
 :root[data-theme*='light'] .network-select,
-:root[data-theme*='light'] .ssh-grid input,
+:root[data-theme*='light'] .ssh-grid input:not(.selection-control),
 :root[data-theme*='light'] .ssh-grid .dropdown-select-trigger,
 :root[data-theme*='light'] .ssh-grid .ft-select-shell,
 :root[data-theme*='light'] .ssh-grid textarea,
-:root[data-theme*='light'] .connection-form input,
+:root[data-theme*='light'] .connection-form input:not(.selection-control),
 :root[data-theme*='light'] .connection-form .dropdown-select-trigger,
 :root[data-theme*='light'] .connection-form .ft-select-shell {
   background: var(--input-bg);

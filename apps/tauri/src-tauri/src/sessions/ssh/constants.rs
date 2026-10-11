@@ -15,13 +15,8 @@ const SFTP_UNAVAILABLE_FALLBACK: &str =
 /// russh-sftp 内部超时往往很长（30s+），这里强制收口到 8 秒。
 const SFTP_INIT_STEP_TIMEOUT: Duration = Duration::from_secs(8);
 
-/// Shell channel 建立阶段的单步超时。`channel_open_session` /
-/// `request_pty` / `request_shell` 任一卡住都会让 worker 永远起不来——
-/// 表现为"连接主机"loading 永不结束，所有后续命令（包括 Ctrl+C）都
-/// 进不了 cmd_rx。服务器在 PTY 协商阶段卡住（罕见但确实发生过，尤其
-/// 是某些嵌入式 dropbear / 网络设备）时，russh 默认无超时，会一直
-/// await。8 秒与 SFTP_INIT_STEP_TIMEOUT 对齐，足够覆盖正常 RTT 与
-/// 一次重试，同时不让用户对着 loading 望穿秋水。
+/// Optional metrics channel steps stay short so monitoring can degrade without
+/// affecting the terminal. Interactive shell startup uses ssh_connect_timeout.
 const SHELL_INIT_STEP_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// `probe_remote_platform` 总超时。该函数在 worker 主循环之前调用，

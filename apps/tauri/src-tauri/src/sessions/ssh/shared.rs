@@ -605,6 +605,16 @@ fn trim_string_front(value: &mut String, keep: usize) {
     value.drain(..start);
 }
 
+fn ssh_connect_timeout(profile: &Value) -> Duration {
+    seconds_from_profile(
+        profile,
+        "connectTimeoutSeconds",
+        SSH_TRANSPORT_TIMEOUT,
+        Duration::from_secs(5),
+        Duration::from_secs(300),
+    )
+}
+
 async fn wait_for_ssh_stage<T>(
     stage: &str,
     deadline: Duration,
