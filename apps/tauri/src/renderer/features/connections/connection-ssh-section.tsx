@@ -49,6 +49,7 @@ export function ConnectionSshSection({
   return (
     <div className="ssh-form-page">
       <ConnectionSshGeneralSection
+        connectionDefaults={connectionDefaults}
         form={form}
         groupOptions={groupOptions}
         isMacOs={isMacOs}

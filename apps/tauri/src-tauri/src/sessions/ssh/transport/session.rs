@@ -122,13 +122,7 @@ async fn open_session(
         .and_then(|a| a.as_str())
         .unwrap_or("password")
         .to_string();
-    let connect_timeout = seconds_from_profile(
-        profile,
-        "connectTimeoutSeconds",
-        SSH_TRANSPORT_TIMEOUT,
-        Duration::from_secs(5),
-        Duration::from_secs(300),
-    );
+    let connect_timeout = ssh_connect_timeout(profile);
     let trusted = trusted_host_fingerprint(profile);
     crate::services::logging::session(
         app,

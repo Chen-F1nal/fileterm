@@ -1,4 +1,11 @@
-import type { CreateProfileInput, SerialPortInfo, SessionType, SshDeviceMode } from '@fileterm/core'
+import type {
+  CreateProfileInput,
+  SerialPortInfo,
+  SessionType,
+  SshConnectionDefaults,
+  SshDeviceMode
+} from '@fileterm/core'
+import './connection-low-resource-mode.css'
 import { normalizeConnectionHost } from '@fileterm/shared'
 import { localizeSerialTerminalText, t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
@@ -6,8 +13,10 @@ import { DropdownSelect } from '../common/dropdown-select'
 import { SelectionControl } from '../common/selection-control'
 import { StableButtonContent } from '../common/stable-button-content'
 import type { ConnectionFormSetter } from './connection-modal-utils'
+import { isLowResourceSshMode, toggleLowResourceSshMode } from './connection-low-resource-mode'
 
 export function ConnectionSshGeneralSection({
+  connectionDefaults,
   form,
   groupOptions,
   isMacOs,
@@ -23,6 +32,7 @@ export function ConnectionSshGeneralSection({
   refreshSerialPorts,
   setForm
 }: {
+  connectionDefaults: SshConnectionDefaults
   form: CreateProfileInput
   groupOptions: string[]
   isMacOs: boolean
@@ -38,6 +48,7 @@ export function ConnectionSshGeneralSection({
   refreshSerialPorts(): Promise<void>
   setForm: ConnectionFormSetter
 }) {
+  const lowResourceMode = isLowResourceSshMode(form, connectionDefaults)
   return (
     <fieldset className="ssh-fieldset">
       <legend>{t.general}</legend>
@@ -424,6 +435,32 @@ export function ConnectionSshGeneralSection({
             ) : !supportsBuiltInRs485 && form.rs485Mode === 'half-duplex' ? (
               <p className="ssh-field-hint span-2">{t.serialRs485Unsupported}</p>
             ) : null}
+          </div>
+        ) : null}
+        {form.type === 'ssh' && !isNetworkDevice ? (
+          <div className="span-2 ssh-low-resource-mode">
+            <span className="ssh-low-resource-mode__label">{t.sshLowResourceModeLabel}:</span>
+            <div className="ssh-low-resource-mode__body">
+              <div className="ssh-low-resource-mode__controls">
+                <label className="ssh-checkbox advanced-toggle-label ssh-low-resource-mode__control">
+                  <SelectionControl
+                    aria-label={t.sshLowResourceMode}
+                    checked={lowResourceMode}
+                    type="checkbox"
+                    onChange={() => setForm((previous) => toggleLowResourceSshMode(previous, connectionDefaults))}
+                  />
+                  <span className="advanced-toggle-name">{lowResourceMode ? t.enabled : t.disabled}</span>
+                </label>
+                <span className="ssh-low-resource-mode__hint">{t.sshLowResourceModeSummary}</span>
+              </div>
+              <details className="ssh-low-resource-mode__details">
+                <summary>
+                  <AppIcon name="info" size={13} />
+                  <span>{t.description}</span>
+                </summary>
+                <p>{t.sshLowResourceModeHint}</p>
+              </details>
+            </div>
           </div>
         ) : null}
         <label className="full">

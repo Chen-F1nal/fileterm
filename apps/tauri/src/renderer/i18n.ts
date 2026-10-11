@@ -1139,6 +1139,11 @@ const zhCN = {
   proxyServer: '代理服务器',
   tunnel: '隧道',
   general: '常规',
+  sshLowResourceMode: '低占用 SSH 模式',
+  sshLowResourceModeLabel: '低占用模式',
+  sshLowResourceModeSummary: '开启后仅保留终端，连接超时至少 60 秒',
+  sshLowResourceModeHint:
+    '适合低内存或响应慢的主机。开启后关闭资源监控、后台命令通道和 SFTP，连接超时至少为 60 秒。手动开启任一功能或将超时调低后，模式自动熄灭。关闭模式恢复连接默认功能和 30 秒超时；保存并重新连接后生效。',
   auth: '认证',
   advanced: '高级',
   enabled: '启用',
@@ -3158,6 +3163,11 @@ const enUS: typeof zhCN = {
   proxyServer: 'Proxy Server',
   tunnel: 'Tunnel',
   general: 'General',
+  sshLowResourceMode: 'Low-resource SSH mode',
+  sshLowResourceModeLabel: 'Low-resource mode',
+  sshLowResourceModeSummary: 'Terminal only when enabled, with a connection timeout of at least 60 seconds',
+  sshLowResourceModeHint:
+    'For hosts with limited memory or slow responses. Disables resource monitoring, background commands and SFTP, with a connection timeout of at least 60 seconds. Enabling any of these features or lowering the timeout turns the mode off. Turning it off restores default features and a 30-second timeout. Save and reconnect to apply.',
   auth: 'Authentication',
   advanced: 'Advanced',
   enabled: 'Enabled',

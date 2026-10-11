@@ -144,16 +144,18 @@ async fn run_worker_loop(
     // ── Shell channel ──────────────────────────────────────────────────────
     // Bound channel creation and request enqueueing, and stop immediately
     // when the user closes the tab during startup.
+    // Slow hosts need the configured connection budget after authentication too.
+    let shell_startup_timeout = ssh_connect_timeout(profile);
     let shell_channel = wait_for_shell_startup_step(
         "channel_open_session",
-        SHELL_INIT_STEP_TIMEOUT,
+        shell_startup_timeout,
         &cancellation,
         handle.channel_open_session(),
     )
     .await?;
     wait_for_shell_startup_step(
         "request_pty",
-        SHELL_INIT_STEP_TIMEOUT,
+        shell_startup_timeout,
         &cancellation,
         shell_channel.request_pty(
             true,
@@ -178,7 +180,7 @@ async fn run_worker_loop(
     );
     wait_for_shell_startup_step(
         "request_shell",
-        SHELL_INIT_STEP_TIMEOUT,
+        shell_startup_timeout,
         &cancellation,
         shell_channel.request_shell(true),
     )

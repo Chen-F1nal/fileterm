@@ -245,7 +245,7 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
 .modal-card.ssh-modal .ssh-fieldset,
 .modal-card.ssh-modal .ssh-grid > *,
 .modal-card.ssh-modal .ssh-grid label,
-.modal-card.ssh-modal .ssh-grid input,
+.modal-card.ssh-modal .ssh-grid input:not(.selection-control),
 .modal-card.ssh-modal .ssh-grid select,
 .modal-card.ssh-modal .ssh-grid textarea,
 .modal-card.ssh-modal .ssh-grid .dropdown-select-trigger,
@@ -867,14 +867,14 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
   resize: vertical;
 }
 
-.ssh-grid input:hover:not(:disabled),
+.ssh-grid input:not(.selection-control):hover:not(:disabled),
 .ssh-grid textarea:hover:not(:disabled),
 .ssh-grid .dropdown-select-trigger:hover:not(:disabled),
 .ssh-grid .ft-select-shell:hover:not(:has(select:disabled)) {
   border-color: var(--border-default);
 }
 
-.ssh-grid input:focus,
+.ssh-grid input:not(.selection-control):focus,
 .ssh-grid textarea:focus,
 .ssh-grid .dropdown-select-trigger:focus-visible,
 .ssh-grid .ft-select-shell:focus-within {

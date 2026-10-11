@@ -1002,9 +1002,9 @@
   border-color: color-mix(in srgb, var(--text-primary) 10%, transparent);
 }
 
-:root:not([data-theme]) .ssh-grid input,
-:root:not([data-theme*='light']) .ssh-grid input,
-:root[data-theme='default'] .ssh-grid input,
+:root:not([data-theme]) .ssh-grid input:not(.selection-control),
+:root:not([data-theme*='light']) .ssh-grid input:not(.selection-control),
+:root[data-theme='default'] .ssh-grid input:not(.selection-control),
 :root:not([data-theme]) .ssh-grid .dropdown-select-trigger,
 :root:not([data-theme*='light']) .ssh-grid .dropdown-select-trigger,
 :root[data-theme='default'] .ssh-grid .dropdown-select-trigger,
@@ -1014,9 +1014,9 @@
 :root:not([data-theme]) .ssh-grid textarea,
 :root:not([data-theme*='light']) .ssh-grid textarea,
 :root[data-theme='default'] .ssh-grid textarea,
-:root:not([data-theme]) .connection-form input,
-:root:not([data-theme*='light']) .connection-form input,
-:root[data-theme='default'] .connection-form input,
+:root:not([data-theme]) .connection-form input:not(.selection-control),
+:root:not([data-theme*='light']) .connection-form input:not(.selection-control),
+:root[data-theme='default'] .connection-form input:not(.selection-control),
 :root:not([data-theme]) .connection-form .dropdown-select-trigger,
 :root:not([data-theme*='light']) .connection-form .dropdown-select-trigger,
 :root[data-theme='default'] .connection-form .dropdown-select-trigger,

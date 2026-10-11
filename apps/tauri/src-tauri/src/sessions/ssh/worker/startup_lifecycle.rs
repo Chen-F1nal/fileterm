@@ -33,7 +33,8 @@ async fn run_with_auxiliary_startup<T>(
 
 #[cfg(test)]
 mod startup_lifecycle_tests {
-    use super::{run_with_auxiliary_startup, wait_for_shell_startup_step};
+    use super::{run_with_auxiliary_startup, ssh_connect_timeout, wait_for_shell_startup_step};
+    use serde_json::json;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -41,6 +42,35 @@ mod startup_lifecycle_tests {
     use std::time::Duration;
     use tokio::sync::{mpsc, oneshot};
     use tokio_util::sync::CancellationToken;
+
+    #[test]
+    fn shell_startup_uses_the_bounded_connection_budget() {
+        for (profile, seconds) in [
+            (json!({}), 30),
+            (json!({"connectTimeoutSeconds": 60}), 60),
+            (json!({"connectTimeoutSeconds": 1}), 5),
+            (json!({"connectTimeoutSeconds": 900}), 300),
+            (json!({"connectTimeoutSeconds": "invalid"}), 30),
+        ] {
+            assert_eq!(ssh_connect_timeout(&profile), Duration::from_secs(seconds));
+        }
+    }
+
+    #[tokio::test]
+    async fn shell_startup_accepts_a_response_after_the_old_eight_second_limit() {
+        let cancellation = CancellationToken::new();
+        let result = wait_for_shell_startup_step(
+            "channel_open_session",
+            ssh_connect_timeout(&json!({})),
+            &cancellation,
+            async {
+                tokio::time::sleep(Duration::from_secs(9)).await;
+                Ok::<_, String>(42)
+            },
+        )
+        .await;
+        assert_eq!(result.unwrap(), 42);
+    }
 
     #[tokio::test]
     async fn cancelling_stalled_shell_startup_drops_the_operation() {

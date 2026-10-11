@@ -51,9 +51,9 @@
   background: var(--bg-hover);
 }
 
-:root:not([data-theme]) .ssh-grid input,
-:root:not([data-theme*='light']) .ssh-grid input,
-:root[data-theme='default'] .ssh-grid input,
+:root:not([data-theme]) .ssh-grid input:not(.selection-control),
+:root:not([data-theme*='light']) .ssh-grid input:not(.selection-control),
+:root[data-theme='default'] .ssh-grid input:not(.selection-control),
 :root:not([data-theme]) .ssh-grid .dropdown-select-trigger,
 :root:not([data-theme*='light']) .ssh-grid .dropdown-select-trigger,
 :root[data-theme='default'] .ssh-grid .dropdown-select-trigger,
@@ -87,9 +87,9 @@
   color: var(--text-main);
 }
 
-:root:not([data-theme]) .connection-form input,
-:root:not([data-theme*='light']) .connection-form input,
-:root[data-theme='default'] .connection-form input,
+:root:not([data-theme]) .connection-form input:not(.selection-control),
+:root:not([data-theme*='light']) .connection-form input:not(.selection-control),
+:root[data-theme='default'] .connection-form input:not(.selection-control),
 :root:not([data-theme]) .connection-form .dropdown-select-trigger,
 :root:not([data-theme*='light']) .connection-form .dropdown-select-trigger,
 :root[data-theme='default'] .connection-form .dropdown-select-trigger,
@@ -100,18 +100,18 @@
   color: var(--text-main);
 }
 
-:root:not([data-theme]) .connection-form input:focus,
-:root:not([data-theme*='light']) .connection-form input:focus,
-:root[data-theme='default'] .connection-form input:focus,
+:root:not([data-theme]) .connection-form input:not(.selection-control):focus,
+:root:not([data-theme*='light']) .connection-form input:not(.selection-control):focus,
+:root[data-theme='default'] .connection-form input:not(.selection-control):focus,
 :root:not([data-theme]) .connection-form .dropdown-select-trigger:focus-visible,
 :root:not([data-theme*='light']) .connection-form .dropdown-select-trigger:focus-visible,
 :root[data-theme='default'] .connection-form .dropdown-select-trigger:focus-visible,
 :root:not([data-theme]) .connection-form .ft-select-shell:focus-within,
 :root:not([data-theme*='light']) .connection-form .ft-select-shell:focus-within,
 :root[data-theme='default'] .connection-form .ft-select-shell:focus-within,
-:root:not([data-theme]) .ssh-grid input:focus,
-:root:not([data-theme*='light']) .ssh-grid input:focus,
-:root[data-theme='default'] .ssh-grid input:focus,
+:root:not([data-theme]) .ssh-grid input:not(.selection-control):focus,
+:root:not([data-theme*='light']) .ssh-grid input:not(.selection-control):focus,
+:root[data-theme='default'] .ssh-grid input:not(.selection-control):focus,
 :root:not([data-theme]) .ssh-grid .dropdown-select-trigger:focus-visible,
 :root:not([data-theme*='light']) .ssh-grid .dropdown-select-trigger:focus-visible,
 :root[data-theme='default'] .ssh-grid .dropdown-select-trigger:focus-visible,
