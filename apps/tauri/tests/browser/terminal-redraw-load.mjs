@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
+import { loadTypeScript } from './helpers/load-typescript.mjs'
 const root = fileURLToPath(new URL('../../../../', import.meta.url)).replace(/\/$/, '')
 const require = createRequire(root + '/package.json')
-const ts = require('typescript')
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
 const browser = await engine.launch({
@@ -36,12 +36,7 @@ try {
       ['components/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
       ['app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter']
     ]) {
-      let code = ts
-        .transpileModule(readFileSync(root + '/apps/tauri/src/renderer/' + file + '.ts', 'utf8'), {
-          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }
-        })
-        .outputText.replace(/^export /gm, '')
-      await page.addScriptTag({ content: code + `\nwindow.${name}=${name};\n//# sourceURL=${file}.js` })
+      await loadTypeScript(page, root + '/apps/tauri/src/renderer/' + file + '.ts', name)
     }
     const result = await page.evaluate(async () => {
       const terminal = new window.Terminal({

@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { readFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { loadTypeScript } from './helpers/load-typescript.mjs'
 
 const require = createRequire(import.meta.url)
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const sharp = require(process.env.SHARP_MODULE_PATH || 'sharp')
-const ts = require('typescript')
 const root = new URL('../../../../', import.meta.url)
 const source = new URL('../../src/renderer/', import.meta.url)
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
@@ -34,26 +34,13 @@ try {
         await document.fonts.load('24px "Noto Sans SC"')
       })
       await page.addScriptTag({ path: fileURLToPath(new URL('node_modules/@xterm/xterm/lib/xterm.js', root)) })
-      const code = ts
-        .transpileModule(readFileSync(new URL('components/terminal-symbol-glyph-renderer.ts', source), 'utf8'), {
-          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }
-        })
-        .outputText.replace('export function', 'function')
-      await page.addScriptTag({ content: `${code}\nwindow.registerSymbols = registerTerminalSymbolGlyphRenderer` })
-      const blockCode = ts
-        .transpileModule(readFileSync(new URL('components/terminal-block-glyph-renderer.ts', source), 'utf8'), {
-          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }
-        })
-        .outputText.replace('export function', 'function')
-      await page.addScriptTag({ content: `${blockCode}\nwindow.registerBlocks = registerTerminalBlockGlyphRenderer` })
-      const selectionCode = ts
-        .transpileModule(readFileSync(new URL('components/terminal-selection-renderer.ts', source), 'utf8'), {
-          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }
-        })
-        .outputText.replace('export function', 'function')
-      await page.addScriptTag({
-        content: `${selectionCode}\nwindow.registerSelection = registerTerminalSelectionRenderer`
-      })
+      for (const [file, symbol] of [
+        ['terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
+        ['terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
+        ['terminal-selection-renderer', 'registerTerminalSelectionRenderer']
+      ]) {
+        await loadTypeScript(page, fileURLToPath(new URL(`components/${file}.ts`, source)), symbol)
+      }
       for (const glyph of ['─', '━', '═']) {
         const results = []
         for (const fixed of [false, true]) {
@@ -71,9 +58,9 @@ try {
               })
               terminal.open(document.getElementById('host'))
               if (fixed) {
-                window.registerSelection(terminal)
-                window.registerSymbols(terminal)
-                window.blocks = window.registerBlocks(terminal)
+                window.registerTerminalSelectionRenderer(terminal)
+                window.registerTerminalSymbolGlyphRenderer(terminal)
+                window.blocks = window.registerTerminalBlockGlyphRenderer(terminal)
               }
               window.terminal = terminal
               // Alternating ANSI spans also expose joins between independent DOM runs.

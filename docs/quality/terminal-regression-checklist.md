@@ -335,6 +335,21 @@ macOS `SFNSMono.ttf` 通过 WebKit 对照检查。修复版本在采样区域没
 spans、合并文本、特殊符号/CJK/组合字符混排、部分选区前景与清除、绘制器销毁。
 横线复用块字符的字符格位图，修改时同时重跑上面的符号遮挡、鼠标拖选和块字符颜色回归。
 
+运行 `terminal-box-drawing.mjs` 检查整个 U+2500–U+257F 线框区。JetBrains Mono、Cascadia
+各覆盖 12/13/14/24px 字号与 100%/125%/150%/200% DPI，验证轻线、粗线、双线、圆角
+表格的连续性，双线交叉处保留 Unicode 定义的通道，虚线保留有意的间隔。
+同时检查 CJK/组合字符列宽、部分选区、反显、备用 buffer、字号/尺寸变化、销毁和空闲收敛。
+几何回归由 `terminal-box-drawing.test.mjs` 纳入 renderer 门禁。
+
+原生 FileTerm Dev 本地终端可运行 `node apps/tauri/tests/fixtures/terminal-box-drawing.mjs`
+（从仓库根目录运行，或使用文件绝对路径）。该程序仅输出 QA 表格/ANSI/特殊符号，窗口改变
+尺寸时重绘，`Ctrl+C` 结束。通过真实鼠标拖选、终端字号与窗口大小变化复查，不能只看浏览器。
+非整数 DPI 下细线至少占一 CSS 像素，再取整到设备像素，避免小字号变成不足一 CSS 像素的发丝线。
+
+2026-10-13：Windows 11 开发版 WebView2 原生本地 ConPTY 验证中文表格、单双/粗线、圆角、
+ANSI 背景、反显、块字符和鼠标拖选，以及默认字号与字号变化；浏览器像素矩阵和持续重绘通过。
+Windows 10、macOS、Linux 原生环境仍需分别复查；本机未安装 WebKit 测试引擎。
+
 ## 性能与长期运行
 
 - `tests/browser/terminal-redraw-load.mjs`：持续 60 秒 ANSI/CJK/符号重绘及普通/备用缓冲区切换；

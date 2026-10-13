@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { loadTypeScript } from './helpers/load-typescript.mjs'
 
 const require = createRequire(import.meta.url)
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const sharp = require(process.env.SHARP_MODULE_PATH || 'sharp')
-const ts = require('typescript')
 const root = new URL('../../../../', import.meta.url)
 const source = new URL('../../src/renderer/components/', import.meta.url)
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
@@ -40,12 +40,7 @@ try {
       ['terminal-symbol-glyph-renderer.ts', 'registerTerminalSymbolGlyphRenderer'],
       ['terminal-block-glyph-renderer.ts', 'registerTerminalBlockGlyphRenderer']
     ]) {
-      const code = ts
-        .transpileModule(readFileSync(new URL(file, source), 'utf8'), {
-          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }
-        })
-        .outputText.replace('export function', 'function')
-      await page.addScriptTag({ content: `${code}\nwindow.${symbol} = ${symbol}` })
+      await loadTypeScript(page, fileURLToPath(new URL(file, source)), symbol)
     }
     for (const fixed of [false, true]) {
       await page.evaluate(

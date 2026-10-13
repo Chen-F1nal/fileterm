@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { isBoxDrawingGlyph } from './terminal-graphic-glyphs/box-drawing'
 
 const SOURCE_CLASS = 'xterm-fitted-symbol-source'
 type SourceStyle = { width: string; spacing: string; text: string }
@@ -48,8 +49,9 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       context.font = font
       const fits = cells.map((cell) => {
         if (!/[\p{Symbol}\p{Punctuation}]/u.test(cell.text)) return undefined
-        // Horizontal rules need their native edge overhang to join adjacent cells.
-        if (/^[\u2500\u2501\u2550]$/u.test(cell.text)) return undefined
+        // Box drawing belongs to the cell-geometry renderer. Fitting only some
+        // arms to font ink breaks the shared grid at corners and intersections.
+        if (cell.text.length === 1 && isBoxDrawingGlyph(cell.text.codePointAt(0)!)) return undefined
         const key = `${font}\n${cell.text}`
         let ink = metrics.get(key)
         if (!ink) {
