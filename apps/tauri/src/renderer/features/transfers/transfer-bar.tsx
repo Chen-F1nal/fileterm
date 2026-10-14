@@ -1,4 +1,4 @@
-import type { WorkspaceSessionSource } from '@fileterm/core'
+import type { SshProfile, WorkspaceSessionSource } from '@fileterm/core'
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
 import { StatusIndicator, type StatusIndicatorStatus } from '../common/status-indicator'
@@ -7,17 +7,11 @@ function sessionSourceLabel(source: WorkspaceSessionSource) {
   return source === 'mcp' ? t.sessionSourceMcp : t.sessionSourceCli
 }
 
-type JumpHostSummary = {
-  name: string
-  host: string
-  port: number
-}
-
 export function TransferBar({
   activeCount,
   activeTabId,
   activeTabStatus,
-  activeJumpHost,
+  activeJumpHosts,
   activeTabSource,
   fullWidth = false,
   isPending,
@@ -27,7 +21,7 @@ export function TransferBar({
   activeCount: number
   activeTabId?: string | null
   activeTabStatus?: StatusIndicatorStatus | null
-  activeJumpHost?: JumpHostSummary | null
+  activeJumpHosts?: SshProfile[]
   activeTabSource?: WorkspaceSessionSource | null
   fullWidth?: boolean
   isPending: boolean
@@ -68,14 +62,14 @@ export function TransferBar({
             ) : null}
           </span>
         ) : null}
-        {activeTabId && activeJumpHost ? (
+        {activeTabId && activeJumpHosts?.length ? (
           <span
-            aria-label={`${t.viaJumpHost}: ${activeJumpHost.name}`}
+            aria-label={`${t.viaJumpHost}: ${activeJumpHosts.map((hop) => hop.name).join(' → ')}`}
             className="transfer-session-jump"
-            title={`${t.viaJumpHost}: ${activeJumpHost.name} (${activeJumpHost.host}:${activeJumpHost.port})`}
+            title={`${t.viaJumpHost}: ${activeJumpHosts.map((hop) => hop.name).join(' → ')} (${activeJumpHosts.map((hop) => `${hop.host}:${hop.port}`).join(' → ')})`}
           >
             <span className="transfer-session-jump-label">{t.viaJumpHost}</span>
-            <span className="transfer-session-jump-name">{activeJumpHost.name}</span>
+            <span className="transfer-session-jump-name">{activeJumpHosts.map((hop) => hop.name).join(' → ')}</span>
           </span>
         ) : null}
       </div>

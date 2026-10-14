@@ -30,7 +30,7 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - 本地文件读写
 - SSH 会话连接
 - SSH shell 输出接入
-- SSH keyboard-interactive/MFA、SOCKS5/HTTP outbound proxy、单级 Jump Host 与运行时 `-L/-R/-D` tunnel service；隧道运行状态归属具体 workspace tab，断线自动回收。
+- SSH keyboard-interactive/MFA、SOCKS5/HTTP outbound proxy、多级 Jump Host（最多 8 个跳板） 与运行时 `-L/-R/-D` tunnel service；隧道运行状态归属具体 workspace tab，断线自动回收。
 - SSH 私钥库：私钥、元数据和可选口令分离存储；连接 profile 仅保存 `privateKeyId`，口令交互通过 `ssh:interaction` 返回 renderer。
 - SSH 私钥导入同时支持文件和临时文本输入；文本只在导入弹窗与一次 IPC 调用期间存在，不进入 profile、workspace snapshot 或日志。
 - 终端写入与 resize IPC
@@ -57,7 +57,7 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 ### 2.1 Rust/Tauri 迁移边界
 
 - Tauri bridge 位于 `apps/tauri/src/bridge/tauri-api.ts`，Rust commands/services/sessions 位于 `apps/tauri/src-tauri/src/`；仓库内不存在第二个运行时目录。
-- Tauri 当前已覆盖桌面壳、JSON 存储、Workspace snapshot、可迁移的 SSH 私钥库，以及 russh SSH shell/SFTP/MFA/host verification、系统指标、CWD 跟随、重连水化、自动重连、远程编码、递归 chmod、单级 Jump Host、SOCKS5/HTTP CONNECT 代理和运行时 SSH `-L/-R/-D` 隧道。
+- Tauri 当前已覆盖桌面壳、JSON 存储、Workspace snapshot、可迁移的 SSH 私钥库，以及 russh SSH shell/SFTP/MFA/host verification、系统指标、CWD 跟随、重连水化、自动重连、远程编码、递归 chmod、多级 Jump Host（最多 8 个跳板）、SOCKS5/HTTP CONNECT 代理和运行时 SSH `-L/-R/-D` 隧道。
 - Tauri 已覆盖 Transfer、FTP/FTPS、Telnet、Serial、WebDAV 同步及 SSH 网络能力；Phase 3/4 的真实服务、实体设备和三平台验收仍是发行候选门禁。SFTP 被服务端拒绝时，Tauri 保留 SSH shell/隧道，并将文件通道故障单独广播到 renderer，而不误报为整条 SSH 连接失败。
 - SSH shell 与 SFTP 可能处于不同的文件系统根；`shellCwd` 保留 Shell 物理路径，`remotePath` 保存当前文件通道的路径：user 模式为 SFTP 命名空间，root 模式为 Shell 物理路径。CWD 跟随先尝试原路径，遇到明确 `NoSuchFile` 后按实际 `/volumeN`、`/var/services` 和 Home chroot 候选探测，无法确认时保留最近有效的 SFTP 目录。初始 SFTP 目录明确不存在时，后台初始化保留错误提示，并依次验证服务器当前目录 `.` 与 SFTP `/`；成功目录与列表一起更新，避免缺失账号 home 导致空文件区。完整背景、群晖示例和排查方式见 [ADR-0006](./decisions/0006-ssh-sftp-path-namespaces.md)。
 - SSH 初始文件目录以 SFTP `canonicalize(".")` 返回的服务端 Home 为准，不写死 `/volume1`、`/home` 或 `/usr/home`；初始目录列表、符号链接元数据和取消路径均有独立超时收口。远程系统指标对 FreeBSD 优先使用官方 `rctl`/`quota` 账号接口，缺失时回退到 `sysctl`/`swapinfo`/`df`/`ps` 主机级基础命令，不复用 Linux `/proc` 采集器；共享托管主机的 `devil info limits` 仅作为提供商补充来源。完整兼容边界、Debian 12 与 Serv00 记录见 [ADR-0007](./decisions/0007-portable-ssh-sftp-home-and-freebsd.md)。
@@ -517,6 +517,15 @@ interface WorkspaceTab {
 - 同一个目标主机
 - 终端与文件面板天然联动
 - 未来可扩展端口转发、远端命令、路径跟随
+
+### SSH 多级跳板生命周期
+
+SSH profile 继续通过 `jumpProfileId` 引用上游连接，最多经过 8 个普通 SSH 跳板。
+后端在打开网络前解析完整链路并校验 SSH 类型、引用、循环、端口及逐节点的 proxy/jump
+互斥规则，再从最外层依次通过 `direct-tcpip` 建立 SSH 会话。每跳独立认证和校验主机
+指纹，`hopIndex` 按实际路径递增；终端、SFTP 和运行时转发使用最终目标的会话。
+整条链的 handles 由当前连接拥有，认证失败、取消、测试完成或关闭会话时显式断开。
+连接表单和工作区底部显示已解析的跳板路径，候选项排除循环和失效链路。
 
 ### FTP
 

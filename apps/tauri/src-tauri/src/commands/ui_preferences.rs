@@ -612,28 +612,37 @@ fn resolve_profile_with_connection_defaults(
     Value::Object(resolved)
 }
 
-fn resolve_profile_for_session(app: &AppHandle, profile: &Value) -> Result<Value, AppError> {
+// Tests use the edited form; live sessions use the latest saved credentials and settings.
+fn session_profile_input<'a>(
+    profile: &'a Value,
+    profiles: &'a [Value],
+    prefer_saved_profile: bool,
+) -> &'a Value {
+    if prefer_saved_profile {
+        if let Some(current) = profile.get("id").and_then(Value::as_str).and_then(|id| {
+            profiles.iter().find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(id))
+        }) {
+            return current;
+        }
+    }
+    profile
+}
+
+fn resolve_profile_for_session(
+    app: &AppHandle,
+    profile: &Value,
+    prefer_saved_profile: bool,
+) -> Result<Value, AppError> {
     let preferences = app_get_ui_preferences(app.clone())?;
     // Opening a profile starts from the public profiles.json record. Resolve
     // reusable proxy/tunnel references from the canonical stores here so a
     // connection always sees the latest shared definition instead of the
     // copied values that happened to be present when it was edited.
-    let mut effective_profile = profile.clone();
     let (profiles, _) = crate::services::profile_ops::read_and_heal_profiles(app)?;
-    if let Some(current) = profile
-        .get("id")
-        .and_then(Value::as_str)
-        .and_then(|id| {
-            profiles
-                .iter()
-                .find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(id))
-        })
-    {
-        effective_profile = current.clone();
-    }
+    let effective_profile = session_profile_input(profile, &profiles, prefer_saved_profile);
 
     let mut resolved = resolve_profile_with_connection_defaults(
-        &effective_profile,
+        effective_profile,
         &preferences.connection_defaults,
     );
     if resolved.get("type").and_then(Value::as_str) == Some("ssh") {

@@ -1,0 +1,22 @@
+.ssh-jump-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ssh-jump-route li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ssh-jump-route li + li::before {
+  content: '→';
+  margin-right: 6px;
+  color: var(--text-muted);
+}

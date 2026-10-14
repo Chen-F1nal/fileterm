@@ -616,6 +616,17 @@ mod ui_preferences_tests {
     };
 
     #[test]
+    fn connection_tests_keep_unsaved_jump_route_and_credentials() {
+        let saved = serde_json::json!({"id":"target", "type":"ssh", "jumpProfileId":"old", "password":"saved"});
+        let edited = serde_json::json!({"id":"target", "type":"ssh", "jumpProfileId":"new", "password":"edited"});
+        let profiles = vec![saved.clone()];
+        assert_eq!(super::session_profile_input(&edited, &profiles, false), &edited);
+        assert_eq!(super::session_profile_input(&edited, &profiles, true), &saved);
+        let new_profile = serde_json::json!({"type":"ssh", "jumpProfileId":"new"});
+        assert_eq!(super::session_profile_input(&new_profile, &profiles, true), &new_profile);
+    }
+
+    #[test]
     fn normalizes_theme_config_colors_fonts_and_variant() {
         let mut config = default_theme_config();
         config.variant = "light".to_string();

@@ -2324,7 +2324,7 @@ mod tests {
             &jump_profile,
             "bastion.example",
             22,
-            SshAuthenticationTarget::JumpHost,
+            SshAuthenticationTarget::JumpHost(0),
             Some("main".to_string()),
             CancellationToken::new(),
         );
@@ -2334,7 +2334,7 @@ mod tests {
             &target_profile,
             "server.example",
             2222,
-            SshAuthenticationTarget::Target,
+            SshAuthenticationTarget::Target(1),
             Some("main".to_string()),
             CancellationToken::new(),
         );
@@ -3000,4 +3000,5 @@ mod tests {
         assert!(sha256_kex_pos < sha1_kex_pos);
         assert!(sha1_kex_pos < g1_pos);
     }
+    include!("transport/route_tests.rs");
 }

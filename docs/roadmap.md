@@ -10,7 +10,7 @@
 
 - 运行时核对：Tauri 位于 `apps/tauri`（`@fileterm/tauri`），是唯一可运行入口，拥有独立 renderer、构建和本地数据目录；仓库不存在第二个运行时 workspace。
 - Phase 0–2 的主体代码已落地：Tauri bridge/contract test、桌面壳、Rust JSON 存储、Workspace snapshot 与历史用户数据的一次性可回滚迁移已经落地；Phase 0 在 renderer mount 前等待原生 metadata，并保留原生拖放路径直到目标成功消费，Phase 1 已补原生 File/View/Window 菜单与文件编辑器关闭取消状态；仍需实际 Tauri UI 手测，不能按“发行验收完成”表述。
-- Phase 3 的 russh SSH 主链路已实现：受管 SSH 私钥库与口令交互、shell、SFTP、MFA、host verification、系统指标、CWD/远端用户跟随、重连水化、自动重连、远程编码、递归 chmod、单级 Jump Host、SOCKS5/HTTP CONNECT 出站代理及运行时 SSH `-L/-R/-D` 隧道均已接入 `apps/tauri/src-tauri`。
+- Phase 3 的 russh SSH 主链路已实现：受管 SSH 私钥库与口令交互、shell、SFTP、MFA、host verification、系统指标、CWD/远端用户跟随、重连水化、自动重连、远程编码、递归 chmod、多级 Jump Host（最多 8 个跳板）、SOCKS5/HTTP CONNECT 出站代理及运行时 SSH `-L/-R/-D` 隧道均已接入 `apps/tauri/src-tauri`。
 - Phase 3 已有本地 OpenSSH 的认证、exec、SFTP、HTTP/SOCKS5 代理、local 与 dynamic direct-tcpip 回归；MFA 使用真实 SSH 协议夹具验证。真实 sshd 的跳板、远程转发、sudo/root、CWD 事件和完整指标流仍是发行候选手测门禁。
 - Phase 4 的 Transfer journal/断点、FTP/FTPS、Telnet、Serial、WebDAV、连接导入导出、偏好/窗口事件、CSP 和本地日志均已接入 Rust backend。显式/隐式 FTPS、WebDAV HEAD/PUT/GET + ETag/hash、Telnet HTTP CONNECT/SOCKS5 已有本地真实协议夹具；实体/虚拟串口、真实 Telnet 设备、真实 WebDAV 服务和三平台结果仍未全部取得。
 - Phase 5 的三平台发布主链路已可用：Release Action 会构建 macOS arm64/x64 DMG、Windows x64/ARM64 签名 NSIS/portable 包及 Linux x86_64/ARM64 `.deb` / `.rpm` / `.AppImage`，并提供 Arch x86_64 与 Arch Linux ARM aarch64 `.pkg.tar.zst`；Linux 包含运行依赖与桌面/AppStream 元数据。Windows 使用签名的应用内更新；macOS 和 Linux 保持 GitHub Release 下载流。Linux tray 图标固定使用 8-bit RGBA 输入，避免 AppImage 在 GTK 环境初始化时因 16-bit 原始像素缓冲崩溃。

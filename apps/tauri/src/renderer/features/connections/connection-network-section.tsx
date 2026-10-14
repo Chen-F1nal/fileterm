@@ -1,5 +1,7 @@
-import type { ConnectionProfile, CreateProfileInput } from '@fileterm/core'
+import type { ConnectionProfile, CreateProfileInput, SshProfile } from '@fileterm/core'
 import { t } from '../../i18n'
+import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
+import './ssh-jump-route.css'
 import { AppIcon } from '../common/app-icon'
 import { DropdownSelect } from '../common/dropdown-select'
 import { ConnectionProxySection } from './connection-proxy-section'
@@ -9,12 +11,18 @@ import type { ConnectionFormSetter } from './connection-modal-utils'
 export function ConnectionNetworkSection({
   form,
   jumpHosts,
+  profiles,
+  jumpRoute,
+  routeError,
   routingMode,
   setForm,
   setRoutingMode
 }: {
   form: CreateProfileInput
   jumpHosts: ConnectionProfile[]
+  profiles: ConnectionProfile[]
+  jumpRoute: SshProfile[]
+  routeError: string | null
   routingMode: 'direct' | 'jump'
   setForm: ConnectionFormSetter
   setRoutingMode(value: 'direct' | 'jump'): void
@@ -66,9 +74,13 @@ export function ConnectionNetworkSection({
             {routingMode === 'jump' && jumpHosts.length ? (
               <div className="network-setting-subgroup">
                 <div className="network-setting-row">
-                  <span className="network-setting-row__label">{t.jumpHost}</span>
+                  <label className="network-setting-row__label" htmlFor="connection-jump-host">
+                    {t.jumpHost}
+                  </label>
                   <div className="network-setting-row__control">
                     <DropdownSelect
+                      id="connection-jump-host"
+                      ariaLabel={t.jumpHost}
                       className="network-select-control network-routing-select"
                       placeholder={t.selectJumpHost}
                       value={form.jumpProfileId ?? ''}
@@ -76,7 +88,9 @@ export function ConnectionNetworkSection({
                         { value: '', label: t.selectJumpHost, disabled: true },
                         ...jumpHosts.map((profile) => ({
                           value: profile.id,
-                          label: `${profile.name} (${profile.host})`
+                          label: `${resolveSshJumpRoute({ jumpProfileId: profile.id }, profiles)
+                            .jumpHosts.map((hop) => hop.name)
+                            .join(' → ')} (${profile.host})`
                         }))
                       ]}
                       onChange={(value) => setForm((prev) => ({ ...prev, jumpProfileId: value || undefined }))}
@@ -85,6 +99,24 @@ export function ConnectionNetworkSection({
                 </div>
                 <p className="network-field-hint">{t.jumpHostHint}</p>
               </div>
+            ) : null}
+
+            {routingMode === 'jump' && form.jumpProfileId ? (
+              routeError ? (
+                <p className="network-field-hint network-field-hint--warning" role="alert">
+                  {routeError}
+                </p>
+              ) : (
+                <ol className="ssh-jump-route" aria-label={t.route}>
+                  <li>FileTerm</li>
+                  {jumpRoute.map((hop) => (
+                    <li key={hop.id} title={`${hop.host}:${hop.port}`}>
+                      {hop.name}
+                    </li>
+                  ))}
+                  <li>{form.name?.trim() || form.host || t.sshJumpRouteTarget}</li>
+                </ol>
+              )
             ) : null}
 
             {routingMode === 'jump' && !jumpHosts.length ? (
