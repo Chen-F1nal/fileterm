@@ -15,9 +15,12 @@ export function ConnectionFilePaneSection({
       <fieldset className="ssh-fieldset narrow">
         <legend>{t.filePaneDefaultMode}</legend>
         <div className="ssh-grid single">
-          <label className="span-2">
-            {t.filePaneDisplayMode}:
+          <div className="span-2 ssh-form-field">
+            <div className="ssh-form-field__header">
+              <label htmlFor="connection-file-pane-mode">{t.filePaneDisplayMode}</label>
+            </div>
             <DropdownSelect
+              id="connection-file-pane-mode"
               ariaLabel={t.filePaneDefaultMode}
               options={[
                 { value: 'local', label: t.filePaneLocal },
@@ -31,8 +34,8 @@ export function ConnectionFilePaneSection({
                 }))
               }
             />
-          </label>
-          <p className="ssh-field-hint">{t.filePaneDefaultModeHint}</p>
+            <p className="ssh-field-hint">{t.filePaneDefaultModeHint}</p>
+          </div>
         </div>
       </fieldset>
     </div>
