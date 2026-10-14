@@ -24,6 +24,39 @@ fn remote_parent_path(path: &str) -> String {
     }
 }
 
+fn validate_remote_directory_path(path: &str) -> Result<(), AppError> {
+    if path.is_empty() || path.len() > 4096 || path.contains('\0') {
+        return Err(AppError::Command("Invalid remote directory path".to_string()));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn app_list_remote_directory(
+    app: AppHandle,
+    tab_id: String,
+    target_path: String,
+) -> Result<Vec<serde_json::Value>, AppError> {
+    validate_remote_directory_path(&target_path)?;
+    {
+        let state = app.state::<crate::services::workspace::WorkspaceState>();
+        let sessions = state.sessions.read().await;
+        let session = sessions
+            .get(&tab_id)
+            .ok_or_else(|| AppError::Command("Session not found".to_string()))?;
+        if !session.connected || !session.capabilities.files {
+            return Err(AppError::Command("Remote file access is unavailable".to_string()));
+        }
+    }
+    // Tree expansion must not replace the workspace's current directory or files.
+    send_worker_file_cmd(&app, &tab_id, |respond_to, cancellation| WorkerCmd::ListRemoteFiles {
+        path: target_path,
+        cancellation,
+        respond_to,
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn app_open_remote_path(
     app: AppHandle,

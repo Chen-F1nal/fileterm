@@ -602,6 +602,7 @@ pub fn run() {
             crate::commands::app_subscribe_terminal_data,
             crate::commands::app_resize_terminal,
             crate::commands::app_open_remote_path,
+            crate::commands::app_list_remote_directory,
             crate::commands::app_set_follow_shell_cwd,
             crate::commands::app_execute_remote_command,
             crate::commands::app_read_remote_file,

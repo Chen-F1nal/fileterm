@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type DragEvent,
   type FormEvent,
@@ -30,6 +31,7 @@ import { FileManagerContextMenuHost } from './file-manager-context-menu-host'
 import { handleFileManagerKeyboardShortcuts } from './file-manager-keyboard-shortcuts'
 import { FileManagerPanes } from './file-manager-panes'
 import { FileManagerToolbar } from './file-manager-toolbar'
+import { getFilePaneMode, setFilePaneMode, subscribeFilePaneMode } from './file-pane-mode-store'
 import { useFileManagerStateSync } from './use-file-manager-state-sync'
 import type { RemoteFileSortState } from './file-tables'
 import { matchesFileFilter, type FileFilterConfig } from './file-filter'
@@ -172,6 +174,7 @@ export function FileManager({
   const [localAnchorPath, setLocalAnchorPath] = useState<string | null>(null)
   const [remoteAnchorPath, setRemoteAnchorPath] = useState<string | null>(null)
   const [keyboardPane, setKeyboardPane] = useState<'local' | 'remote'>('remote')
+  const { mode: leftPaneMode, error: leftPaneModeError } = useSyncExternalStore(subscribeFilePaneMode, getFilePaneMode)
   const [resetColumnsTrigger, setResetColumnsTrigger] = useState(0)
   const [contextMenu, setContextMenu] = useState<FileContextMenuState | null>(null)
   const splitRef = useRef<HTMLDivElement | null>(null)
@@ -189,7 +192,6 @@ export function FileManager({
   internalFileDragRuntimeRef.current = { canUseRemoteFiles, localPath, onDownloadFiles, onUploadFiles }
   const localScrollRef = useRef<HTMLDivElement | null>(null)
   const remoteScrollRef = useRef<HTMLDivElement | null>(null)
-  const requestedInitialLocalDirectoryRef = useRef(false)
 
   const switchActiveView = (nextView: 'file' | 'command' | 'tunnel') => {
     if (nextView === activeView) {
@@ -201,6 +203,9 @@ export function FileManager({
   }
 
   useFileManagerStateSync({
+    leftPaneMode,
+    isLocalDirectoryLoading,
+    onOpenLocalPath,
     localItems,
     localPath,
     localPanePath,
@@ -220,20 +225,6 @@ export function FileManager({
     setRemoteSort,
     onActiveViewChange
   })
-
-  useEffect(() => {
-    if (
-      activeView !== 'file' ||
-      localItems.length > 0 ||
-      isLocalDirectoryLoading ||
-      requestedInitialLocalDirectoryRef.current
-    ) {
-      return
-    }
-
-    requestedInitialLocalDirectoryRef.current = true
-    onOpenLocalPath(localPath)
-  }, [activeView, isLocalDirectoryLoading, localItems.length, localPath, onOpenLocalPath])
 
   const [localFilter, setLocalFilter] = useState<FileFilterConfig>({ query: '', mode: 'text' })
   const [remoteFilter, setRemoteFilter] = useState<FileFilterConfig>({ query: '', mode: 'text' })
@@ -330,11 +321,12 @@ export function FileManager({
     (contextMenu?.pane !== 'remote' || canUseRemoteFiles)
   )
 
+  const effectiveKeyboardPane = leftPaneMode === 'remote-tree' ? 'remote' : keyboardPane
   const keyboardSelection =
-    keyboardPane === 'local'
+    effectiveKeyboardPane === 'local'
       ? localItems.filter((item) => selectedLocalPaths.includes(item.path) && item.name !== '..')
       : selectedRemoteItems.filter((item) => item.name !== '..')
-  const canPasteFromKeyboard = keyboardPane === 'local' ? canPasteToLocal : canPasteToRemote
+  const canPasteFromKeyboard = effectiveKeyboardPane === 'local' ? canPasteToLocal : canPasteToRemote
 
   const beginInternalFileDrag = (
     sourcePane: FilePane,
@@ -615,7 +607,7 @@ export function FileManager({
         onKeyDown={(event) =>
           handleFileManagerKeyboardShortcuts(event, {
             canPaste: canPasteFromKeyboard,
-            keyboardPane,
+            keyboardPane: effectiveKeyboardPane,
             keyboardSelection,
             onClearCutState,
             onCopyItems,
@@ -627,6 +619,9 @@ export function FileManager({
         style={{ '--local-pane-width': `${commandPaneWidth}px` } as CSSProperties}
       >
         <FileManagerToolbar
+          leftPaneMode={leftPaneMode}
+          leftPaneModeError={leftPaneModeError}
+          onLeftPaneModeChange={setFilePaneMode}
           activeSession={activeSession}
           activeTab={activeTab}
           activeView={activeView}
@@ -672,6 +667,9 @@ export function FileManager({
           </div>
         ) : (
           <FileManagerPanes
+            leftPaneMode={leftPaneMode}
+            treeTabId={activeTab?.id ?? ''}
+            onOpenRemotePath={onOpenRemotePath}
             activeSession={activeSession}
             beginInternalFileDrag={beginInternalFileDrag}
             canUseRemoteFiles={canUseRemoteFiles}

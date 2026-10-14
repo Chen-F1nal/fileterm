@@ -1686,6 +1686,9 @@ export interface ThemeConfig {
     surface: string
     surfaceSecondary: string
     surfaceElevated: string
+    surfaceSidebar?: string
+    surfaceInput?: string
+    surfaceContextMenu?: string
     /** Optional advanced color overrides; absent for normal themes. */
     overrides?: Record<string, string>
     terminal: TerminalThemeConfig
@@ -1798,6 +1801,9 @@ export function createCodexThemeConfig(variant: ThemeVariant = 'dark'): ThemeCon
       surface: isLight ? '#ffffff' : '#111111',
       surfaceSecondary: isLight ? '#ffffff' : '#181818',
       surfaceElevated: isLight ? '#ffffff' : '#222222',
+      surfaceSidebar: isLight ? '#ffffff' : '#181818',
+      surfaceInput: isLight ? '#ffffff' : '#222222',
+      surfaceContextMenu: isLight ? '#ffffff' : '#242424',
       terminal: {
         background: isLight ? '#ffffff' : '#111111',
         foreground: isLight ? '#1a1c1f' : '#fcfcfc',
@@ -1853,7 +1859,10 @@ export function createDefaultThemeConfig(variant: ThemeVariant = 'dark'): ThemeC
       },
       surface: isLight ? '#F4F4F6' : '#151515',
       surfaceSecondary: isLight ? '#ffffff' : '#1e1e1e',
-      surfaceElevated: isLight ? '#ffffff' : '#2a2a2a',
+      surfaceElevated: isLight ? '#ffffff' : '#303030',
+      surfaceSidebar: isLight ? '#ffffff' : '#242424',
+      surfaceInput: isLight ? '#ffffff' : '#1a1a1a',
+      surfaceContextMenu: isLight ? '#ffffff' : '#1e2024',
       terminal: defaultTerminalThemeConfig(variant)
     }
   }
@@ -1884,7 +1893,7 @@ function normalizeThemeFont(value: unknown, fallback: string | null) {
 function collectThemeColorOverrides(value: unknown, prefix = '', result: Record<string, string> = {}) {
   if (typeof value === 'string') {
     if (prefix && THEME_HEX_COLOR_PATTERN.test(value.trim())) {
-      result[prefix] = value.trim().toUpperCase()
+      result[prefix] = normalizeThemeSurface(value, '#303030')
     }
     return result
   }
@@ -1897,6 +1906,11 @@ function collectThemeColorOverrides(value: unknown, prefix = '', result: Record<
     }
   }
   return result
+}
+
+function normalizeThemeSurface(value: unknown, fallback: string) {
+  const color = normalizeThemeColor(value, fallback)
+  return color === '#2A2A2A' || color === '#2E2E2E' ? '#303030' : color
 }
 
 function normalizeThemeNumber(value: unknown, fallback: number) {
@@ -1957,12 +1971,15 @@ export function normalizeThemeConfig(value: unknown, fallbackVariant: ThemeVaria
   )
   const ftpFallback = isFileTermTheme ? variantFallback.theme.semanticColors.ftp : normalizedSkill
   const normalizedFtp = normalizeThemeColor(rawSemanticColors.ftp, ftpFallback)
-  const normalizedSurface = normalizeThemeColor(rawTheme.surface, variantFallback.theme.surface)
-  const normalizedSurfaceSecondary = normalizeThemeColor(
+  const normalizedSurface = normalizeThemeSurface(rawTheme.surface, variantFallback.theme.surface)
+  const normalizedSurfaceSecondary = normalizeThemeSurface(
     rawTheme.surfaceSecondary,
     variantFallback.theme.surfaceSecondary
   )
-  const normalizedSurfaceElevated = normalizeThemeColor(rawTheme.surfaceElevated, variantFallback.theme.surfaceElevated)
+  const normalizedSurfaceElevated = normalizeThemeSurface(
+    rawTheme.surfaceElevated,
+    variantFallback.theme.surfaceElevated
+  )
   const rawOverrides = Object.keys(asThemeRecord(rawTheme.overrides)).length
     ? rawTheme.overrides
     : isFileTermTheme
@@ -2030,6 +2047,20 @@ export function normalizeThemeConfig(value: unknown, fallbackVariant: ThemeVaria
       surface: normalizedSurface,
       surfaceSecondary: normalizedSurfaceSecondary,
       surfaceElevated: normalizedSurfaceElevated,
+      ...(rawTheme.surfaceSidebar !== undefined
+        ? { surfaceSidebar: normalizeThemeSurface(rawTheme.surfaceSidebar, variantFallback.theme.surfaceSidebar!) }
+        : {}),
+      ...(rawTheme.surfaceInput !== undefined
+        ? { surfaceInput: normalizeThemeSurface(rawTheme.surfaceInput, variantFallback.theme.surfaceInput!) }
+        : {}),
+      ...(rawTheme.surfaceContextMenu !== undefined
+        ? {
+            surfaceContextMenu: normalizeThemeSurface(
+              rawTheme.surfaceContextMenu,
+              variantFallback.theme.surfaceContextMenu!
+            )
+          }
+        : {}),
       ...(Object.keys(overrides).length > 0 ? { overrides } : {}),
       terminal: {
         background: normalizeThemeColor(rawTerminal.background, terminalFallback.background),
@@ -2785,6 +2816,7 @@ export interface FileTermDesktopApi {
   writeTerminal(tabId: string, data: string): Promise<void>
   resizeTerminal(tabId: string, cols: number, rows: number, width: number, height: number): Promise<void>
   openRemotePath(tabId: string, targetPath: string): Promise<WorkspaceSnapshot>
+  listRemoteDirectory(tabId: string, targetPath: string): Promise<RemoteFileItem[]>
   setFollowShellCwd(tabId: string, enabled: boolean): Promise<WorkspaceSnapshot>
   readRemoteFile(tabId: string, targetPath: string, encoding?: string): Promise<string>
   writeRemoteFile(tabId: string, targetPath: string, content: string, encoding?: string): Promise<WorkspaceSnapshot>

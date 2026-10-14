@@ -1,12 +1,16 @@
-import { useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { LocalFileItem, SessionSnapshot } from '@fileterm/core'
 import { areStringArraysEqual } from './file-manager-utils'
 import type { FileContextMenuState } from './file-manager-types'
 import type { RemoteFileSortState } from './file-tables'
+import type { FilePaneMode } from './file-pane-mode-store'
 
 const VIEW_TRANSITION_LOADING_MS = 180
 
 export type FileManagerStateSyncOptions = {
+  leftPaneMode: FilePaneMode
+  isLocalDirectoryLoading: boolean
+  onOpenLocalPath(path: string): void
   localItems: LocalFileItem[]
   localPath: string
   localPanePath: string
@@ -28,6 +32,9 @@ export type FileManagerStateSyncOptions = {
 }
 
 export function useFileManagerStateSync({
+  leftPaneMode,
+  isLocalDirectoryLoading,
+  onOpenLocalPath,
   localItems,
   localPath,
   localPanePath,
@@ -47,6 +54,26 @@ export function useFileManagerStateSync({
   setRemoteSort,
   onActiveViewChange
 }: FileManagerStateSyncOptions) {
+  const requestedInitialLocalDirectory = useRef(false)
+  useEffect(() => {
+    if (
+      activeView !== 'file' ||
+      leftPaneMode !== 'local' ||
+      localItems.length > 0 ||
+      isLocalDirectoryLoading ||
+      requestedInitialLocalDirectory.current
+    )
+      return
+    requestedInitialLocalDirectory.current = true
+    onOpenLocalPath(localPath)
+  }, [activeView, leftPaneMode, isLocalDirectoryLoading, localItems.length, localPath, onOpenLocalPath])
+
+  useEffect(() => {
+    if (leftPaneMode !== 'remote-tree') return
+    setSelectedLocalPaths([])
+    setContextMenu((previous) => (previous?.pane === 'local' ? null : previous))
+  }, [leftPaneMode, setSelectedLocalPaths, setContextMenu])
+
   useEffect(() => {
     setLocalPathInput((previous) => (previous === localPath || previous === localPanePath ? previous : localPanePath))
     setSelectedLocalPaths((previous) => {

@@ -1,5 +1,7 @@
 import './file-manager-panes.css'
 import { PathBookmarksButton } from './path-bookmarks-button'
+import { RemoteDirectoryTree } from './remote-directory-tree'
+import type { FilePaneMode } from './file-pane-mode-store'
 import type {
   Dispatch,
   DragEvent,
@@ -28,6 +30,9 @@ type DragSelection = {
 }
 
 export function FileManagerPanes({
+  leftPaneMode,
+  treeTabId,
+  onOpenRemotePath,
   activeSession,
   canUseRemoteFiles,
   didDragSelect,
@@ -96,6 +101,9 @@ export function FileManagerPanes({
   splitRef,
   beginInternalFileDrag
 }: {
+  leftPaneMode: FilePaneMode
+  treeTabId: string
+  onOpenRemotePath(path: string): void
   activeSession: SessionSnapshot
   canUseRemoteFiles: boolean
   didDragSelect: MutableRefObject<boolean>
@@ -168,6 +176,52 @@ export function FileManagerPanes({
     event: PointerEvent<HTMLElement>
   ): void
 }) {
+  const remoteHeader = (
+    <>
+      <PanePathBar
+        disabled={!canUseRemoteFiles}
+        hint={canUseRemoteFiles ? t.dragUpload : remoteFilesUnavailableText}
+        label={t.remoteHost}
+        value={remotePathInput}
+        action={
+          <div className="pane-path-bar-actions">
+            <PathBookmarksButton
+              key={activeSession.profileId}
+              scope={`remote:${activeSession.profileId}`}
+              path={activeSession.remotePath}
+              disabled={!canUseRemoteFiles}
+              onOpen={onOpenRemoteItem}
+            />
+            {isSshSession ? (
+              <button
+                aria-pressed={activeSession.followShellCwd !== false}
+                className={`follow-shell-cwd-toggle ${activeSession.followShellCwd !== false ? 'is-active' : ''}`}
+                disabled={!canUseRemoteFiles}
+                onClick={onToggleFollowShellCwd}
+                title={
+                  activeSession.shellCwd ? `${t.shellCwd}: ${activeSession.shellCwd}` : t.followShellCwdUnavailable
+                }
+                type="button"
+              >
+                {t.followShellCwd}
+              </button>
+            ) : null}
+            <RemoteCapabilityPanel capabilities={activeSession.remoteCapabilities} />
+          </div>
+        }
+        onChange={setRemotePathInput}
+        onSubmit={submitRemotePath}
+      />
+      <PaneFilterBar
+        disabled={!canUseRemoteFiles}
+        filter={remoteFilter}
+        matchCount={filteredRemoteFiles.filter((i) => i.name !== '..').length}
+        totalCount={activeSession.remoteFiles.filter((i) => i.name !== '..').length}
+        onFilterChange={setRemoteFilter}
+        onClear={() => setRemoteFilter((prev) => ({ ...prev, query: '' }))}
+      />
+    </>
+  )
   return (
     <div
       aria-busy={
@@ -177,7 +231,7 @@ export function FileManagerPanes({
         isLocalDirectoryLoading ||
         showRemoteDirectoryLoading
       }
-      className="file-split"
+      className={`file-split ${leftPaneMode === 'remote-tree' ? 'file-split--remote-tree' : ''}`}
       ref={splitRef}
     >
       {internalFileDragPreview ? (
@@ -200,101 +254,94 @@ export function FileManagerPanes({
           </span>
         </div>
       ) : null}
-      <div
-        className="local-pane"
-        onMouseDownCapture={(event) => {
-          if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return
-          setKeyboardPane('local')
-          focusContainer()
-        }}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) {
-            setSelectedLocalPaths([])
-            setLocalAnchorPath(null)
-          }
-        }}
-        onDragOver={(event) => {
-          event.preventDefault()
-          event.dataTransfer.dropEffect = 'copy'
-        }}
-        onDrop={handleLocalPaneDrop}
-      >
-        <PanePathBar
-          label={isLocalNetworkShare ? t.networkShare : t.localComputer}
-          value={localPathInput === WINDOWS_DRIVES_PATH ? t.localComputer : localPathInput}
-          onChange={setLocalPathInput}
-          onSubmit={submitLocalPath}
-          action={
-            <div className="pane-path-bar-actions">
-              <PathBookmarksButton scope="local" path={localPath} onOpen={onOpenLocalItem} />
-              {isLocalNetworkShare ? (
-                <button
-                  type="button"
-                  className="pane-path-bar-action"
-                  title={t.backToThisPC}
-                  onClick={onBackToLocalComputer}
-                >
-                  {t.localComputer}
-                </button>
-              ) : null}
-            </div>
-          }
-        />
-        <PaneFilterBar
-          filter={localFilter}
-          matchCount={filteredLocalItems.filter((i) => i.name !== '..').length}
-          totalCount={localItems.filter((i) => i.name !== '..').length}
-          onFilterChange={setLocalFilter}
-          onClear={() => setLocalFilter((prev) => ({ ...prev, query: '' }))}
-        />
-        <div className="file-table-scroll-region">
-          <div
-            className="file-table-shell file-table-shell--with-trailing-space local-file-table-shell"
-            ref={localScrollRef}
-            onContextMenu={(event) => {
-              if (event.target !== event.currentTarget) return
-              event.preventDefault()
-              event.stopPropagation()
+      {leftPaneMode === 'remote-tree' ? <div className="file-remote-shared-header">{remoteHeader}</div> : null}
+      {leftPaneMode === 'remote-tree' ? (
+        canUseRemoteFiles && treeTabId ? (
+          <RemoteDirectoryTree
+            key={`${treeTabId}:${remoteFileAccessMode}`}
+            tabId={treeTabId}
+            path={activeSession.remotePath}
+            files={activeSession.remoteFiles}
+            refresh={resetColumnsTrigger}
+            onOpenPath={onOpenRemotePath}
+          />
+        ) : (
+          <div className="remote-directory-pane">
+            <div className="remote-directory-tree-header">{t.remoteDirectoryTree}</div>
+            <p className="remote-directory-unavailable">{remoteFilesUnavailableText}</p>
+          </div>
+        )
+      ) : (
+        <div
+          className="local-pane"
+          onMouseDownCapture={(event) => {
+            if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return
+            setKeyboardPane('local')
+            focusContainer()
+          }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
               setSelectedLocalPaths([])
               setLocalAnchorPath(null)
-              setContextMenu({ pane: 'local', x: event.clientX, y: event.clientY, path: null })
-            }}
-            onMouseDown={(event) => {
-              if (event.target !== event.currentTarget || event.button !== 0) return
-              isSelectingLocal.current = true
-              didDragSelect.current = false
-              localDragSelection.current = {
-                basePaths: event.metaKey || event.ctrlKey ? selectedLocalPaths : [],
-                startPath: null
-              }
-            }}
-            onClick={(event) => {
-              if (event.target !== event.currentTarget) return
-              if (suppressNextClearClick.current) {
-                suppressNextClearClick.current = false
-                return
-              }
-              setSelectedLocalPaths([])
-              setLocalAnchorPath(null)
-            }}
-          >
-            <LocalFileTable
-              scrollRef={localScrollRef}
-              cutPaths={localCutPaths}
-              rows={filteredLocalItems}
-              selectedPaths={selectedLocalPaths}
-              onPointerDragStart={(event, item) => beginInternalFileDrag('local', item, event)}
-              onOpenItem={onOpenLocalItem}
-              onContextItem={(event, item) => {
+            }
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'copy'
+          }}
+          onDrop={handleLocalPaneDrop}
+        >
+          <PanePathBar
+            label={isLocalNetworkShare ? t.networkShare : t.localComputer}
+            value={localPathInput === WINDOWS_DRIVES_PATH ? t.localComputer : localPathInput}
+            onChange={setLocalPathInput}
+            onSubmit={submitLocalPath}
+            action={
+              <div className="pane-path-bar-actions">
+                <PathBookmarksButton scope="local" path={localPath} onOpen={onOpenLocalItem} />
+                {isLocalNetworkShare ? (
+                  <button
+                    type="button"
+                    className="pane-path-bar-action"
+                    title={t.backToThisPC}
+                    onClick={onBackToLocalComputer}
+                  >
+                    {t.localComputer}
+                  </button>
+                ) : null}
+              </div>
+            }
+          />
+          <PaneFilterBar
+            filter={localFilter}
+            matchCount={filteredLocalItems.filter((i) => i.name !== '..').length}
+            totalCount={localItems.filter((i) => i.name !== '..').length}
+            onFilterChange={setLocalFilter}
+            onClear={() => setLocalFilter((prev) => ({ ...prev, query: '' }))}
+          />
+          <div className="file-table-scroll-region">
+            <div
+              className="file-table-shell file-table-shell--with-trailing-space local-file-table-shell"
+              ref={localScrollRef}
+              onContextMenu={(event) => {
+                if (event.target !== event.currentTarget) return
                 event.preventDefault()
                 event.stopPropagation()
-                if (!selectedLocalPaths.includes(item.path)) {
-                  setSelectedLocalPaths([item.path])
-                  setLocalAnchorPath(item.path)
-                }
-                setContextMenu({ pane: 'local', x: event.clientX, y: event.clientY, path: item.path })
+                setSelectedLocalPaths([])
+                setLocalAnchorPath(null)
+                setContextMenu({ pane: 'local', x: event.clientX, y: event.clientY, path: null })
               }}
-              onClearSelection={() => {
+              onMouseDown={(event) => {
+                if (event.target !== event.currentTarget || event.button !== 0) return
+                isSelectingLocal.current = true
+                didDragSelect.current = false
+                localDragSelection.current = {
+                  basePaths: event.metaKey || event.ctrlKey ? selectedLocalPaths : [],
+                  startPath: null
+                }
+              }}
+              onClick={(event) => {
+                if (event.target !== event.currentTarget) return
                 if (suppressNextClearClick.current) {
                   suppressNextClearClick.current = false
                   return
@@ -302,35 +349,61 @@ export function FileManagerPanes({
                 setSelectedLocalPaths([])
                 setLocalAnchorPath(null)
               }}
-              onSelectItem={selectLocalItem}
-              onSelectionDragStart={(event, item) => {
-                setKeyboardPane('local')
-                isSelectingLocal.current = true
-                didDragSelect.current = false
-                const startPath = event.shiftKey && localAnchorPath ? localAnchorPath : item.path
-                const basePaths = event.metaKey || event.ctrlKey ? selectedLocalPaths : []
-                localDragSelection.current = { basePaths, startPath }
-                suppressNextSelectionClick.current = true
-                setSelectedLocalPaths(
-                  nextSelection({
-                    anchorPath: localAnchorPath,
-                    currentSelection: selectedLocalPaths,
-                    event,
-                    itemPath: item.path,
-                    rows: filteredLocalItems
-                  })
-                )
-                setLocalAnchorPath(startPath)
-              }}
-              onSelectionDragEnter={extendLocalDragSelection}
-            />
+            >
+              <LocalFileTable
+                scrollRef={localScrollRef}
+                cutPaths={localCutPaths}
+                rows={filteredLocalItems}
+                selectedPaths={selectedLocalPaths}
+                onPointerDragStart={(event, item) => beginInternalFileDrag('local', item, event)}
+                onOpenItem={onOpenLocalItem}
+                onContextItem={(event, item) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  if (!selectedLocalPaths.includes(item.path)) {
+                    setSelectedLocalPaths([item.path])
+                    setLocalAnchorPath(item.path)
+                  }
+                  setContextMenu({ pane: 'local', x: event.clientX, y: event.clientY, path: item.path })
+                }}
+                onClearSelection={() => {
+                  if (suppressNextClearClick.current) {
+                    suppressNextClearClick.current = false
+                    return
+                  }
+                  setSelectedLocalPaths([])
+                  setLocalAnchorPath(null)
+                }}
+                onSelectItem={selectLocalItem}
+                onSelectionDragStart={(event, item) => {
+                  setKeyboardPane('local')
+                  isSelectingLocal.current = true
+                  didDragSelect.current = false
+                  const startPath = event.shiftKey && localAnchorPath ? localAnchorPath : item.path
+                  const basePaths = event.metaKey || event.ctrlKey ? selectedLocalPaths : []
+                  localDragSelection.current = { basePaths, startPath }
+                  suppressNextSelectionClick.current = true
+                  setSelectedLocalPaths(
+                    nextSelection({
+                      anchorPath: localAnchorPath,
+                      currentSelection: selectedLocalPaths,
+                      event,
+                      itemPath: item.path,
+                      rows: filteredLocalItems
+                    })
+                  )
+                  setLocalAnchorPath(startPath)
+                }}
+                onSelectionDragEnter={extendLocalDragSelection}
+              />
+            </div>
+            <VerticalScrollbar ariaLabel={t.scrollLocalFiles} scrollRef={localScrollRef} topInset={24} />
           </div>
-          <VerticalScrollbar ariaLabel={t.scrollLocalFiles} scrollRef={localScrollRef} topInset={24} />
+          {showLocalDirectoryLoading ? (
+            <WorkspaceLoadingState className="workspace-loading-state--overlay" label={t.loadingLocalDirectory} />
+          ) : null}
         </div>
-        {showLocalDirectoryLoading ? (
-          <WorkspaceLoadingState className="workspace-loading-state--overlay" label={t.loadingLocalDirectory} />
-        ) : null}
-      </div>
+      )}
       <div
         className="file-split-resizer"
         onMouseDown={(event) => {
@@ -367,48 +440,7 @@ export function FileManagerPanes({
         onDrop={handleRemotePaneDrop}
       >
         <div aria-busy={showRemoteDirectoryLoading} className="remote-pane-content">
-          <PanePathBar
-            disabled={!canUseRemoteFiles}
-            hint={canUseRemoteFiles ? t.dragUpload : remoteFilesUnavailableText}
-            label={t.remoteHost}
-            value={remotePathInput}
-            action={
-              <div className="pane-path-bar-actions">
-                <PathBookmarksButton
-                  key={activeSession.profileId}
-                  scope={`remote:${activeSession.profileId}`}
-                  path={activeSession.remotePath}
-                  disabled={!canUseRemoteFiles}
-                  onOpen={onOpenRemoteItem}
-                />
-                {isSshSession ? (
-                  <button
-                    aria-pressed={activeSession.followShellCwd !== false}
-                    className={`follow-shell-cwd-toggle ${activeSession.followShellCwd !== false ? 'is-active' : ''}`}
-                    disabled={!canUseRemoteFiles}
-                    onClick={onToggleFollowShellCwd}
-                    title={
-                      activeSession.shellCwd ? `${t.shellCwd}: ${activeSession.shellCwd}` : t.followShellCwdUnavailable
-                    }
-                    type="button"
-                  >
-                    {t.followShellCwd}
-                  </button>
-                ) : null}
-                <RemoteCapabilityPanel capabilities={activeSession.remoteCapabilities} />
-              </div>
-            }
-            onChange={setRemotePathInput}
-            onSubmit={submitRemotePath}
-          />
-          <PaneFilterBar
-            disabled={!canUseRemoteFiles}
-            filter={remoteFilter}
-            matchCount={filteredRemoteFiles.filter((i) => i.name !== '..').length}
-            totalCount={activeSession.remoteFiles.filter((i) => i.name !== '..').length}
-            onFilterChange={setRemoteFilter}
-            onClear={() => setRemoteFilter((prev) => ({ ...prev, query: '' }))}
-          />
+          {leftPaneMode === 'local' ? remoteHeader : null}
           <div className="remote-file-table-region">
             <div
               ref={remoteScrollRef}

@@ -3,8 +3,14 @@ import type { RemoteFileItem, SessionSnapshot, WorkspaceTab } from '@fileterm/co
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
 import { StableButtonLabel } from '../common/stable-button-content'
+import { DropdownSelect } from '../common/dropdown-select'
+import type { FilePaneMode } from './file-pane-mode-store'
+import './file-manager-toolbar.css'
 
 export function FileManagerToolbar({
+  leftPaneMode,
+  leftPaneModeError,
+  onLeftPaneModeChange,
   activeSession,
   activeTab,
   activeView,
@@ -22,6 +28,9 @@ export function FileManagerToolbar({
   setResetColumnsTrigger,
   switchActiveView
 }: {
+  leftPaneMode: FilePaneMode
+  leftPaneModeError: string | null
+  onLeftPaneModeChange(mode: FilePaneMode): void
   activeSession: SessionSnapshot
   activeTab: WorkspaceTab | null
   activeView: 'file' | 'command' | 'tunnel'
@@ -88,6 +97,22 @@ export function FileManagerToolbar({
           >
             <AppIcon name="refresh" />
           </button>
+          <DropdownSelect
+            className="file-pane-mode-select"
+            forceCustomMenu
+            ariaLabel={t.filePaneDisplayMode}
+            value={leftPaneMode}
+            options={[
+              { value: 'local', label: t.filePaneLocal },
+              { value: 'remote-tree', label: t.remoteDirectoryTree }
+            ]}
+            onChange={(value) => onLeftPaneModeChange(value === 'remote-tree' ? 'remote-tree' : 'local')}
+          />
+          {leftPaneModeError ? (
+            <span role="status" className="file-pane-mode-error" title={leftPaneModeError}>
+              {t.filePaneModeError}
+            </span>
+          ) : null}
           {activeTab?.sessionType === 'ssh' ? (
             <button
               aria-pressed={remoteFileAccessMode === 'root'}

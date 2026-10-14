@@ -214,6 +214,7 @@ Renderer 只显示遮罩、倒计时和操作反馈，`app_retry_monitoring` 只
 - renderer 从 `tauri-api.ts` 暴露的平台信息同步到 `document.documentElement.dataset.platform`。
 - 设置页展示的 runtime 名称与版本来自 Tauri bridge 和 Rust command，renderer 不写死运行时信息。
 - Tauri 的 renderer UI 状态通过 Rust command 持久化为 `ui-state.json` 键值对象；读取时兼容历史 `{ version, values }` 包装格式和早期 `{ key, value }[]` 数组格式，业务组件不得自行假设另一种文件结构。
+- 文件面板左侧显示模式通过 `file-panel.left-pane-mode` UI state 保存，默认 `local`，可选择 `remote-tree`。目录树使用 `app_list_remote_directory` 只读 IPC，复用既有带超时和取消的协议 worker，不更新会话当前目录或列表；节点缓存按标签、连接和 user/root 模式隔离，路径联动由现有 workspace 快照驱动。
 - CSS 使用 `data-platform` 和稳定 class 做 macOS/Windows/Linux 差异化布局。
 - Tauri 无边框子窗口在 macOS 与 Linux 使用透明原生表面，由 renderer 的 `standalone-window-frame` 统一裁切圆角；Windows 窗口使用不透明原生表面，避免 WebView2 圆角处透出桌面。Windows/Linux 主窗口使用无边框 renderer chrome，并共用紧凑菜单栏。三端主窗口均以 `visible: false` 创建；`renderer/lib/main-window-reveal.tsx` 在应用首屏 React 提交并经过绘制机会后，通过 `tauri-api.ts` 的 `showCurrentWindow()` 显示主窗口，含定时兜底以兼容隐藏 WebView 暂停动画帧。Linux 主窗口原生表面透明，但正常页面由 CSS 绘制实色背景；Linux 独立窗口不得附加 GTK 应用菜单。
 - Windows 下严禁从同步 Tauri command、托盘回调或原生菜单回调直接执行 `WebviewWindowBuilder::build()`；WebView2 会在该上下文发生建窗死锁并阻塞后续全部 invoke。Renderer 建窗入口必须使用 async command，实际 builder 工作进入 blocking worker；原生事件入口也必须先交给 worker。

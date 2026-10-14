@@ -1,3 +1,4 @@
+import '../workspace/workspace-list-rows.css'
 import { useRef, type ReactNode } from 'react'
 import type { ConnectionProfile, SessionSnapshot, TabStatus } from '@fileterm/core'
 import { t } from '../../i18n'

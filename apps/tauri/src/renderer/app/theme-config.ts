@@ -96,6 +96,29 @@ function sidebarGlassSupported(): boolean {
   return typeof document !== 'undefined' && document.documentElement.dataset.platform === 'darwin'
 }
 
+export function getThemeControlSurfaces(
+  config: Pick<ThemeConfig, 'theme' | 'variant' | 'baseThemeId' | 'codeThemeId'>
+) {
+  const { theme, variant, baseThemeId } = config
+  const isLight = variant === 'light'
+  const isCodex = baseThemeId === 'codex'
+  const defaults = config.codeThemeId === 'fileterm' ? createDefaultThemeConfig(variant).theme : null
+  return {
+    sidebar:
+      theme.surfaceSidebar ??
+      defaults?.surfaceSidebar ??
+      (isCodex || !isLight ? theme.surfaceSecondary : theme.surfaceElevated),
+    input:
+      theme.surfaceInput ??
+      defaults?.surfaceInput ??
+      (isCodex || isLight ? theme.surfaceElevated : blend(theme.surface, '#000000', 10)),
+    menu:
+      theme.surfaceContextMenu ??
+      defaults?.surfaceContextMenu ??
+      (isCodex && !isLight ? '#242424' : theme.surfaceElevated)
+  }
+}
+
 function resolveCompactUiVariables(
   theme: ThemeConfig['theme'],
   variant: ThemeVariant,
@@ -110,7 +133,13 @@ function resolveCompactUiVariables(
   const accent = theme.accent
   const secondaryAccent = theme.semanticColors.secondary
 
-  const sidebar = isCodex ? surfaceSecondary : isLight ? surfaceElevated : surfaceSecondary
+  const controls = getThemeControlSurfaces({
+    codeThemeId: 'custom',
+    theme,
+    variant,
+    baseThemeId
+  })
+  const sidebar = controls.sidebar
   const card = surfaceSecondary
   const section = isCodex
     ? isLight
@@ -120,10 +149,10 @@ function resolveCompactUiVariables(
       ? '#f5f5f7'
       : blend(surfaceSecondary, surfaceElevated, 20)
   const elevated = surfaceElevated
-  const input = isCodex ? surfaceElevated : isLight ? surfaceElevated : blend(surface, '#000000', 10)
+  const input = controls.input
   const hover =
     isCodex && !isLight
-      ? '#2a2a2a'
+      ? '#303030'
       : isLight
         ? blend(surfaceElevated, '#000000', 5.5)
         : blend(surfaceElevated, '#FFFFFF', 8)
@@ -136,7 +165,7 @@ function resolveCompactUiVariables(
       : blend(surfaceElevated, accent, 18)
   const titlebar = isCodex ? surfaceElevated : isLight ? surface : surfaceSecondary
   const tabbar = isCodex ? surfaceElevated : isLight ? surface : surfaceSecondary
-  const managerHeadBg = isCodex ? surfaceSecondary : isLight ? surface : surfaceSecondary
+  const managerHeadBg = theme.surfaceSidebar ?? (isCodex ? surfaceSecondary : isLight ? surface : surfaceSecondary)
 
   const secondaryText = theme.semanticColors.textSecondary
   const softText = isLight ? blend(surface, secondaryText, 72) : blend(surface, secondaryText, 68)
@@ -183,7 +212,7 @@ function resolveCompactUiVariables(
 
   const sidebarGlassActive = !theme.opaqueWindows && sidebarGlassSupported()
   const sidebarBackground = sidebarGlassActive ? alpha(sidebar, isLight ? 88 : 82) : sidebar
-  const contextMenuSurface = isCodex && !isLight ? '#242424' : surfaceElevated
+  const contextMenuSurface = controls.menu
   const contextMenuShadow = isLight
     ? '0 12px 32px rgba(15, 23, 42, 0.12)'
     : isCodex
@@ -548,6 +577,12 @@ function isDefaultFileTermTheme(config: ThemeConfig, variant: ThemeVariant): boo
     config.theme.surface.toUpperCase() === defaultConfig.theme.surface.toUpperCase() &&
     config.theme.surfaceSecondary.toUpperCase() === defaultConfig.theme.surfaceSecondary.toUpperCase() &&
     config.theme.surfaceElevated.toUpperCase() === defaultConfig.theme.surfaceElevated.toUpperCase() &&
+    (config.theme.surfaceSidebar ?? defaultConfig.theme.surfaceSidebar!).toUpperCase() ===
+      defaultConfig.theme.surfaceSidebar!.toUpperCase() &&
+    (config.theme.surfaceInput ?? defaultConfig.theme.surfaceInput!).toUpperCase() ===
+      defaultConfig.theme.surfaceInput!.toUpperCase() &&
+    (config.theme.surfaceContextMenu ?? defaultConfig.theme.surfaceContextMenu) ===
+      defaultConfig.theme.surfaceContextMenu &&
     config.theme.ink.toUpperCase() === defaultConfig.theme.ink.toUpperCase() &&
     config.theme.contrast === defaultConfig.theme.contrast &&
     config.theme.opaqueWindows === defaultConfig.theme.opaqueWindows &&
@@ -583,12 +618,15 @@ const THEME_VARIANT_KEYS = [
   'surface',
   'surfaceSecondary',
   'surfaceElevated',
+  'surfaceSidebar',
+  'surfaceInput',
+  'surfaceContextMenu',
   'overrides',
   'terminal'
 ] as const
 
 function cloneThemeValue<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
+  return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T)
 }
 
 function sameThemeValue(left: unknown, right: unknown) {
@@ -668,6 +706,9 @@ export function getThemeConfigFromTokenPreset(codeThemeId: string, variant: Them
     theme.surface = read('--ref-surface-canvas', theme.surface)
     theme.surfaceSecondary = read('--ref-surface-panel', theme.surfaceSecondary)
     theme.surfaceElevated = read('--ref-surface-elevated', theme.surfaceElevated)
+    theme.surfaceSidebar = read('--ref-surface-sidebar', theme.surfaceSidebar!)
+    theme.surfaceInput = read('--ref-surface-input', theme.surfaceInput!)
+    theme.surfaceContextMenu = read('--ref-surface-context-menu', theme.surfaceContextMenu!)
     theme.semanticColors = {
       ...theme.semanticColors,
       diffAdded: read('--ref-color-diff-added', theme.semanticColors.diffAdded),

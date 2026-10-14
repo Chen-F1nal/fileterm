@@ -1,3 +1,4 @@
+import '../workspace/workspace-list-rows.css'
 import { useMonitoringDiagnostics } from './use-monitoring-diagnostics'
 import './system-sidebar-controls.css'
 import { MonitoringToggle } from './monitoring-toggle'

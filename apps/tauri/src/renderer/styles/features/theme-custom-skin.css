@@ -52,7 +52,7 @@
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-tabs {
-  background: var(--surface-elevated) !important;
+  background: var(--surface-toolbar) !important;
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-split-resizer {
@@ -102,18 +102,13 @@
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-toolbar,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-title,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-path-bar,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-filter-bar,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-tabs,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .system-sidebar-layout .disk-table::after,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .transfer-strip,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .fs-file-table th {
+:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .transfer-strip {
   background: var(--surface-elevated) !important;
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-toolbar,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-title,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-path-bar,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .transfer-strip {
   color: var(--text-primary) !important;
 }
@@ -127,9 +122,10 @@
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-toolbar button,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-tab-actions button,
+:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-'])
+  .file-tab-actions
+  button:not(.file-pane-mode-select):not([aria-pressed]),
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-path-bar-action,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .follow-shell-cwd-toggle,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-filter-mode-toggles,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .pane-filter-mode-btn.active {
   background: var(--surface-elevated) !important;
@@ -147,30 +143,6 @@
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .fs-file-table th {
   color: var(--text-secondary) !important;
-}
-
-:root[data-theme-base='codex']:not([data-theme-preset^='iterm2-']) .fs-file-table tbody tr:nth-child(odd),
-:root[data-theme-base='codex']:not([data-theme-preset^='iterm2-']) .process-row:nth-child(odd),
-:root[data-theme-base='codex']:not([data-theme-preset^='iterm2-']) .disk-row:nth-child(odd) {
-  background: var(--surface-sidebar) !important;
-}
-
-:root[data-theme-base='codex']:not([data-theme-preset^='iterm2-']) .fs-file-table tbody tr:nth-child(even),
-:root[data-theme-base='codex']:not([data-theme-preset^='iterm2-']) .process-row:nth-child(even),
-:root[data-theme-base='codex']:not([data-theme-preset^='iterm2-']) .disk-row:nth-child(even) {
-  background: color-mix(in srgb, var(--surface-sidebar) 92%, var(--surface-elevated) 8%) !important;
-}
-
-:root[data-theme-preset^='iterm2-'] .fs-file-table tbody tr:nth-child(odd),
-:root[data-theme-preset^='iterm2-'] .process-row:nth-child(odd),
-:root[data-theme-preset^='iterm2-'] .disk-row:nth-child(odd) {
-  background: var(--surface-card);
-}
-
-:root[data-theme-preset^='iterm2-'] .fs-file-table tbody tr:nth-child(even),
-:root[data-theme-preset^='iterm2-'] .process-row:nth-child(even),
-:root[data-theme-preset^='iterm2-'] .disk-row:nth-child(even) {
-  background: var(--surface-hover);
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .fs-file-table tbody tr:hover,

@@ -28,6 +28,7 @@ import type {
   TransferTask,
   SessionMetricsUpdate,
   RemoteFilesUpdate,
+  RemoteFileItem,
   SshInteractionRequest,
   RemoteExecCredentials,
   SudoPasswordRequest,
@@ -661,6 +662,8 @@ export async function createTauriApi(): Promise<FileTermDesktopApi> {
       invoke<void>('app_resize_terminal', { tabId, cols, rows, width, height }),
     openRemotePath: (tabId: string, targetPath: string) =>
       invoke<WorkspaceSnapshot>('app_open_remote_path', { tabId, targetPath }),
+    listRemoteDirectory: (tabId: string, targetPath: string) =>
+      invoke<RemoteFileItem[]>('app_list_remote_directory', { tabId, targetPath }),
     setFollowShellCwd: (tabId: string, enabled: boolean) =>
       invoke<WorkspaceSnapshot>('app_set_follow_shell_cwd', { tabId, enabled }),
     readRemoteFile: (tabId: string, targetPath: string, encoding?: string) =>

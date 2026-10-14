@@ -1,3 +1,4 @@
+import './home-workspace.css'
 import type {
   CommandFolder,
   CommandTemplate,

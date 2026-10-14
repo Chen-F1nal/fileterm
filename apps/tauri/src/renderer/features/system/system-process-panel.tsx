@@ -1,3 +1,4 @@
+import '../workspace/workspace-list-rows.css'
 import { useRef } from 'react'
 import type { SystemMetrics } from '@fileterm/core'
 import { t } from '../../i18n'

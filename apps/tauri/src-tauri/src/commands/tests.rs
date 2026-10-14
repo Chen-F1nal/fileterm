@@ -1,5 +1,25 @@
 // Command contract and behavior tests.
 #[cfg(test)]
+mod remote_directory_path_tests {
+    use super::validate_remote_directory_path;
+
+    #[test]
+    fn allows_remote_names_without_using_host_path_rules() {
+        for path in ["/", ".", "/home/a b/目录", r"/home/back\slash"] {
+            assert!(validate_remote_directory_path(path).is_ok());
+        }
+    }
+
+    #[test]
+    fn rejects_empty_nul_and_oversized_remote_paths() {
+        assert!(validate_remote_directory_path("").is_err());
+        assert!(validate_remote_directory_path("/root\0/hidden").is_err());
+        assert!(validate_remote_directory_path(&"a".repeat(4096)).is_ok());
+        assert!(validate_remote_directory_path(&"a".repeat(4097)).is_err());
+    }
+}
+
+#[cfg(test)]
 mod command_template_tests {
     use super::render_command_template;
 
@@ -679,9 +699,25 @@ mod ui_preferences_tests {
         assert!(normalized.theme.overrides.is_empty());
         assert_eq!(normalized.code_theme_id, "fileterm");
         assert_eq!(normalized.theme.surface_secondary, "#1E1E1E");
-        assert_eq!(normalized.theme.surface_elevated, "#2A2A2A");
+        assert_eq!(normalized.theme.surface_elevated, "#303030");
         assert_eq!(normalized.theme.semantic_colors.secondary, "#8BBFFF");
         assert_eq!(normalized.theme.semantic_colors.success, "#34D399");
+    }
+
+    #[test]
+    fn theme_control_surfaces_roundtrip_and_migrate_legacy_greys() {
+        let mut value = serde_json::to_value(default_theme_config()).unwrap();
+        value["theme"]["surfaceSidebar"] = serde_json::json!("#242424");
+        value["theme"]["surfaceInput"] = serde_json::json!("#1a1a1a");
+        value["theme"]["surfaceContextMenu"] = serde_json::json!("#123456");
+        value["theme"]["surfaceElevated"] = serde_json::json!("#2e2e2e");
+        let config: super::ThemeConfig = serde_json::from_value(value).unwrap();
+        let normalized = normalize_theme_config(config, "dark");
+        let saved = serde_json::to_value(normalized).unwrap();
+        assert_eq!(saved["theme"]["surfaceSidebar"], "#242424");
+        assert_eq!(saved["theme"]["surfaceInput"], "#1A1A1A");
+        assert_eq!(saved["theme"]["surfaceContextMenu"], "#123456");
+        assert_eq!(saved["theme"]["surfaceElevated"], "#303030");
     }
 
     #[test]

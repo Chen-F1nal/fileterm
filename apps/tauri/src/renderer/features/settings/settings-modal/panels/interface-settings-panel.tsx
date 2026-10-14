@@ -1,3 +1,4 @@
+import { getThemeControlSurfaces } from '../../../../app/theme-config'
 import './interface-font-settings.css'
 import type { Dispatch, SetStateAction, PointerEvent as ReactPointerEvent } from 'react'
 import type {
@@ -368,6 +369,21 @@ export function InterfaceSettingsPanel() {
                 label={t.themeSurfaceSecondaryColor}
                 onChange={(value) => updateThemeBody({ surfaceSecondary: value })}
                 value={normalizedThemeConfig.theme.surfaceSecondary}
+              />
+              <ThemeColorField
+                label={t.themeSurfaceSidebarColor}
+                onChange={(value) => updateThemeBody({ surfaceSidebar: value })}
+                value={getThemeControlSurfaces(normalizedThemeConfig).sidebar}
+              />
+              <ThemeColorField
+                label={t.themeSurfaceInputColor}
+                onChange={(value) => updateThemeBody({ surfaceInput: value })}
+                value={getThemeControlSurfaces(normalizedThemeConfig).input}
+              />
+              <ThemeColorField
+                label={t.themeSurfaceContextMenuColor}
+                onChange={(value) => updateThemeBody({ surfaceContextMenu: value })}
+                value={getThemeControlSurfaces(normalizedThemeConfig).menu}
               />
               <ThemeColorField
                 label={t.themeSurfaceElevatedColor}
