@@ -110,7 +110,11 @@ export function SyncSettingsPanel() {
         <section className="settings-section">
           <h3>{t.webdavConfigSync}</h3>
           <p className="settings-tools-hint">{t.webdavConfigSyncDescription}</p>
-          <fieldset disabled={syncOperation !== null} style={{ border: 0, margin: 0, padding: 0 }}>
+          <fieldset
+            aria-busy={syncOperation !== null}
+            inert={syncOperation !== null}
+            style={{ border: 0, margin: 0, padding: 0 }}
+          >
             <div className="webdav-sync-form">
               <label>
                 <span>{t.webdavUrl}</span>
@@ -170,7 +174,6 @@ export function SyncSettingsPanel() {
                 <button
                   aria-busy={syncOperation === 'save'}
                   className="primary-button compact"
-                  disabled={syncOperation !== null}
                   type="button"
                   onClick={() => {
                     if (!desktopApi) return
@@ -194,7 +197,6 @@ export function SyncSettingsPanel() {
                 <button
                   aria-busy={syncOperation === 'test'}
                   className="flat-button compact"
-                  disabled={syncOperation !== null}
                   type="button"
                   onClick={() => {
                     if (!desktopApi) return
@@ -268,7 +270,7 @@ export function SyncSettingsPanel() {
                     <button
                       aria-busy={syncOperation === 'upload'}
                       className="flat-button compact sync-op-btn"
-                      disabled={!syncConfig.enabled || syncOperation !== null}
+                      disabled={!syncConfig.enabled}
                       type="button"
                       onClick={() => {
                         if (!desktopApi) return
@@ -312,7 +314,7 @@ export function SyncSettingsPanel() {
                     <button
                       aria-busy={syncOperation === 'download'}
                       className="flat-button compact sync-op-btn"
-                      disabled={!syncConfig.enabled || syncOperation !== null}
+                      disabled={!syncConfig.enabled}
                       type="button"
                       onClick={() => {
                         if (!desktopApi) return
@@ -340,7 +342,11 @@ export function SyncSettingsPanel() {
         <section className="settings-section">
           <h3>{t.s3Backup}</h3>
           <p className="settings-tools-hint">{t.s3BackupDescription}</p>
-          <fieldset disabled={syncOperation !== null} style={{ border: 0, margin: 0, padding: 0 }}>
+          <fieldset
+            aria-busy={syncOperation !== null}
+            inert={syncOperation !== null}
+            style={{ border: 0, margin: 0, padding: 0 }}
+          >
             <div className="webdav-sync-form">
               <label>
                 <span>{t.s3Provider}</span>
@@ -474,7 +480,6 @@ export function SyncSettingsPanel() {
                 <button
                   aria-busy={syncOperation === 's3-test'}
                   className="flat-button compact"
-                  disabled={syncOperation !== null}
                   type="button"
                   onClick={() => {
                     if (!desktopApi) return
@@ -544,7 +549,7 @@ export function SyncSettingsPanel() {
                     <button
                       aria-busy={syncOperation === 's3-upload'}
                       className="flat-button compact sync-op-btn"
-                      disabled={!s3Config.enabled || syncOperation !== null}
+                      disabled={!s3Config.enabled}
                       type="button"
                       onClick={() => {
                         if (!desktopApi) return
@@ -588,7 +593,7 @@ export function SyncSettingsPanel() {
                     <button
                       aria-busy={syncOperation === 's3-download'}
                       className="flat-button compact sync-op-btn"
-                      disabled={!s3Config.enabled || syncOperation !== null}
+                      disabled={!s3Config.enabled}
                       type="button"
                       onClick={() => {
                         if (!desktopApi) return

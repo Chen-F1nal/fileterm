@@ -1,3 +1,4 @@
+import './updates-settings-panel.css'
 import type { AppUpdateStatus, FileTermDesktopApi, UiPreferences } from '@fileterm/core'
 import { useState } from 'react'
 import { useExternalUrl } from '../../../../hooks/use-external-url'
@@ -40,14 +41,14 @@ export function UpdatesSettingsPanel() {
     <div className="settings-panel">
       <section className="settings-section">
         <h3>{t.appUpdates}</h3>
-        <div className="update-check-preference">
+        <div aria-busy={isSavingUpdatePreference} className="update-check-preference" inert={isSavingUpdatePreference}>
           <div>
             <strong>{t.updateCheckPreference}</strong>
             <p>{t.updateCheckPreferenceHint}</p>
           </div>
           <DropdownSelect
             className="update-check-preference-select"
-            disabled={!desktopApi || isSavingUpdatePreference}
+            disabled={!desktopApi}
             onChange={(value) => setUpdateCheckPreference(value === 'auto')}
             value={autoCheckUpdates ? 'auto' : 'manual'}
             options={[
@@ -56,14 +57,14 @@ export function UpdatesSettingsPanel() {
             ]}
           />
         </div>
-        <div className="update-check-preference">
+        <div aria-busy={isSavingUpdatePreference} className="update-check-preference" inert={isSavingUpdatePreference}>
           <div>
             <strong>{t.updateChannel}</strong>
             <p>{t.updateChannelHint}</p>
           </div>
           <DropdownSelect
-            className="update-check-preference-select"
-            disabled={!desktopApi || isSavingUpdatePreference}
+            className="update-check-preference-select update-channel-select"
+            disabled={!desktopApi}
             onChange={(value) => setUpdateChannelPreference(value === 'beta' ? 'beta' : 'stable')}
             value={updateChannel}
             options={[

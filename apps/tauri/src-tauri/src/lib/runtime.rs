@@ -602,6 +602,7 @@ pub fn run() {
             crate::commands::app_subscribe_terminal_data,
             crate::commands::app_resize_terminal,
             crate::commands::app_open_remote_path,
+            crate::commands::app_list_remote_directory,
             crate::commands::app_set_follow_shell_cwd,
             crate::commands::app_execute_remote_command,
             crate::commands::app_read_remote_file,
@@ -643,6 +644,7 @@ pub fn run() {
             // Phase 2: profile / folder / command CRUD
             crate::commands::app_create_profile,
             crate::commands::app_update_profile,
+            crate::commands::app_set_profile_file_pane_mode,
             crate::commands::app_clear_trusted_host_fingerprint,
             crate::commands::app_test_connection,
             crate::commands::app_delete_profile,

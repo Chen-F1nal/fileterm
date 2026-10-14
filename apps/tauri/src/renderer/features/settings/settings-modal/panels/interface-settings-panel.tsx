@@ -1,4 +1,6 @@
+import { getThemeControlSurfaces } from '../../../../app/theme-config'
 import './interface-font-settings.css'
+import './interface-settings-panel.css'
 import type { Dispatch, SetStateAction, PointerEvent as ReactPointerEvent } from 'react'
 import type {
   FileTermDesktopApi,
@@ -370,6 +372,21 @@ export function InterfaceSettingsPanel() {
                 value={normalizedThemeConfig.theme.surfaceSecondary}
               />
               <ThemeColorField
+                label={t.themeSurfaceSidebarColor}
+                onChange={(value) => updateThemeBody({ surfaceSidebar: value })}
+                value={getThemeControlSurfaces(normalizedThemeConfig).sidebar}
+              />
+              <ThemeColorField
+                label={t.themeSurfaceInputColor}
+                onChange={(value) => updateThemeBody({ surfaceInput: value })}
+                value={getThemeControlSurfaces(normalizedThemeConfig).input}
+              />
+              <ThemeColorField
+                label={t.themeSurfaceContextMenuColor}
+                onChange={(value) => updateThemeBody({ surfaceContextMenu: value })}
+                value={getThemeControlSurfaces(normalizedThemeConfig).menu}
+              />
+              <ThemeColorField
                 label={t.themeSurfaceElevatedColor}
                 onChange={(value) => updateThemeBody({ surfaceElevated: value })}
                 value={normalizedThemeConfig.theme.surfaceElevated}
@@ -709,7 +726,11 @@ export function InterfaceSettingsPanel() {
       <section className="settings-section">
         <h3>{t.terminalDisplaySettings}</h3>
         <p className="settings-tools-hint">{t.terminalDisplaySettingsHint}</p>
-        <div className="overview-preference-list">
+        <div
+          aria-busy={isSavingTerminalZoomPreference}
+          className="overview-preference-list"
+          inert={isSavingTerminalZoomPreference}
+        >
           <label className="overview-preference-row">
             <span className="overview-preference-copy">
               <strong>{t.lockTerminalZoom}</strong>
@@ -718,7 +739,7 @@ export function InterfaceSettingsPanel() {
             <span className="command-toggle overview-preference-toggle">
               <SelectionControl
                 checked={terminalZoomLocked}
-                disabled={!desktopApi || isSavingTerminalZoomPreference}
+                disabled={!desktopApi}
                 onChange={(event) => setTerminalZoomLockPreference(event.target.checked)}
                 type="checkbox"
               />
@@ -731,12 +752,12 @@ export function InterfaceSettingsPanel() {
       <section className="settings-section">
         <h3>{t.displayAndFilePanelSettings}</h3>
         <p className="settings-tools-hint">{t.displayAndFilePanelSettingsHint}</p>
-        <div className="theme-config-control">
+        <div aria-busy={isSavingUiZoomPercent} className="theme-config-control" inert={isSavingUiZoomPercent}>
           <span className="theme-config-label">{t.uiZoomPercent}</span>
           <DropdownSelect
             ariaLabel={t.uiZoomPercent}
             className="theme-config-select"
-            disabled={!desktopApi || isSavingUiZoomPercent}
+            disabled={!desktopApi}
             onChange={(value) => setUiZoomPercentPreference(Number(value))}
             options={Array.from(
               { length: (MAX_UI_ZOOM_PERCENT - MIN_UI_ZOOM_PERCENT) / UI_ZOOM_PERCENT_STEP + 1 },
@@ -750,7 +771,11 @@ export function InterfaceSettingsPanel() {
         </div>
         {uiZoomPercentError ? <p className="modal-error">{uiZoomPercentError}</p> : null}
         <div className="overview-preference-list">
-          <label className="overview-preference-row">
+          <label
+            aria-busy={isSavingUiZoomPreference}
+            className="overview-preference-row"
+            inert={isSavingUiZoomPreference}
+          >
             <span className="overview-preference-copy">
               <strong>{t.lockUiZoom}</strong>
               <p>{t.lockUiZoomHint}</p>
@@ -758,13 +783,17 @@ export function InterfaceSettingsPanel() {
             <span className="command-toggle overview-preference-toggle">
               <SelectionControl
                 checked={uiZoomLocked}
-                disabled={!desktopApi || isSavingUiZoomPreference}
+                disabled={!desktopApi}
                 onChange={(event) => setUiZoomLockPreference(event.target.checked)}
                 type="checkbox"
               />
             </span>
           </label>
-          <label className="overview-preference-row">
+          <label
+            aria-busy={isSavingFilePanelPreference}
+            className="overview-preference-row"
+            inert={isSavingFilePanelPreference}
+          >
             <span className="overview-preference-copy">
               <strong>{t.rememberFilePanelRatio}</strong>
               <p>{t.rememberFilePanelRatioHint}</p>
@@ -772,7 +801,7 @@ export function InterfaceSettingsPanel() {
             <span className="command-toggle overview-preference-toggle">
               <SelectionControl
                 checked={filePanelRememberRatio}
-                disabled={!desktopApi || isSavingFilePanelPreference}
+                disabled={!desktopApi}
                 onChange={(event) => setFilePanelRememberRatioPreference(event.target.checked)}
                 type="checkbox"
               />
@@ -786,7 +815,11 @@ export function InterfaceSettingsPanel() {
       <section className="settings-section">
         <h3>{t.windowStartupSettings}</h3>
         <div className="overview-preference-list">
-          <label className="overview-preference-row">
+          <label
+            aria-busy={isSavingWindowSizePreference}
+            className="overview-preference-row"
+            inert={isSavingWindowSizePreference}
+          >
             <span className="overview-preference-copy">
               <strong>{t.rememberWindowSize}</strong>
               <p>{t.rememberWindowSizeHint}</p>
@@ -794,7 +827,7 @@ export function InterfaceSettingsPanel() {
             <span className="command-toggle overview-preference-toggle">
               <SelectionControl
                 checked={rememberWindowSize}
-                disabled={!desktopApi || isSavingWindowSizePreference}
+                disabled={!desktopApi}
                 onChange={(event) => setRememberWindowSizePreference(event.target.checked)}
                 type="checkbox"
               />
@@ -807,7 +840,11 @@ export function InterfaceSettingsPanel() {
       <section className="settings-section">
         <h3>{t.overviewContentSettings}</h3>
         <p className="settings-tools-hint">{t.overviewContentSettingsHint}</p>
-        <div className="overview-preference-list">
+        <div
+          aria-busy={isSavingOverviewPreference}
+          className="overview-preference-list"
+          inert={isSavingOverviewPreference}
+        >
           {draggingOverviewSection && overviewSectionOrder[0] ? (
             <div
               aria-hidden="true"
@@ -862,7 +899,7 @@ export function InterfaceSettingsPanel() {
                 <span className="command-toggle overview-preference-toggle">
                   <SelectionControl
                     checked={checked}
-                    disabled={!desktopApi || isSavingOverviewPreference}
+                    disabled={!desktopApi}
                     onChange={(event) => {
                       if (sectionId === 'stats') setOverviewShowStatsPreference(event.target.checked)
                       else if (sectionId === 'recent') setOverviewShowRecentPreference(event.target.checked)

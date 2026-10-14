@@ -660,7 +660,7 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
 .network-routing-modes button.is-active {
   background: var(--action-primary-bg);
   color: var(--action-primary-text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--control-shadow);
 }
 
 .network-routing-modes button.is-active:hover {
@@ -1167,15 +1167,10 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
   gap: 4px;
   min-width: 0;
   padding: 10px 12px;
-  transition: background 0.15s ease;
 }
 
 .advanced-toggle-row:not(:last-child) {
   border-bottom: 1px solid var(--border-dark);
-}
-
-.advanced-toggle-row:hover {
-  background: color-mix(in srgb, var(--bg-hover) 55%, transparent);
 }
 
 .advanced-toggle-label {

@@ -16,7 +16,7 @@
   --ref-surface-panel: #1e1e1e;
   --ref-surface-card: #1e1e1e;
   --ref-surface-section: #242424;
-  --ref-surface-elevated: #2a2a2a;
+  --ref-surface-elevated: #303030;
   --ref-surface-modal: #1e1e1e;
   --ref-surface-context-menu: #1e2024;
   --ref-surface-overlay: rgba(0, 0, 0, 0.65);
@@ -122,11 +122,11 @@
   --ref-preview-dark-canvas: #141414;
   --ref-preview-light-canvas: #f5f5f5;
   --ref-preview-dark-header: #1e1e1e;
-  --ref-preview-dark-divider: #2e2e2e;
+  --ref-preview-dark-divider: #303030;
   --ref-preview-light-header: #e8e8e8;
   --ref-preview-light-divider: #dcdcdc;
   --ref-preview-dark-sidebar: #1a1a1a;
   --ref-preview-light-sidebar: #f0f0f0;
-  --ref-preview-dark-content: #2e2e2e;
+  --ref-preview-dark-content: #303030;
   --ref-preview-light-content: #dcdcdc;
 }

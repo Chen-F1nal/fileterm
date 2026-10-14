@@ -5,27 +5,27 @@
 :root[data-theme='fileterm-light'][data-theme-preset='iterm2-gruvbox'] {
   /* Solid tinted canvas and sections, tinted panels, controls, and input surfaces. */
   --ref-surface-canvas: #fbf1c7;
-  --ref-surface-sidebar: #f4edcf;
-  --ref-surface-panel: color-mix(in srgb, var(--ref-surface-canvas) 65%, var(--ref-surface-section));
-  --ref-surface-card: color-mix(in srgb, var(--ref-surface-canvas) 65%, var(--ref-surface-section));
-  --ref-surface-section: #fdf6dc;
-  --ref-surface-elevated: color-mix(in srgb, var(--ref-surface-canvas) 65%, var(--ref-surface-section));
-  --ref-surface-modal: color-mix(in srgb, var(--ref-surface-canvas) 65%, var(--ref-surface-section));
-  --ref-surface-context-menu: color-mix(in srgb, var(--ref-surface-canvas) 65%, var(--ref-surface-section));
+  --ref-surface-sidebar: #eee2bf;
+  --ref-surface-panel: #f2e8c9;
+  --ref-surface-card: #f2e8c9;
+  --ref-surface-section: #efe3c2;
+  --ref-surface-elevated: #e5d8b2;
+  --ref-surface-modal: #f2e8c9;
+  --ref-surface-context-menu: #e5d8b2;
   --ref-surface-overlay: rgba(0, 0, 0, 0.32);
-  --ref-surface-hover: #efe8d0;
-  --ref-surface-active: #e6e7d0;
-  --ref-surface-input: color-mix(in srgb, var(--ref-surface-canvas) 65%, var(--ref-surface-section));
-  --ref-surface-input-focus: #eeecd4;
-  --ref-surface-toolbar: #fbf1c7;
-  --ref-surface-titlebar: #fbf1c7;
+  --ref-surface-hover: #dfd2ac;
+  --ref-surface-active: #d8cca6;
+  --ref-surface-input: #eadfbd;
+  --ref-surface-input-focus: #dfd2ac;
+  --ref-surface-toolbar: #eee2bf;
+  --ref-surface-titlebar: #f2e8c9;
   --ref-surface-terminal: #fbf1c7;
   --ref-surface-chip: rgba(60, 56, 54, 0.08);
   --ref-surface-inset: rgba(60, 56, 54, 0.03);
   --ref-surface-inset-border: rgba(60, 56, 54, 0.12);
   --ref-text-primary: #3c3836;
   --ref-text-secondary: #5e5950;
-  --ref-text-muted: #77715f;
+  --ref-text-muted: #645c51;
   --ref-text-disabled: #b3ab90;
   --ref-text-inverse: #ffffff;
   --ref-text-context-menu: #3c3836;
@@ -70,8 +70,8 @@
   --ref-action-danger-active: #901a15;
   --ref-action-danger-text: #ffffff;
   --ref-shadow-context-menu: 0 12px 32px rgba(15, 23, 42, 0.12);
-  --ref-monaco-editor-bg: #ffffff;
-  --ref-monaco-editor-foreground: #1a1c1f;
+  --ref-monaco-editor-bg: #fbf1c7;
+  --ref-monaco-editor-foreground: #3c3836;
   --ref-monaco-line-number: #77715f;
   --ref-monaco-line-number-active: #5e5950;
   --ref-monaco-cursor: #356d70;
@@ -117,8 +117,8 @@
   --ref-preview-dark-sidebar: #32312f;
   --ref-preview-dark-content: #3f3d39;
   --ref-preview-light-canvas: #fbf1c7;
-  --ref-preview-light-header: #fdf6dc;
+  --ref-preview-light-header: #f2e8c9;
   --ref-preview-light-divider: rgba(60, 56, 54, 0.14);
-  --ref-preview-light-sidebar: #f1e7bf;
+  --ref-preview-light-sidebar: #eee2bf;
   --ref-preview-light-content: #e8debd;
 }

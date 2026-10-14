@@ -671,7 +671,6 @@
 
 /* Keep one divider that moves with the sticky header while scrolling. */
 :root:is([data-theme='fileterm-light'], [data-theme='default-light']) .fs-file-table th {
-  border-bottom: 0;
   box-shadow: 0 1px 0 var(--border-subtle);
 }
 

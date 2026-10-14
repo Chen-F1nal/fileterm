@@ -13,6 +13,7 @@ import { FeedbackText } from '../common/feedback-text'
 import { StableButtonContent } from '../common/stable-button-content'
 import { waitForMinimumBusyDuration } from '../common/operation-timing'
 import { ConnectionNetworkSection } from './connection-network-section'
+import { ConnectionFilePaneSection } from './connection-file-pane-section'
 import { ConnectionReliabilitySection } from './connection-reliability-section'
 import { ConnectionSessionLogSection } from './connection-session-log-section'
 import { ConnectionSshAdvancedSection } from './connection-ssh-advanced-section'
@@ -64,9 +65,9 @@ export function ConnectionModal({
   profiles?: import('@fileterm/core').ConnectionProfile[]
   editingProfileId?: string | null
 }) {
-  const [section, setSection] = useState<'ssh' | 'network' | 'terminal' | 'advanced' | 'reliability' | 'session-log'>(
-    'ssh'
-  )
+  const [section, setSection] = useState<
+    'ssh' | 'files' | 'network' | 'terminal' | 'advanced' | 'reliability' | 'session-log'
+  >('ssh')
   const [isSelectingSessionLogDirectory, setIsSelectingSessionLogDirectory] = useState(false)
   const [serialPorts, setSerialPorts] = useState<SerialPortInfo[]>([])
   const [isLoadingSerialPorts, setIsLoadingSerialPorts] = useState(false)
@@ -78,6 +79,7 @@ export function ConnectionModal({
   const [routingMode, setRoutingMode] = useState<'direct' | 'jump'>(() => (form.jumpProfileId ? 'jump' : 'direct'))
   const serialPortRefreshInFlightRef = useRef(false)
   const supportsNetwork = form.type === 'ssh' || form.type === 'telnet' || form.type === 'ftp'
+  const supportsFilePaneMode = form.type === 'ftp' || (form.type === 'ssh' && form.deviceMode !== 'network-device')
   const supportsTerminal = form.type !== 'ftp'
   const supportsAdvanced = form.type === 'ssh'
   const supportsReliability = form.type === 'ssh' || form.type === 'telnet' || form.type === 'ftp'
@@ -104,13 +106,14 @@ export function ConnectionModal({
   useEffect(() => {
     if (
       (section === 'network' && !supportsNetwork) ||
+      (section === 'files' && !supportsFilePaneMode) ||
       (section === 'terminal' && !supportsTerminal) ||
       (section === 'advanced' && !supportsAdvanced) ||
       (section === 'reliability' && !supportsReliability)
     ) {
       setSection('ssh')
     }
-  }, [section, supportsNetwork, supportsTerminal, supportsAdvanced, supportsReliability])
+  }, [section, supportsFilePaneMode, supportsNetwork, supportsTerminal, supportsAdvanced, supportsReliability])
 
   const connectionTabTitle =
     form.type === 'ftp'
@@ -304,6 +307,11 @@ export function ConnectionModal({
           <button className={section === 'ssh' ? 'active' : ''} type="button" onClick={() => setSection('ssh')}>
             {connectionTabTitle}
           </button>
+          {supportsFilePaneMode ? (
+            <button className={section === 'files' ? 'active' : ''} type="button" onClick={() => setSection('files')}>
+              {t.filePaneSettings}
+            </button>
+          ) : null}
           {supportsNetwork ? (
             <button
               className={section === 'network' ? 'active' : ''}
@@ -377,6 +385,9 @@ export function ConnectionModal({
                 supportsBuiltInRs485={supportsBuiltInRs485}
                 supportsExtendedParity={supportsExtendedParity}
               />
+            ) : null}
+            {section === 'files' && supportsFilePaneMode ? (
+              <ConnectionFilePaneSection form={form} setForm={setForm} />
             ) : null}
             {section === 'network' && supportsNetwork ? (
               <ConnectionNetworkSection

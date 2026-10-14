@@ -161,13 +161,6 @@
   box-shadow: 0 0 0 2px var(--accent-focus-ring);
 }
 
-.sidebar-nav-link.active {
-  background: var(--surface-active);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
 .sidebar-nav-link.active span.material-symbols-outlined {
   color: var(--text-primary);
 }

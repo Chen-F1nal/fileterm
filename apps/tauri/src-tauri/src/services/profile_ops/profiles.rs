@@ -179,3 +179,28 @@ pub fn update_profile(app: &AppHandle, profile_id: &str, input: Value) -> Result
     persist_profiles(app, &profiles)?;
     Ok(profile_value)
 }
+
+pub fn set_file_pane_mode(app: &AppHandle, profile_id: &str, mode: &str) -> Result<(), AppError> {
+    let (mut profiles, _) = read_and_heal_profiles(app)?;
+    set_file_pane_mode_in_profiles(&mut profiles, profile_id, mode)?;
+    persist_profiles(app, &profiles)
+}
+
+fn set_file_pane_mode_in_profiles(
+    profiles: &mut [Value],
+    profile_id: &str,
+    mode: &str,
+) -> Result<(), AppError> {
+    if !matches!(mode, "local" | "remote-tree") {
+        return Err(AppError::Command("Invalid file pane mode".to_string()));
+    }
+    let profile = profiles
+        .iter_mut()
+        .find(|profile| profile.get("id").and_then(Value::as_str) == Some(profile_id))
+        .ok_or_else(|| AppError::Storage("Profile not found".to_string()))?;
+    let profile = profile
+        .as_object_mut()
+        .ok_or_else(|| AppError::Storage("Invalid profile".to_string()))?;
+    profile.insert("filePaneMode".to_string(), Value::String(mode.to_string()));
+    Ok(())
+}

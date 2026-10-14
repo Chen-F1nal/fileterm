@@ -137,7 +137,7 @@ fn default_auto_check_updates() -> bool {
 }
 
 fn default_update_channel() -> String {
-    "stable".to_string()
+    "beta".to_string()
 }
 
 fn default_windows_local_terminal_shell() -> String {

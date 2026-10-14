@@ -61,7 +61,11 @@ export function LocalTerminalSettingsPanel() {
         <h3>{t.localTerminalSettings}</h3>
         <p className="settings-tools-hint">{t.localTerminalSettingsHint}</p>
 
-        <div className="local-terminal-shell-detection">
+        <div
+          aria-busy={isSavingLocalTerminalShells}
+          className="local-terminal-shell-detection"
+          inert={isSavingLocalTerminalShells}
+        >
           <div className="local-terminal-shell-detection-copy">
             <strong>
               {currentLocalTerminalPlatform
@@ -76,7 +80,7 @@ export function LocalTerminalSettingsPanel() {
           </div>
           <button
             className="flat-button compact"
-            disabled={!desktopApi || isLoadingLocalTerminalShellOptions || isSavingLocalTerminalShells}
+            disabled={!desktopApi || isLoadingLocalTerminalShellOptions}
             onClick={() => setLocalTerminalShellScanVersion((version) => version + 1)}
             type="button"
           >
@@ -85,7 +89,11 @@ export function LocalTerminalSettingsPanel() {
           </button>
         </div>
 
-        <div className="local-terminal-shell-list">
+        <div
+          aria-busy={isSavingLocalTerminalShells}
+          className="local-terminal-shell-list"
+          inert={isSavingLocalTerminalShells}
+        >
           {currentLocalTerminalShellConfig ? (
             <div className="local-terminal-shell-card">
               <div className="local-terminal-shell-card-heading">
@@ -100,7 +108,7 @@ export function LocalTerminalSettingsPanel() {
                   <span>{t.localTerminalShellExecutable}</span>
                   <input
                     aria-label={`${t[currentLocalTerminalShellConfig.labelKey]} · ${t.localTerminalShellExecutable}`}
-                    disabled={!desktopApi || isSavingLocalTerminalShells}
+                    disabled={!desktopApi}
                     onChange={(event) =>
                       updateLocalTerminalShellDraft(currentLocalTerminalShellConfig.platform, event.target.value)
                     }
@@ -112,7 +120,7 @@ export function LocalTerminalSettingsPanel() {
                 <DropdownSelect
                   ariaLabel={`${t[currentLocalTerminalShellConfig.labelKey]} ${t.localTerminalShellSelectPlaceholder}`}
                   className="local-terminal-shell-select"
-                  disabled={!desktopApi || isSavingLocalTerminalShells || currentLocalTerminalShellOptions.length === 0}
+                  disabled={!desktopApi || currentLocalTerminalShellOptions.length === 0}
                   onChange={(value) => updateLocalTerminalShellDraft(currentLocalTerminalShellConfig.platform, value)}
                   options={currentLocalTerminalShellOptions}
                   placeholder={t.localTerminalShellSelectPlaceholder}
@@ -122,7 +130,7 @@ export function LocalTerminalSettingsPanel() {
               <p className="local-terminal-shell-input-hint">{t.localTerminalShellExecutableHint}</p>
               <button
                 className="flat-button compact local-terminal-shell-reset"
-                disabled={!desktopApi || isSavingLocalTerminalShells}
+                disabled={!desktopApi}
                 onClick={() => updateLocalTerminalShellDraft(currentLocalTerminalShellConfig.platform, '')}
                 type="button"
               >

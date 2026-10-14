@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   createDefaultThemeConfig,
   normalizeThemeConfig,
@@ -9,6 +9,8 @@ import {
 import {
   deriveThemeVariant,
   getSavedThemeConfig,
+  getThemeConfigFromTokenPreset,
+  isIterm2ThemePresetId,
   normalizeSavedTheme,
   themeVariantForMode,
   type ThemeMode
@@ -73,6 +75,18 @@ export function useThemeSettingsController({
 
   const themeVariant = themeVariantForMode(theme)
   const normalizedThemeConfig = normalizeThemeConfig(themeConfig, themeVariant)
+  const syncedPresetKeyRef = useRef<string | null>(null)
+  const presetSyncKey = `${themeConfig.codeThemeId}:${themeVariant}:${themeConfig.theme.overrides ? 'overridden' : 'base'}`
+
+  useEffect(() => {
+    if (syncedPresetKeyRef.current === presetSyncKey) return
+    syncedPresetKeyRef.current = presetSyncKey
+    if (!isIterm2ThemePresetId(themeConfig.codeThemeId) || themeConfig.theme.overrides) return
+    const currentPreset = getThemeConfigFromTokenPreset(themeConfig.codeThemeId, themeVariant)
+    if (JSON.stringify(normalizeThemeConfig(themeConfig, themeVariant)) !== JSON.stringify(currentPreset)) {
+      onSetThemeConfig(currentPreset)
+    }
+  }, [onSetThemeConfig, presetSyncKey, themeConfig, themeVariant])
 
   const setThemeConfigValue = (nextValue: ThemeConfig) => {
     onSetThemeConfig(

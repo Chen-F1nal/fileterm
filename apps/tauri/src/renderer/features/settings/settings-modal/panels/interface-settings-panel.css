@@ -1,0 +1,21 @@
+.preview-header {
+  position: relative;
+}
+
+.preview-header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: -1px;
+  left: 33px;
+  width: 1px;
+  pointer-events: none;
+}
+
+.theme-card.dark .preview-header::after {
+  background: var(--theme-preview-dark-divider);
+}
+
+.theme-card.light .preview-header::after {
+  background: var(--theme-preview-light-divider);
+}

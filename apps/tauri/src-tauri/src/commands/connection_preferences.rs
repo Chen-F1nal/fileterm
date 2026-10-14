@@ -198,6 +198,12 @@ pub struct ThemeBody {
     pub surface_secondary: String,
     #[serde(default)]
     pub surface_elevated: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_sidebar: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_input: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_context_menu: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub overrides: BTreeMap<String, String>,
     pub terminal: TerminalThemeConfig,
@@ -269,6 +275,9 @@ fn codex_theme_config_for_variant(variant: &str) -> ThemeConfig {
             surface: if is_light { "#ffffff" } else { "#111111" }.to_string(),
             surface_secondary: if is_light { "#ffffff" } else { "#1b1b1b" }.to_string(),
             surface_elevated: if is_light { "#ffffff" } else { "#242424" }.to_string(),
+            surface_sidebar: Some(if is_light { "#ffffff" } else { "#181818" }.to_string()),
+            surface_input: Some(if is_light { "#ffffff" } else { "#222222" }.to_string()),
+            surface_context_menu: Some(if is_light { "#ffffff" } else { "#242424" }.to_string()),
             overrides: BTreeMap::new(),
             terminal: TerminalThemeConfig {
                 background: if is_light { "#ffffff" } else { "#111111" }.to_string(),
@@ -323,7 +332,10 @@ fn default_theme_config_for_variant(variant: &str) -> ThemeConfig {
             },
             surface: if is_light { "#F4F4F6" } else { "#151515" }.to_string(),
             surface_secondary: if is_light { "#ffffff" } else { "#1e1e1e" }.to_string(),
-            surface_elevated: if is_light { "#ffffff" } else { "#2a2a2a" }.to_string(),
+            surface_elevated: if is_light { "#ffffff" } else { "#303030" }.to_string(),
+            surface_sidebar: Some(if is_light { "#ffffff" } else { "#242424" }.to_string()),
+            surface_input: Some(if is_light { "#ffffff" } else { "#1a1a1a" }.to_string()),
+            surface_context_menu: Some(if is_light { "#ffffff" } else { "#1e2024" }.to_string()),
             overrides: BTreeMap::new(),
             terminal: TerminalThemeConfig {
                 background: if is_light { "#f4f4f6" } else { "#181818" }.to_string(),
@@ -436,6 +448,27 @@ fn normalize_theme_config(mut config: ThemeConfig, variant: &str) -> ThemeConfig
         &mut config.theme.surface_elevated,
         &fallback.theme.surface_elevated,
     );
+    for (color, fallback_color) in [
+        (&mut config.theme.surface_context_menu, &fallback.theme.surface_context_menu),
+        (&mut config.theme.surface_sidebar, &fallback.theme.surface_sidebar),
+        (&mut config.theme.surface_input, &fallback.theme.surface_input),
+    ] {
+        if let Some(value) = color {
+            normalize_theme_color(value, fallback_color.as_deref().unwrap_or("#ffffff"));
+        }
+    }
+    for color in [
+        Some(&mut config.theme.surface),
+        Some(&mut config.theme.surface_secondary),
+        Some(&mut config.theme.surface_elevated),
+        config.theme.surface_sidebar.as_mut(),
+        config.theme.surface_input.as_mut(),
+        config.theme.surface_context_menu.as_mut(),
+    ].into_iter().flatten() {
+        if matches!(color.as_str(), "#2A2A2A" | "#2E2E2E") {
+            *color = "#303030".to_string();
+        }
+    }
     normalize_theme_color(
         &mut config.theme.semantic_colors.diff_added,
         &fallback.theme.semantic_colors.diff_added,
@@ -502,6 +535,9 @@ fn normalize_theme_config(mut config: ThemeConfig, variant: &str) -> ThemeConfig
         let valid_color = is_theme_hex_color(value.trim());
         if valid_color {
             *value = value.trim().to_uppercase();
+            if matches!(value.as_str(), "#2A2A2A" | "#2E2E2E") {
+                *value = "#303030".to_string();
+            }
         }
         valid_key && valid_color
     });

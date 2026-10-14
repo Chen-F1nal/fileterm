@@ -40,6 +40,17 @@ pub async fn app_update_profile(
 }
 
 #[tauri::command]
+pub async fn app_set_profile_file_pane_mode(
+    app: AppHandle,
+    profile_id: String,
+    mode: String,
+) -> Result<serde_json::Value, AppError> {
+    let _guard = lock_library_after_transfer_hydration(&app).await?;
+    crate::services::profile_ops::set_file_pane_mode(&app, &profile_id, &mode)?;
+    get_workspace_snapshot_and_emit(&app).await
+}
+
+#[tauri::command]
 pub async fn app_clear_trusted_host_fingerprint(
     app: AppHandle,
     profile_id: String,

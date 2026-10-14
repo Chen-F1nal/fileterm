@@ -88,7 +88,7 @@ export function AiSettingsPanel() {
 
   return (
     <div className="settings-panel settings-ai-panel">
-      <section className="settings-section">
+      <section aria-busy={aiOperation !== null} className="settings-section">
         <h3>{t.aiSettingsProvider}</h3>
         <p className="settings-tools-hint">{t.aiSettingsProviderDescription}</p>
 
@@ -117,11 +117,11 @@ export function AiSettingsPanel() {
           </span>
         </div>
 
-        <div className="ai-settings-provider-picker">
+        <div aria-busy={aiOperation !== null} className="ai-settings-provider-picker" inert={aiOperation !== null}>
           <label>
             <span>{t.aiSettingsConfiguredProviders}</span>
             <DropdownSelect
-              disabled={!desktopApi || aiOperation !== null}
+              disabled={!desktopApi}
               value={aiDraft.id ?? '__new__'}
               options={[
                 ...aiProviders.map((provider) => ({ value: provider.id, label: provider.name })),
@@ -136,7 +136,7 @@ export function AiSettingsPanel() {
           </label>
           <button
             className="ai-settings-secondary-button"
-            disabled={!desktopApi || aiOperation !== null}
+            disabled={!desktopApi}
             type="button"
             onClick={() => selectAiProvider(undefined)}
           >
@@ -146,11 +146,11 @@ export function AiSettingsPanel() {
         </div>
 
         {!aiDraft.id && (
-          <div className="ai-settings-preset-picker">
+          <div aria-busy={aiOperation !== null} className="ai-settings-preset-picker" inert={aiOperation !== null}>
             <span className="ai-settings-preset-label">{t.aiSettingsPresetLabel}</span>
             <DropdownSelect
               className="ai-settings-preset-select"
-              disabled={!desktopApi || aiOperation !== null}
+              disabled={!desktopApi}
               value="__none__"
               placeholder={t.aiSettingsPresetPlaceholder}
               options={[
@@ -171,7 +171,12 @@ export function AiSettingsPanel() {
           </div>
         )}
 
-        <fieldset className="ai-settings-provider-fields" disabled={!desktopApi || aiOperation !== null}>
+        <fieldset
+          aria-busy={aiOperation !== null}
+          className="ai-settings-provider-fields"
+          disabled={!desktopApi}
+          inert={aiOperation !== null}
+        >
           <div className="ai-settings-form">
             <label>
               <span>{t.aiSettingsProviderName}</span>
@@ -184,7 +189,7 @@ export function AiSettingsPanel() {
             <label>
               <span>{t.aiSettingsProviderType}</span>
               <DropdownSelect
-                disabled={!desktopApi || aiOperation !== null}
+                disabled={!desktopApi}
                 value={aiDraft.kind}
                 options={[
                   { value: 'openai-compatible-chat', label: 'OpenAI-compatible Chat (OpenAI 兼容对话协议)' },
@@ -222,7 +227,7 @@ export function AiSettingsPanel() {
                       />
                       <button
                         className="ai-settings-secondary-button ai-settings-add-model-btn"
-                        disabled={!desktopApi || aiOperation !== null || !customModelText.trim()}
+                        disabled={!desktopApi || !customModelText.trim()}
                         type="button"
                         onClick={addSelectedModelToProvider}
                         title={t.aiSettingsModelManualInput}
@@ -246,7 +251,7 @@ export function AiSettingsPanel() {
                       <DropdownSelect
                         ariaLabel={t.aiSettingsModelSuggestionsPlaceholder}
                         className="ai-settings-model-select"
-                        disabled={!desktopApi || aiOperation !== null}
+                        disabled={!desktopApi}
                         value={selectedCandidateModel || '__none__'}
                         options={[
                           { value: '__none__', label: t.aiSettingsModelSuggestionsPlaceholder },
@@ -271,7 +276,7 @@ export function AiSettingsPanel() {
                       />
                       <button
                         className="ai-settings-secondary-button ai-settings-add-model-btn"
-                        disabled={!desktopApi || aiOperation !== null || !selectedCandidateModel}
+                        disabled={!desktopApi || !selectedCandidateModel}
                         type="button"
                         onClick={addSelectedModelToProvider}
                         title={t.aiSettingsModelAddHint}
@@ -281,7 +286,7 @@ export function AiSettingsPanel() {
                       <button
                         aria-busy={aiOperation === 'models'}
                         className="ai-settings-secondary-button ai-settings-refresh-models-btn"
-                        disabled={!desktopApi || aiOperation !== null}
+                        disabled={!desktopApi}
                         type="button"
                         onClick={() => void refreshAiModelChoices()}
                         title={t.aiSettingsRefreshModelsHint}
@@ -482,7 +487,7 @@ export function AiSettingsPanel() {
               <button
                 aria-busy={aiOperation === 'delete'}
                 className="ai-settings-danger-button"
-                disabled={!desktopApi || aiOperation !== null}
+                disabled={!desktopApi}
                 type="button"
                 onClick={() => setShowDeleteAiProviderConfirm(true)}
               >
@@ -501,7 +506,7 @@ export function AiSettingsPanel() {
             <button
               aria-busy={aiOperation === 'test'}
               className="ai-settings-secondary-button"
-              disabled={!desktopApi || aiOperation !== null}
+              disabled={!desktopApi}
               type="button"
               onClick={() => void testAiProvider()}
             >
@@ -519,7 +524,7 @@ export function AiSettingsPanel() {
             <button
               aria-busy={aiOperation === 'save'}
               className="primary-button compact"
-              disabled={!desktopApi || aiOperation !== null}
+              disabled={!desktopApi}
               type="button"
               onClick={() => void saveAiProvider()}
             >

@@ -87,7 +87,11 @@ export function AgentSettingsPanel() {
         <h3>{t.agentMcpSettings}</h3>
         <p className="settings-tools-hint">{t.agentMcpDescription}</p>
 
-        <div className="agent-mcp-policy-stack agent-mcp-shared-policy">
+        <div
+          aria-busy={mcpAgentOperation !== null}
+          className="agent-mcp-policy-stack agent-mcp-shared-policy"
+          inert={mcpAgentOperation !== null}
+        >
           <section className="agent-mcp-policy-card" aria-labelledby="agent-mcp-execution-policy-title">
             <div className="agent-mcp-policy-heading">
               <div>
@@ -98,7 +102,7 @@ export function AgentSettingsPanel() {
             <RadioCardGroup
               ariaLabel={t.agentMcpExecutionPolicyTitle}
               className="agent-mcp-policy-options"
-              disabled={!desktopApi || mcpAgentOperation !== null}
+              disabled={!desktopApi}
               name="agent-mcp-execution-policy"
               options={mcpExecutionPolicyOptions}
               value={mcpAgentPreferences.operationPolicy}
@@ -166,7 +170,7 @@ export function AgentSettingsPanel() {
             <RadioCardGroup
               ariaLabel={t.agentMcpAllowedConnectionsTitle}
               className="agent-mcp-policy-options agent-mcp-connection-options"
-              disabled={!desktopApi || mcpAgentOperation !== null}
+              disabled={!desktopApi}
               name="agent-mcp-connection-scope"
               options={mcpConnectionScopeOptions}
               value={mcpAgentPreferences.connectionScope}
@@ -181,7 +185,7 @@ export function AgentSettingsPanel() {
                 <input
                   aria-label={t.agentMcpSelectedConnections}
                   className="agent-mcp-profile-search"
-                  disabled={!desktopApi || mcpAgentOperation !== null}
+                  disabled={!desktopApi}
                   placeholder={t.agentMcpSelectedConnectionsSearchPlaceholder}
                   type="search"
                   value={mcpAgentProfileSearch}
@@ -194,7 +198,7 @@ export function AgentSettingsPanel() {
                       <label key={profile.id} className="agent-mcp-profile-option">
                         <SelectionControl
                           checked={selected}
-                          disabled={!desktopApi || mcpAgentOperation !== null}
+                          disabled={!desktopApi}
                           type="checkbox"
                           onChange={() => {
                             const allowedProfileIds = selected

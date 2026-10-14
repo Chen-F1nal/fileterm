@@ -6,6 +6,7 @@ import type {
   AppUpdateStatus,
   BackupDownloadMode,
   BackupUploadMode,
+  FilePaneMode,
   FileTermDesktopApi,
   S3BackupConfig,
   S3BackupConfigInput,
@@ -28,6 +29,7 @@ import type {
   TransferTask,
   SessionMetricsUpdate,
   RemoteFilesUpdate,
+  RemoteFileItem,
   SshInteractionRequest,
   RemoteExecCredentials,
   SudoPasswordRequest,
@@ -569,6 +571,8 @@ export async function createTauriApi(): Promise<FileTermDesktopApi> {
       invoke<WorkspaceSnapshot>('app_workspace_mutation', { operation: 'create-command', payload: { input } }),
     updateProfile: (profileId: string, input: unknown) =>
       invoke<WorkspaceSnapshot>('app_update_profile', { profileId, input }),
+    setProfileFilePaneMode: (profileId: string, mode: FilePaneMode) =>
+      invoke<WorkspaceSnapshot>('app_set_profile_file_pane_mode', { profileId, mode }),
     clearTrustedHostFingerprint: (profileId: string) =>
       invoke<WorkspaceSnapshot>('app_clear_trusted_host_fingerprint', { profileId }),
     testConnection: (input: CreateProfileInput, profileId?: string) =>
@@ -661,6 +665,8 @@ export async function createTauriApi(): Promise<FileTermDesktopApi> {
       invoke<void>('app_resize_terminal', { tabId, cols, rows, width, height }),
     openRemotePath: (tabId: string, targetPath: string) =>
       invoke<WorkspaceSnapshot>('app_open_remote_path', { tabId, targetPath }),
+    listRemoteDirectory: (tabId: string, targetPath: string) =>
+      invoke<RemoteFileItem[]>('app_list_remote_directory', { tabId, targetPath }),
     setFollowShellCwd: (tabId: string, enabled: boolean) =>
       invoke<WorkspaceSnapshot>('app_set_follow_shell_cwd', { tabId, enabled }),
     readRemoteFile: (tabId: string, targetPath: string, encoding?: string) =>

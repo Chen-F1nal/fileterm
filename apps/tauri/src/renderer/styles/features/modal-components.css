@@ -1031,7 +1031,7 @@
 }
 
 .settings-modal .connection-manager-sidebar-item.active {
-  border-left: 2px solid var(--text-main);
+  border-left: 2px solid var(--text-primary);
   border-radius: 0 8px 8px 0;
   padding-left: 10px;
 }
@@ -1738,7 +1738,7 @@
 }
 
 .preview-sidebar {
-  width: 28px;
+  width: 34px;
   border-right: 1px solid var(--border-light);
 }
 
