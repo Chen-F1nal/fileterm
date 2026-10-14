@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type CSSProperties,
   type DragEvent,
   type FormEvent,
@@ -16,6 +15,7 @@ import type {
   CommandFolder,
   CommandTemplate,
   CommandTemplateInput,
+  FilePaneMode,
   LocalFileItem,
   RemoteFileItem,
   SessionSnapshot,
@@ -31,7 +31,6 @@ import { FileManagerContextMenuHost } from './file-manager-context-menu-host'
 import { handleFileManagerKeyboardShortcuts } from './file-manager-keyboard-shortcuts'
 import { FileManagerPanes } from './file-manager-panes'
 import { FileManagerToolbar } from './file-manager-toolbar'
-import { getFilePaneMode, setFilePaneMode, subscribeFilePaneMode } from './file-pane-mode-store'
 import { useFileManagerStateSync } from './use-file-manager-state-sync'
 import type { RemoteFileSortState } from './file-tables'
 import { matchesFileFilter, type FileFilterConfig } from './file-filter'
@@ -90,7 +89,9 @@ export function FileManager({
   onToggleFollowShellCwd,
   onToggleRemoteFileAccessMode,
   remoteFileAccessMode,
-  isRemoteDirectoryLoading
+  isRemoteDirectoryLoading,
+  filePaneMode,
+  onSetProfileFilePaneMode
 }: {
   activeSession: SessionSnapshot
   activeTab: WorkspaceTab | null
@@ -155,6 +156,8 @@ export function FileManager({
   onToggleRemoteFileAccessMode(): void
   remoteFileAccessMode: 'user' | 'root'
   isRemoteDirectoryLoading: boolean
+  filePaneMode: FilePaneMode
+  onSetProfileFilePaneMode(profileId: string, mode: FilePaneMode): Promise<void>
 }) {
   const defaultRemoteSort = { field: 'name', direction: 'asc' } satisfies RemoteFileSortState
   const canUseRemoteFiles = activeSession.connected === true && !activeSession.sftpUnavailableReason
@@ -174,12 +177,19 @@ export function FileManager({
   const [localAnchorPath, setLocalAnchorPath] = useState<string | null>(null)
   const [remoteAnchorPath, setRemoteAnchorPath] = useState<string | null>(null)
   const [keyboardPane, setKeyboardPane] = useState<'local' | 'remote'>('remote')
-  const { mode: leftPaneMode, error: leftPaneModeError } = useSyncExternalStore(subscribeFilePaneMode, getFilePaneMode)
+  const [leftPaneModeError, setLeftPaneModeError] = useState<string | null>(null)
   const [resetColumnsTrigger, setResetColumnsTrigger] = useState(0)
   const [contextMenu, setContextMenu] = useState<FileContextMenuState | null>(null)
   const splitRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const isResizingFileSplit = useRef(false)
+  const handleLeftPaneModeChange = (mode: FilePaneMode) => {
+    if (!activeTab) return
+    setLeftPaneModeError(null)
+    void onSetProfileFilePaneMode(activeTab.profileId, mode).catch((error: unknown) => {
+      setLeftPaneModeError(String(error))
+    })
+  }
   const isSelectingLocal = useRef(false)
   const isSelectingRemote = useRef(false)
   const didDragSelect = useRef(false)
@@ -203,7 +213,7 @@ export function FileManager({
   }
 
   useFileManagerStateSync({
-    leftPaneMode,
+    leftPaneMode: filePaneMode,
     isLocalDirectoryLoading,
     onOpenLocalPath,
     localItems,
@@ -321,7 +331,7 @@ export function FileManager({
     (contextMenu?.pane !== 'remote' || canUseRemoteFiles)
   )
 
-  const effectiveKeyboardPane = leftPaneMode === 'remote-tree' ? 'remote' : keyboardPane
+  const effectiveKeyboardPane = filePaneMode === 'remote-tree' ? 'remote' : keyboardPane
   const keyboardSelection =
     effectiveKeyboardPane === 'local'
       ? localItems.filter((item) => selectedLocalPaths.includes(item.path) && item.name !== '..')
@@ -619,9 +629,9 @@ export function FileManager({
         style={{ '--local-pane-width': `${commandPaneWidth}px` } as CSSProperties}
       >
         <FileManagerToolbar
-          leftPaneMode={leftPaneMode}
+          leftPaneMode={filePaneMode}
           leftPaneModeError={leftPaneModeError}
-          onLeftPaneModeChange={setFilePaneMode}
+          onLeftPaneModeChange={handleLeftPaneModeChange}
           activeSession={activeSession}
           activeTab={activeTab}
           activeView={activeView}
@@ -667,7 +677,7 @@ export function FileManager({
           </div>
         ) : (
           <FileManagerPanes
-            leftPaneMode={leftPaneMode}
+            leftPaneMode={filePaneMode}
             treeTabId={activeTab?.id ?? ''}
             onOpenRemotePath={onOpenRemotePath}
             activeSession={activeSession}

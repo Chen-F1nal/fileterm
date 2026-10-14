@@ -806,7 +806,8 @@ const zhCN = {
   remoteHost: '远程',
   filePaneDisplayMode: '文件区域左侧显示',
   filePaneDefaultMode: '文件区域默认显示',
-  filePaneDefaultModeHint: '设置连接工作区文件区域左侧默认显示本地文件还是远程目录树；也可在文件工具栏切换。',
+  filePaneSettings: '文件区域',
+  filePaneDefaultModeHint: '为此连接设置文件区域左侧默认显示本地文件还是远程目录树；也可在文件工具栏切换。',
   filePaneLocal: '本地文件',
   remoteDirectoryTree: '远程目录树',
   locateCurrentDirectory: '定位当前目录',
@@ -3627,8 +3628,9 @@ const enUS: typeof zhCN = {
   displayAndFilePanelSettingsHint:
     'Scale the full app interface while keeping terminal text independently sized. Save the file panel layout here.',
   filePaneDefaultMode: 'Default file panel view',
+  filePaneSettings: 'File panel',
   filePaneDefaultModeHint:
-    'Choose whether the workspace file area shows local files or the remote directory tree by default. You can also switch modes from the file toolbar.',
+    'Choose whether this connection opens with local files or the remote directory tree on the left. You can also switch modes from the file toolbar.',
   rememberFilePanelRatio: 'Remember file panel ratio',
   rememberFilePanelRatioHint: 'Save after resizing or hiding/showing, then restore it for the same connection.',
   filePanelPreferenceSaveFailed: 'Unable to save the file panel preference.',

@@ -76,6 +76,27 @@ mod tests {
     }
 
     #[test]
+    fn changes_only_the_profile_file_pane_mode() {
+        let mut profiles = vec![json!({
+            "id": "p1",
+            "type": "ssh",
+            "password": "kept-in-secret-store",
+            "filePaneMode": "local"
+        })];
+
+        set_file_pane_mode_in_profiles(&mut profiles, "p1", "remote-tree").unwrap();
+
+        assert_eq!(profiles[0]["filePaneMode"], "remote-tree");
+        assert_eq!(profiles[0]["password"], "kept-in-secret-store");
+    }
+
+    #[test]
+    fn rejects_unknown_profile_file_pane_modes() {
+        let mut profiles = vec![profile("p1", "默认", None)];
+        assert!(set_file_pane_mode_in_profiles(&mut profiles, "p1", "unexpected").is_err());
+    }
+
+    #[test]
     fn heals_legacy_folder_and_command_entity_shapes() {
         let mut connection_folders = vec![json!({ "id": "f1", "name": "Legacy" })];
         let mut command_folders = vec![json!({ "id": "cf1", "name": "Legacy commands" })];

@@ -1,11 +1,9 @@
 import './connections-settings-panel.css'
-import { useSyncExternalStore } from 'react'
 import type { FileTermDesktopApi, SshConnectionDefaults } from '@fileterm/core'
 import { DropdownSelect } from '../../../common/dropdown-select'
 import { ResourceMonitoringMetricsEditor } from '../../../common/resource-monitoring-metrics-editor'
 import { SelectionControl } from '../../../common/selection-control'
 import { type LocaleMessages } from '../../../../i18n'
-import { getFilePaneMode, setFilePaneMode, subscribeFilePaneMode } from '../../../files/file-pane-mode-store'
 import { useSettingsModalContext } from '../context'
 
 type ConnectionsSettingsPanelContext = {
@@ -18,7 +16,6 @@ type ConnectionsSettingsPanelContext = {
 }
 
 export function ConnectionsSettingsPanel() {
-  const { mode: filePaneMode, error: filePaneModeError } = useSyncExternalStore(subscribeFilePaneMode, getFilePaneMode)
   const {
     t,
     desktopApi,
@@ -162,22 +159,6 @@ export function ConnectionsSettingsPanel() {
             </div>
           </div>
         </fieldset>
-        <div className="settings-connection-defaults__group">
-          <h4>{t.filePaneDefaultMode}</h4>
-          <DropdownSelect
-            ariaLabel={t.filePaneDefaultMode}
-            className="theme-config-select"
-            disabled={!desktopApi}
-            onChange={(value) => setFilePaneMode(value === 'remote-tree' ? 'remote-tree' : 'local')}
-            options={[
-              { value: 'local', label: t.filePaneLocal },
-              { value: 'remote-tree', label: t.remoteDirectoryTree }
-            ]}
-            value={filePaneMode}
-          />
-          <p className="settings-tools-hint">{t.filePaneDefaultModeHint}</p>
-        </div>
-        {filePaneModeError ? <p className="modal-error">{t.filePaneModeError}</p> : null}
         {connectionDefaultsError ? <p className="modal-error">{connectionDefaultsError}</p> : null}
       </section>
     </div>

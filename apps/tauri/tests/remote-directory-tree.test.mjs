@@ -191,39 +191,6 @@ test('navigation and unmount discard obsolete reads; failed nodes can be retried
   assert.equal(before['/slow'], undefined)
 })
 
-test('mode defaults to local, ignores obsolete hydration and serializes rapid preference writes', async () => {
-  const hydration = deferred(),
-    firstWrite = deferred(),
-    writes = []
-  const store = load(
-    'file-pane-mode-store',
-    {},
-    {
-      window: {
-        fileterm: {
-          getUiStateItem: () => hydration.promise,
-          setUiStateItem: (_key, mode) => {
-            writes.push(mode)
-            return writes.length === 1 ? firstWrite.promise : Promise.resolve()
-          }
-        }
-      }
-    }
-  )
-  assert.equal(store.getFilePaneMode().mode, 'local')
-  const unsubscribe = store.subscribeFilePaneMode(() => {})
-  store.setFilePaneMode('remote-tree')
-  store.setFilePaneMode('local')
-  hydration.resolve('remote-tree')
-  await tick()
-  assert.equal(store.getFilePaneMode().mode, 'local')
-  assert.deepEqual(writes, ['remote-tree'])
-  firstWrite.resolve()
-  await tick()
-  assert.deepEqual(writes, ['remote-tree', 'local'])
-  unsubscribe()
-})
-
 test('refresh invalidates expanded node caches and reloads them without reading the current directory', async () => {
   const fixture = treeFixture()
   fixture.render().toggle('/etc', true)
@@ -244,35 +211,4 @@ test('refresh invalidates expanded node caches and reloads them without reading 
 test('relative directory names cannot read inherited cache properties', () => {
   assert.deepEqual(plain(model.remoteDirectoryAncestors('constructor/')), ['constructor'])
   assert.equal(model.remoteDirectoryRows({}, new Set(['constructor']), 'constructor').length, 1)
-})
-
-test('saved mode restores across mounts, and persistence failures remain visible until a successful change', async () => {
-  let fail = true
-  const store = load(
-    'file-pane-mode-store',
-    {},
-    {
-      window: {
-        fileterm: {
-          getUiStateItem: async () => 'remote-tree',
-          setUiStateItem: async () => {
-            if (fail) throw new Error('disk full')
-          }
-        }
-      }
-    }
-  )
-  const unsubscribe = store.subscribeFilePaneMode(() => {})
-  await tick()
-  assert.equal(store.getFilePaneMode().mode, 'remote-tree')
-  unsubscribe()
-  store.subscribeFilePaneMode(() => {})
-  assert.equal(store.getFilePaneMode().mode, 'remote-tree')
-  store.setFilePaneMode('local')
-  await tick()
-  assert.match(store.getFilePaneMode().error, /disk full/)
-  fail = false
-  store.setFilePaneMode('remote-tree')
-  await tick()
-  assert.equal(store.getFilePaneMode().error, null)
 })

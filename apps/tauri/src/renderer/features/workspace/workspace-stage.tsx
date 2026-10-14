@@ -5,6 +5,7 @@ import type {
   CommandTemplateInput,
   ConnectionFolder,
   ConnectionProfile,
+  FilePaneMode,
   McpAgentClientStatus,
   LocalFileItem,
   OverviewSectionId,
@@ -44,6 +45,7 @@ export function WorkspaceStage({
   splitRootTab,
   activeView,
   onActiveViewChange,
+  onSetProfileFilePaneMode,
   commandPaneWidth,
   onCommandPaneWidthChange,
   filePanelHeight,
@@ -167,6 +169,7 @@ export function WorkspaceStage({
   splitRootTab?: WorkspaceTab
   activeView: 'file' | 'command' | 'tunnel'
   onActiveViewChange(view: 'file' | 'command' | 'tunnel'): void
+  onSetProfileFilePaneMode(profileId: string, mode: FilePaneMode): Promise<void>
   commandPaneWidth: number
   onCommandPaneWidthChange(width: number): void
   filePanelHeight: number
@@ -291,6 +294,8 @@ export function WorkspaceStage({
   onActivatePane(paneTabId: string): void
   onSetPaneWeights(panePath: number[], weights: number[]): void
 }) {
+  const activeTabProfile = profiles.find((profile) => profile.id === activeTab?.profileId) ?? null
+
   if (activeLocalTab?.kind === 'system') {
     return (
       <SystemInfoWorkspace
@@ -337,6 +342,8 @@ export function WorkspaceStage({
         onSetPaneWeights={onSetPaneWeights}
         activeView={activeView}
         onActiveViewChange={onActiveViewChange}
+        filePaneMode={activeTabProfile?.filePaneMode ?? 'local'}
+        onSetProfileFilePaneMode={onSetProfileFilePaneMode}
         commandPaneWidth={commandPaneWidth}
         onCommandPaneWidthChange={onCommandPaneWidthChange}
         filePanelHeight={filePanelHeight}

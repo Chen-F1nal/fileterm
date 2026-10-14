@@ -295,6 +295,7 @@ function toProfile(id: string, input: CreateProfileInput): ConnectionProfile {
       username: '',
       remotePath: '',
       group: input.group,
+      filePaneMode: input.filePaneMode,
       sessionLogEnabled: input.sessionLogEnabled,
       sessionLogDirectory: input.sessionLogDirectory,
       devicePath: input.devicePath ?? '',
@@ -377,7 +378,8 @@ function toProfile(id: string, input: CreateProfileInput): ConnectionProfile {
         proxy: input.proxy ? { ...input.proxy, password: input.proxyPassword ?? input.proxy.password } : undefined,
         jumpProfileId: input.jumpProfileId,
         forwards: input.forwards ?? [],
-        disableShellIntegration: input.disableShellIntegration ?? false
+        disableShellIntegration: input.disableShellIntegration ?? false,
+        filePaneMode: input.filePaneMode
       }
     : input.type === 'telnet'
       ? {
@@ -389,6 +391,7 @@ function toProfile(id: string, input: CreateProfileInput): ConnectionProfile {
           username: '',
           remotePath: '',
           group: input.group,
+          filePaneMode: input.filePaneMode,
           sessionLogEnabled: input.sessionLogEnabled,
           sessionLogDirectory: input.sessionLogDirectory,
           note: input.note,
@@ -409,7 +412,8 @@ function toProfile(id: string, input: CreateProfileInput): ConnectionProfile {
           secure: (input.securityMode ?? (input.secure ? 'explicit' : 'none')) !== 'none',
           securityMode: input.securityMode ?? (input.secure ? 'explicit' : 'none'),
           group: input.group,
-          remotePath: input.remotePath
+          remotePath: input.remotePath,
+          filePaneMode: input.filePaneMode
         }
 }
 

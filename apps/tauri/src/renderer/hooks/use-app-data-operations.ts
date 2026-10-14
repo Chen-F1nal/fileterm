@@ -3,6 +3,7 @@ import type {
   CommandExecutionOptions,
   ConnectionProfile,
   CreateProfileInput,
+  FilePaneMode,
   FileTermDesktopApi,
   WorkspaceSnapshot,
   WorkspaceTab
@@ -205,6 +206,11 @@ export function useAppDataOperations({
     }
   }
 
+  const setProfileFilePaneMode = async (profileId: string, mode: FilePaneMode) => {
+    if (!desktopApi) throw new Error('Desktop API is unavailable')
+    applySnapshot(await desktopApi.setProfileFilePaneMode(profileId, mode))
+  }
+
   const executeCommandTemplate = async (
     commandId: string,
     args: string[],
@@ -254,6 +260,7 @@ export function useAppDataOperations({
     handleTestConnection,
     handleDeleteProfile,
     handleClearHostFingerprint,
+    setProfileFilePaneMode,
     executeCommandTemplate,
     openLogsDirectory
   }

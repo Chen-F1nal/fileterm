@@ -6,6 +6,7 @@ import type {
   AppUpdateStatus,
   BackupDownloadMode,
   BackupUploadMode,
+  FilePaneMode,
   FileTermDesktopApi,
   S3BackupConfig,
   S3BackupConfigInput,
@@ -570,6 +571,8 @@ export async function createTauriApi(): Promise<FileTermDesktopApi> {
       invoke<WorkspaceSnapshot>('app_workspace_mutation', { operation: 'create-command', payload: { input } }),
     updateProfile: (profileId: string, input: unknown) =>
       invoke<WorkspaceSnapshot>('app_update_profile', { profileId, input }),
+    setProfileFilePaneMode: (profileId: string, mode: FilePaneMode) =>
+      invoke<WorkspaceSnapshot>('app_set_profile_file_pane_mode', { profileId, mode }),
     clearTrustedHostFingerprint: (profileId: string) =>
       invoke<WorkspaceSnapshot>('app_clear_trusted_host_fingerprint', { profileId }),
     testConnection: (input: CreateProfileInput, profileId?: string) =>

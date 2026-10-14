@@ -1,7 +1,6 @@
 import './file-manager-panes.css'
 import { PathBookmarksButton } from './path-bookmarks-button'
 import { RemoteDirectoryTree } from './remote-directory-tree'
-import type { FilePaneMode } from './file-pane-mode-store'
 import type {
   Dispatch,
   DragEvent,
@@ -12,7 +11,7 @@ import type {
   RefObject,
   SetStateAction
 } from 'react'
-import type { LocalFileItem, RemoteFileItem, SessionSnapshot } from '@fileterm/core'
+import type { FilePaneMode, LocalFileItem, RemoteFileItem, SessionSnapshot } from '@fileterm/core'
 import { nextSelection, WINDOWS_DRIVES_PATH } from '../../app/app-utils'
 import { APP_EVENT, dispatchAppEvent } from '../../lib/app-events'
 import { t } from '../../i18n'

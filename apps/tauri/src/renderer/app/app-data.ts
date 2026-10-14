@@ -43,6 +43,7 @@ export const defaultForm: CreateProfileInput = {
   // FTP keeps its protocol root via the connection-type defaults.
   remotePath: '.',
   note: '',
+  filePaneMode: 'local',
   sessionLogEnabled: false,
   sessionLogDirectory: '',
   password: '',
@@ -181,6 +182,7 @@ export function profileToForm(
     username: profile.username,
     group: profile.group,
     remotePath: profile.remotePath,
+    filePaneMode: profile.filePaneMode ?? 'local',
     note: profile.note ?? '',
     sessionLogEnabled: profile.sessionLogEnabled ?? false,
     sessionLogDirectory: profile.sessionLogDirectory ?? '',

@@ -14,6 +14,7 @@ import type {
   CommandTemplate,
   LocalFileItem,
   RemoteFileItem,
+  FilePaneMode,
   SessionSnapshot,
   WorkspaceTab
 } from '@fileterm/core'
@@ -50,6 +51,8 @@ export function SessionWorkspace({
   onSetPaneWeights,
   activeView,
   onActiveViewChange,
+  filePaneMode,
+  onSetProfileFilePaneMode,
   commandPaneWidth,
   onCommandPaneWidthChange,
   activeSession,
@@ -126,6 +129,8 @@ export function SessionWorkspace({
   onSetPaneWeights(panePath: number[], weights: number[]): void
   activeView: 'file' | 'command' | 'tunnel'
   onActiveViewChange(view: 'file' | 'command' | 'tunnel'): void
+  filePaneMode: FilePaneMode
+  onSetProfileFilePaneMode(profileId: string, mode: FilePaneMode): Promise<void>
   commandPaneWidth: number
   onCommandPaneWidthChange(width: number): void
   activeSession: SessionSnapshot
@@ -723,6 +728,8 @@ export function SessionWorkspace({
               activeTab={activeTab}
               activeView={activeView}
               onActiveViewChange={onActiveViewChange}
+              filePaneMode={filePaneMode}
+              onSetProfileFilePaneMode={onSetProfileFilePaneMode}
               commandPaneWidth={commandPaneWidth}
               onCommandPaneWidthChange={onCommandPaneWidthChange}
               sendTargets={sendTargets}

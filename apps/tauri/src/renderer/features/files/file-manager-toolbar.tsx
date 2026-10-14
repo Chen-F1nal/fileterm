@@ -1,10 +1,9 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { RemoteFileItem, SessionSnapshot, WorkspaceTab } from '@fileterm/core'
+import type { FilePaneMode, RemoteFileItem, SessionSnapshot, WorkspaceTab } from '@fileterm/core'
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
 import { StableButtonLabel } from '../common/stable-button-content'
 import { DropdownSelect } from '../common/dropdown-select'
-import type { FilePaneMode } from './file-pane-mode-store'
 import './file-manager-toolbar.css'
 
 export function FileManagerToolbar({

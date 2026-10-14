@@ -87,6 +87,8 @@ export interface CommandTemplate extends BaseEntity {
   appendCarriageReturn: boolean
 }
 
+export type FilePaneMode = 'local' | 'remote-tree'
+
 export interface BaseProfile extends BaseEntity {
   type: SessionType
   /** Serial profiles keep these inert placeholders; devicePath remains their only endpoint. */
@@ -94,6 +96,7 @@ export interface BaseProfile extends BaseEntity {
   port: number
   username: string
   remotePath: string
+  filePaneMode?: FilePaneMode
   group: string
   lastUsedAt?: number
   /** Persisted per-device terminal output logging preference. */
@@ -1244,6 +1247,7 @@ export interface CreateProfileInput {
   username: string
   group: string
   remotePath: string
+  filePaneMode?: FilePaneMode
   note?: string
   sessionLogEnabled?: boolean
   sessionLogDirectory?: string
@@ -2746,6 +2750,7 @@ export interface FileTermDesktopApi {
   setCommandSendPreferences(preferences: CommandSendPreferences): Promise<void>
   createProfile(input: CreateProfileInput): Promise<WorkspaceSnapshot>
   updateProfile(profileId: string, input: CreateProfileInput): Promise<WorkspaceSnapshot>
+  setProfileFilePaneMode(profileId: string, mode: FilePaneMode): Promise<WorkspaceSnapshot>
   clearTrustedHostFingerprint(profileId: string): Promise<WorkspaceSnapshot>
   testConnection(input: CreateProfileInput, profileId?: string): Promise<void>
   deleteProfile(profileId: string): Promise<WorkspaceSnapshot>

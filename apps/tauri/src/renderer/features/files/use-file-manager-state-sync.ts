@@ -3,7 +3,7 @@ import type { LocalFileItem, SessionSnapshot } from '@fileterm/core'
 import { areStringArraysEqual } from './file-manager-utils'
 import type { FileContextMenuState } from './file-manager-types'
 import type { RemoteFileSortState } from './file-tables'
-import type { FilePaneMode } from './file-pane-mode-store'
+import type { FilePaneMode } from '@fileterm/core'
 
 const VIEW_TRANSITION_LOADING_MS = 180
 

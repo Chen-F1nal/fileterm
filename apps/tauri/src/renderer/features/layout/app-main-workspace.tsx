@@ -153,6 +153,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     updateCommandFolder,
     updateCommandOrder,
     handleDeleteProfile,
+    setProfileFilePaneMode,
     createConnectionFolder,
     deleteConnectionFolder,
     updateConnectionFolder,
@@ -339,6 +340,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
                 activeView={activeWorkspaceView}
                 commandPaneWidth={activeCommandPaneWidth}
                 onCommandPaneWidthChange={setActiveCommandPaneWidth}
+                onSetProfileFilePaneMode={setProfileFilePaneMode}
                 onActiveViewChange={(view) => {
                   if (!activeTab) return
                   shell.setWorkspaceViews((currentViews) => ({ ...currentViews, [activeTab.id]: view }))
