@@ -1,0 +1,15 @@
+.settings-connection-defaults__group {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-connection-defaults__group + .settings-connection-defaults__group {
+  margin-top: 16px;
+}
+
+.settings-connection-defaults__group > h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}

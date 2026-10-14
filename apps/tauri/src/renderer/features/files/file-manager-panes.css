@@ -21,11 +21,11 @@
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-'])
   .file-manager
   :is(.pane-path-bar, .pane-filter-bar, .remote-directory-tree-header, .fs-file-table th) {
-  background: var(--surface-canvas);
+  background: var(--surface-panel);
 }
 
-:root[data-theme*='light']:is([data-theme-base='codex'], [data-theme-preset^='iterm2-'])
+:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-'])
   .file-manager
-  :is(.pane-path-bar, .pane-filter-bar, .remote-directory-tree-header, .fs-file-table th) {
-  background: var(--surface-hover);
+  :is(.local-pane, .remote-pane, .file-table-shell) {
+  background: var(--surface-panel);
 }

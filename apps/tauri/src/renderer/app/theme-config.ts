@@ -1,3 +1,4 @@
+import { readThemeTokenColor } from './theme-token-color'
 import {
   createCodexThemeConfig,
   createDefaultThemeConfig,
@@ -44,7 +45,7 @@ const ITERM2_THEME_PRESET_IDS = [
 
 export type Iterm2ThemePresetId = (typeof ITERM2_THEME_PRESET_IDS)[number]
 
-function isIterm2ThemePresetId(value: string): value is Iterm2ThemePresetId {
+export function isIterm2ThemePresetId(value: string): value is Iterm2ThemePresetId {
   return ITERM2_THEME_PRESET_IDS.some((presetId) => presetId === value)
 }
 
@@ -699,7 +700,7 @@ export function getThemeConfigFromTokenPreset(codeThemeId: string, variant: Them
     root.style.colorScheme = variant
 
     const tokens = window.getComputedStyle(root)
-    const read = (name: string, fallback: string) => tokens.getPropertyValue(name).trim() || fallback
+    const read = (name: string, fallback: string) => readThemeTokenColor(tokens, name, fallback)
     const { theme } = config
     theme.accent = read('--ref-accent', theme.accent)
     theme.ink = read('--ref-text-primary', theme.ink)

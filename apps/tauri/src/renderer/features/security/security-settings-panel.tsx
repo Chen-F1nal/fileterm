@@ -354,7 +354,11 @@ export function SecuritySettingsPanel({
             </span>
           </div>
 
-          <div className="security-preference-row">
+          <div
+            aria-busy={isLoading || isSecurityMutationInFlight}
+            className="security-preference-row"
+            inert={isLoading || isSecurityMutationInFlight}
+          >
             <div className="security-preference-copy">
               <strong>{t.securityEnableLock}</strong>
               <p>{t.securityEnableLockHint}</p>
@@ -362,7 +366,7 @@ export function SecuritySettingsPanel({
             <label className="ssh-checkbox security-checkbox-wrapper" title={t.securityEnableLock}>
               <SelectionControl
                 checked={lockEnabled}
-                disabled={isLoading || isSecurityMutationInFlight || (!hasLockPassword && !lockPassword)}
+                disabled={!hasLockPassword && !lockPassword}
                 onChange={(event) => {
                   setLockEnabled(event.target.checked)
                   setErrorMessage(null)
@@ -374,7 +378,11 @@ export function SecuritySettingsPanel({
             </label>
           </div>
 
-          <div className="security-preference-row">
+          <div
+            aria-busy={isLoading || isSecurityMutationInFlight}
+            className="security-preference-row"
+            inert={isLoading || isSecurityMutationInFlight}
+          >
             <div className="security-preference-copy">
               <strong>{t.securityIdleLockMinutes}</strong>
               <p>{t.securityIdleLockMinutesHint}</p>
@@ -382,7 +390,7 @@ export function SecuritySettingsPanel({
             <DropdownSelect
               ariaLabel={t.securityIdleLockMinutes}
               className="security-idle-lock-select"
-              disabled={isLoading || isSecurityMutationInFlight || (!hasLockPassword && !lockPassword)}
+              disabled={!hasLockPassword && !lockPassword}
               onChange={(value) => {
                 setIdleLockMinutes(normalizeIdleLockMinutes(Number.parseInt(value, 10)))
                 setErrorMessage(null)
@@ -395,15 +403,15 @@ export function SecuritySettingsPanel({
           </div>
 
           <div
+            aria-busy={isLoading || isSecurityMutationInFlight}
             className={`security-form-grid security-password-grid${hasLockPassword ? ' security-password-grid--changing' : ''}`}
+            inert={isLoading || isSecurityMutationInFlight}
           >
             {hasLockPassword ? (
               <label>
                 <span>{t.securityCurrentMasterPassword}</span>
                 <input
                   autoComplete="current-password"
-                  disabled={isLoading || isSecurityMutationInFlight}
-                  readOnly={isSessionSaving}
                   onChange={(event) => {
                     setCurrentLockPassword(event.target.value)
                     setErrorMessage(null)
@@ -420,8 +428,6 @@ export function SecuritySettingsPanel({
               <span>{hasLockPassword ? t.securityNewMasterPassword : t.securitySetMasterPassword}</span>
               <input
                 autoComplete="new-password"
-                disabled={isLoading || isSecurityMutationInFlight}
-                readOnly={isSessionSaving}
                 onChange={(event) => {
                   setLockPassword(event.target.value)
                   setErrorMessage(null)
@@ -437,8 +443,6 @@ export function SecuritySettingsPanel({
               <span>{hasLockPassword ? t.securityConfirmNewMasterPassword : t.securityConfirmMasterPassword}</span>
               <input
                 autoComplete="new-password"
-                disabled={isLoading || isSecurityMutationInFlight}
-                readOnly={isSessionSaving}
                 onChange={(event) => {
                   setLockPasswordConfirmation(event.target.value)
                   setErrorMessage(null)
@@ -462,7 +466,8 @@ export function SecuritySettingsPanel({
             <button
               aria-busy={isSessionSaving}
               className="primary-button compact"
-              disabled={isLoading || isSecurityMutationInFlight}
+              disabled={isLoading || isSessionSaving}
+              inert={isSecurityMutationInFlight && !isSessionSaving}
               onClick={() => void saveSessionSettings()}
               type="button"
             >
@@ -481,7 +486,7 @@ export function SecuritySettingsPanel({
             </button>
             <button
               className="flat-button compact"
-              disabled={isLoading || isSecurityMutationInFlight}
+              inert={isLoading || isSecurityMutationInFlight}
               onClick={() => setPreviewMode('loading')}
               type="button"
             >
@@ -491,7 +496,7 @@ export function SecuritySettingsPanel({
             {hasLockPassword ? (
               <button
                 className="flat-button security-reset-password-button danger"
-                disabled={isLoading || isSecurityMutationInFlight}
+                inert={isLoading || isSecurityMutationInFlight}
                 onClick={() => {
                   setLockResetCurrentPassword('')
                   setLockResetErrorMessage(null)
@@ -535,15 +540,15 @@ export function SecuritySettingsPanel({
           </div>
 
           <div
+            aria-busy={isLoading || isSecurityMutationInFlight}
             className={`security-form-grid security-password-grid${hasBackupPassword ? ' security-password-grid--changing' : ''}`}
+            inert={isLoading || isSecurityMutationInFlight}
           >
             {hasBackupPassword ? (
               <label>
                 <span>{t.securityCurrentBackupPassword}</span>
                 <input
                   autoComplete="current-password"
-                  disabled={isLoading || isSecurityMutationInFlight}
-                  readOnly={isBackupSaving}
                   onChange={(event) => {
                     setCurrentBackupPassword(event.target.value)
                     setErrorMessage(null)
@@ -560,8 +565,6 @@ export function SecuritySettingsPanel({
               <span>{hasBackupPassword ? t.securityNewBackupPassword : t.securityBackupPassword}</span>
               <input
                 autoComplete="new-password"
-                disabled={isLoading || isSecurityMutationInFlight}
-                readOnly={isBackupSaving}
                 onChange={(event) => {
                   setBackupPassword(event.target.value)
                   setErrorMessage(null)
@@ -578,8 +581,6 @@ export function SecuritySettingsPanel({
               <span>{hasBackupPassword ? t.securityConfirmNewBackupPassword : t.securityConfirmBackupPassword}</span>
               <input
                 autoComplete="new-password"
-                disabled={isLoading || isSecurityMutationInFlight}
-                readOnly={isBackupSaving}
                 onChange={(event) => {
                   setBackupPasswordConfirmation(event.target.value)
                   setErrorMessage(null)
@@ -603,7 +604,8 @@ export function SecuritySettingsPanel({
             <button
               aria-busy={isBackupSaving}
               className="primary-button compact"
-              disabled={isLoading || isSecurityMutationInFlight}
+              disabled={isLoading || isBackupSaving}
+              inert={isSecurityMutationInFlight && !isBackupSaving}
               onClick={() => void saveBackupPassword()}
               type="button"
             >
@@ -632,7 +634,7 @@ export function SecuritySettingsPanel({
             {hasBackupPassword ? (
               <button
                 className="flat-button security-reset-password-button danger"
-                disabled={isLoading || isSecurityMutationInFlight}
+                inert={isLoading || isSecurityMutationInFlight}
                 onClick={() => {
                   setBackupResetErrorMessage(null)
                   setIsBackupResetConfirmOpen(true)

@@ -1,3 +1,4 @@
+import './tab-bar.css'
 import { useRef, type MouseEvent, type ReactNode } from 'react'
 import type { WorkspaceTab } from '@fileterm/core'
 import { tabStatusClass } from '../../app/app-utils'

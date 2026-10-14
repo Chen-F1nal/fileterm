@@ -1167,15 +1167,10 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
   gap: 4px;
   min-width: 0;
   padding: 10px 12px;
-  transition: background 0.15s ease;
 }
 
 .advanced-toggle-row:not(:last-child) {
   border-bottom: 1px solid var(--border-dark);
-}
-
-.advanced-toggle-row:hover {
-  background: color-mix(in srgb, var(--bg-hover) 55%, transparent);
 }
 
 .advanced-toggle-label {

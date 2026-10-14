@@ -25,7 +25,6 @@
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .fs-tabbar,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .titlebar-brand,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .titlebar-tabarea,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .window-menubar,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .standalone-window-titlebar {
@@ -39,15 +38,12 @@
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .fs-tab.active,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-tabs button.active {
-  background: var(--surface-sidebar) !important;
+  background: var(--surface-tab-active) !important;
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-manager,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-toolbar,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .local-pane,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .remote-pane,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .command-pane-preview,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-table-shell {
+:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .command-pane-preview {
   background: var(--surface-sidebar) !important;
 }
 
@@ -89,10 +85,7 @@
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .disk-scroll-region,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .disk-body,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-manager,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .local-pane,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .remote-pane,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .command-pane-preview,
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .file-table-shell {
+:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .command-pane-preview {
   background: var(--surface-sidebar) !important;
 }
 
@@ -215,17 +208,10 @@
   background: var(--surface-canvas) !important;
 }
 
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .settings-modal .connection-manager-sidebar,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .settings-modal .theme-config-toolbar,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .settings-modal .theme-advanced-section,
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .settings-modal .theme-color-field {
   background: var(--surface-sidebar) !important;
-}
-
-:root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-'])
-  .settings-modal
-  .connection-manager-sidebar-item.active {
-  background: var(--bg-active) !important;
 }
 
 :root:is([data-theme-base='codex'], [data-theme-preset^='iterm2-']) .settings-modal .connection-manager-footer,
@@ -339,18 +325,37 @@
   background: var(--bg-main) !important;
 }
 
+:root[data-platform='darwin'][data-theme-base='codex']:not([data-theme*='light']) .fs-sidebar,
+:root[data-platform='darwin'][data-theme-base='codex']:not([data-theme*='light']) .fs-tabbar .titlebar-brand {
+  --surface-sidebar: var(--surface-elevated);
+}
+
+:root[data-platform='darwin'][data-theme-base='codex']:not([data-theme*='light']) .fs-sidebar {
+  --theme-sidebar-background: var(--surface-elevated);
+  --theme-sidebar-backdrop-filter: none;
+}
+
+:root[data-platform='darwin'][data-theme-base='codex']:not([data-theme*='light']) .system-sidebar-layout {
+  --surface-sidebar: var(--surface-elevated);
+  --surface-panel: var(--surface-elevated);
+  --theme-sidebar-background: var(--surface-elevated);
+  --theme-sidebar-backdrop-filter: none;
+  --network-panel-bg: var(--surface-elevated);
+}
+
+:root[data-platform='darwin'][data-theme-base='codex']:not([data-theme*='light']) .system-sidebar-layout .system-title {
+  border-color: var(--border-subtle);
+}
+
 :root[data-platform='darwin'][data-theme-base='codex']:not([data-theme*='light'])
   .fs-shell.is-home-active
   .settings-modal
   .connection-manager-sidebar {
-  background: var(--theme-surface-secondary, var(--bg-card)) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  --theme-sidebar-background: var(--surface-elevated);
+  --theme-sidebar-backdrop-filter: none;
 }
 
-/* Native window blur should not expose the desktop or another window through
- * the Codex glass. Keep the unfocused glass regions on the requested solid
- * solid dark surface while preserving the focused vibrancy treatment. */
+/* Only the outer home shell follows native window focus; embedded sidebars keep a fixed surface. */
 :root[data-platform='darwin'][data-theme-base='codex']:not([data-theme*='light'])[data-window-focused='false']
   .fs-shell.is-home-active
   .home-sidebar,

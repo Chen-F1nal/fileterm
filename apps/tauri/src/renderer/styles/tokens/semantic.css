@@ -22,6 +22,7 @@
   --surface-input-focus: var(--ref-surface-input-focus);
   --surface-toolbar: var(--ref-surface-toolbar);
   --surface-titlebar: var(--ref-surface-titlebar);
+  --surface-tab-active: color-mix(in srgb, var(--surface-titlebar) 75%, var(--surface-active));
   --surface-terminal: var(--ref-surface-terminal);
   --surface-chip: var(--ref-surface-chip);
   --surface-inset: var(--ref-surface-inset);
@@ -36,9 +37,9 @@
   /* Theme picker preview semantics (fixed swatches, independent of active theme). */
   --theme-preview-dark-canvas: var(--ref-preview-dark-canvas);
   --theme-preview-light-canvas: var(--ref-preview-light-canvas);
-  --theme-preview-dark-header: var(--ref-preview-dark-header);
+  --theme-preview-dark-header: var(--theme-preview-dark-sidebar);
   --theme-preview-dark-divider: var(--ref-preview-dark-divider);
-  --theme-preview-light-header: var(--ref-preview-light-header);
+  --theme-preview-light-header: var(--theme-preview-light-sidebar);
   --theme-preview-light-divider: var(--ref-preview-light-divider);
   --theme-preview-dark-sidebar: var(--ref-preview-dark-sidebar);
   --theme-preview-light-sidebar: var(--ref-preview-light-sidebar);

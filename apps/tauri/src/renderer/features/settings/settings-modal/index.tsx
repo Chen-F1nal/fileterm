@@ -108,7 +108,7 @@ export function SettingsModal({
           </label>
           {!inline && (
             <div className="connection-manager-header-actions">
-              <CloseButton disabled={syncOperation !== null} onClick={onClose} />
+              <CloseButton aria-busy={syncOperation !== null} inert={syncOperation !== null} onClick={onClose} />
             </div>
           )}
         </div>
