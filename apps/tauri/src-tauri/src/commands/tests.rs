@@ -840,7 +840,7 @@ mod ui_preferences_tests {
 
         assert_eq!(preferences.theme, "fileterm-dark");
         assert_eq!(preferences.locale, default_ui_locale());
-        assert_eq!(preferences.update_channel, "stable");
+        assert_eq!(preferences.update_channel, "beta");
         assert!(preferences.overview_show_recent);
         assert!(preferences.overview_show_all_connections);
         assert_eq!(
@@ -1159,7 +1159,7 @@ mod ui_preferences_tests {
         .expect("legacy UI preferences should still deserialize");
 
         assert!(preferences.auto_check_updates);
-        assert_eq!(preferences.update_channel, "stable");
+        assert_eq!(preferences.update_channel, "beta");
         assert!(preferences.overview_show_stats);
         assert!(preferences.overview_show_recent);
         assert!(preferences.overview_show_all_connections);

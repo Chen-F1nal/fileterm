@@ -36,7 +36,7 @@ export function useSettingsModalState(initialTab: SettingsTab) {
   const [agentSubTab, setAgentSubTab] = useState<'mcp' | 'cli'>('mcp')
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null)
   const [autoCheckUpdates, setAutoCheckUpdates] = useState(true)
-  const [updateChannel, setUpdateChannel] = useState<'stable' | 'beta'>('stable')
+  const [updateChannel, setUpdateChannel] = useState<'stable' | 'beta'>('beta')
   const [isSavingUpdatePreference, setIsSavingUpdatePreference] = useState(false)
   const [updatePreferenceError, setUpdatePreferenceError] = useState<string | null>(null)
   const [terminalZoomLocked, setTerminalZoomLocked] = useState(false)
