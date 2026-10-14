@@ -47,6 +47,16 @@ fn resolve_ssh_route(profile: &Value, profiles: &[Value]) -> Result<Vec<Value>, 
                 "Proxy and Jump Host are mutually exclusive for SSH profile '{id}'"
             ));
         }
+        // Legacy per-profile overrides also belong to an intermediate hop's transport.
+        for field in ["useEmptyPassword", "legacyAlgorithms"] {
+            if let Some(value) = current
+                .get("connectionOverrides")
+                .and_then(|overrides| overrides.get(field))
+                .cloned()
+            {
+                current[field] = value;
+            }
+        }
         route.push(current);
         let Some(jump_id) = jump_id else { break };
         if visited.contains(&jump_id) {

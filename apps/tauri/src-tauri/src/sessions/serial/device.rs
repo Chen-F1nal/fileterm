@@ -143,8 +143,8 @@ pub async fn test_connection(app: &AppHandle, profile: &Value, tab_id: &str) -> 
     if let Some(dtr_on_open) = control_state.dtr {
         builder = builder.dtr_on_open(dtr_on_open);
     }
-    let mut stream = builder
-        .open_native_async()
+    let mut stream = open_serial_port(builder, control_state, &CancellationToken::new())
+        .await
         .map_err(|error| serial_error(&device_path, error))?;
     if matches!(parity_wire_mode, SerialParityWireMode::Native) {
         if let Err(error) = apply_platform_parity(&stream, serial_parity) {

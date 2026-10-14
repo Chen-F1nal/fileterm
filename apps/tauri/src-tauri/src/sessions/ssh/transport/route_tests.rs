@@ -30,6 +30,21 @@ fn ssh_route_resolves_outermost_first_and_preserves_each_hops_credentials() {
 }
 
 #[test]
+fn ssh_route_preserves_each_hops_legacy_transport_overrides() {
+    let entry = serde_json::json!({
+        "id":"entry", "type":"ssh", "useEmptyPassword":false, "legacyAlgorithms":false,
+        "connectionOverrides":{"useEmptyPassword":true, "legacyAlgorithms":true}
+    });
+    let target = serde_json::json!({"id":"target", "type":"ssh", "jumpProfileId":"entry"});
+    let route = super::resolve_ssh_route(&target, std::slice::from_ref(&entry)).unwrap();
+    assert_eq!(route[0]["useEmptyPassword"], true);
+    assert_eq!(route[0]["legacyAlgorithms"], true);
+    assert_eq!(entry["useEmptyPassword"], false);
+    assert_eq!(entry["legacyAlgorithms"], false);
+    assert!(route[1].get("useEmptyPassword").is_none());
+}
+
+#[test]
 fn ssh_route_rejects_invalid_references_and_conflicts_before_connecting() {
     let target = serde_json::json!({"id":"target", "type":"ssh", "jumpProfileId":"entry"});
     assert!(super::resolve_ssh_route(&target, &[])

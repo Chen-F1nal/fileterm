@@ -40,6 +40,8 @@ SSH-over-`direct-tcpip` 通道可承载各跳之间的 SSH 流量。
 - 从最外层跳板开始逐层建立 SSH 会话；每一跳通过上一跳的 `direct-tcpip` channel 建立，
   最终目标仍是当前 workspace 的 SSH 会话。目标会话建立后，现有 shell、SFTP、资源监控和
   `-L/-R/-D` 隧道继续复用目标 session。
+- 每跳独立应用旧版 `connectionOverrides` 中的空密码和兼容算法选项，不将一跳的选项
+  传给下一跳；解析结果不修改保存记录。
 - 每个 hop 保留自己的认证、MFA 和 host-key 校验。交互事件中的 `hopIndex` 按真实链路
   从 0 递增；各跳板标记为 `jump-host`，最终目标标记为 `target`，直连标记为 `direct`。
 - 连接取消、某一跳认证失败、超时或目标握手失败时，回收已经打开的各层连接；最后一跳断开
@@ -90,14 +92,11 @@ SSH-over-`direct-tcpip` 通道可承载各跳之间的 SSH 流量。
 已在现有 OpenSSH fixture 基础上使用四个临时 sshd，覆盖直连、单跳、两跳、三跳、
 每跳不同密钥、目标执行/SFTP、失败和取消回收；新增前后端路径解析和连接表单渲染测试。
 类型、lint、renderer、Tauri/Rust 测试与 Clippy 已通过；renderer 为 66 项，Rust/contract
-为 762 项。本次改动的格式检查通过。末次仓库全量格式检查被任务期间新增的
-`apps/tauri/assets/icons/source/fileterm-rim-preview.icon/icon.json` 和
-`apps/tauri/assets/icons/source/fileterm.icon/icon.json` 的格式问题阻塞；两份文件不属于本次
-跳板实现。真实 Windows/WSL 手测需记录平台和 FileTerm commit，不能由本机自动化代替。
+为 762 项。本次改动的格式检查通过。真实 Windows/WSL 手测需记录平台和 FileTerm commit，不能由本机自动化代替。
 
 ## 5. Windows 本地测试拓扑
 
-优先用 Docker Compose 起三个 OpenSSH 容器。它在 Windows Docker Desktop（WSL2 backend）和
+优先用 Docker Compose 起三个 OpenSSH 容器。它在 Windows 的 WSL2 容器环境和
 macOS 都能复用；FileTerm 主机只连接映射到 `127.0.0.1:2221` 的入口机，后续跳转由容器网络
 内的服务名解析，不需要给 Windows 配三条路由。中间 sshd 必须允许 `AllowTcpForwarding yes`
 和目标端口转发。
