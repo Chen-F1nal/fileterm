@@ -56,7 +56,6 @@ pub fn app_set_ui_preferences(
     let previous_ui_zoom_locked = preferences.ui_zoom_locked;
     #[cfg(target_os = "macos")]
     let previous_show_macos_menu_bar_icon = preferences.show_macos_menu_bar_icon;
-    #[cfg(target_os = "macos")]
     let previous_app_icon = preferences.app_icon.clone();
     #[cfg(target_os = "macos")]
     let previous_ui_zoom_percent = preferences.ui_zoom_percent;
@@ -190,13 +189,12 @@ pub fn app_set_ui_preferences(
     let content = serde_json::to_string_pretty(&preferences)
         .map_err(|error| AppError::Serialization(error.to_string()))?;
     std::fs::write(path, content).map_err(|error| AppError::Storage(error.to_string()))?;
-    #[cfg(target_os = "macos")]
     if previous_app_icon != preferences.app_icon {
-        if let Err(error) = crate::macos_icon::set_app_icon(&app, &preferences.app_icon) {
+        if let Err(error) = crate::app_icon::set_app_icon(&app, &preferences.app_icon) {
             crate::services::logging::warn(
                 &app,
                 "ui-preferences",
-                format!("failed to update macOS app icon: {error}"),
+                format!("failed to update app icon: {error}"),
             );
         }
     }

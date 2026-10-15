@@ -5,11 +5,7 @@ use std::path::Path;
 use tauri::AppHandle;
 
 pub fn set_app_icon(app: &AppHandle, variant: &str) -> Result<(), String> {
-    let icon_bytes: &'static [u8] = match variant {
-        "material" => include_bytes!("../../src/renderer/assets/app-icons/dock-material.png"),
-        "clean" => include_bytes!("../../src/renderer/assets/app-icons/dock-clean.png"),
-        _ => include_bytes!("../../src/renderer/assets/app-icons/dock-classic.png"),
-    };
+    let icon_bytes = crate::app_icon::icon_bytes(variant);
     let reset_finder_icon = variant == "classic";
     let logging_app = app.clone();
 

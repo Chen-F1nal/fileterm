@@ -336,7 +336,12 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
   }
 
   const setAppIconPreference = (nextValue: UiPreferences['appIcon']) => {
-    if (!desktopApi || desktopApi.platform !== 'darwin' || isSavingAppIcon || nextValue === appIcon) {
+    if (
+      !desktopApi ||
+      !['darwin', 'win32', 'linux'].includes(desktopApi.platform) ||
+      isSavingAppIcon ||
+      nextValue === appIcon
+    ) {
       return
     }
 

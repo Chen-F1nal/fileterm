@@ -203,6 +203,12 @@ export function InterfaceSettingsPanel() {
     setOverviewShowQuickActionsPreference,
     handleOverviewPointerDown
   } = useSettingsModalContext<InterfaceSettingsPanelContext>()
+  const appIconHint =
+    desktopApi?.platform === 'win32'
+      ? t.appIconHintWindows
+      : desktopApi?.platform === 'linux'
+        ? t.appIconHintLinux
+        : t.appIconHintMac
 
   return (
     <div className="settings-panel">
@@ -833,10 +839,10 @@ export function InterfaceSettingsPanel() {
         {filePanelPreferenceError ? <p className="modal-error">{filePanelPreferenceError}</p> : null}
       </section>
 
-      {desktopApi?.platform === 'darwin' ? (
+      {desktopApi && ['darwin', 'win32', 'linux'].includes(desktopApi.platform) ? (
         <section className="settings-section">
           <h3>{t.appIcon}</h3>
-          <p className="settings-tools-hint">{t.appIconHint}</p>
+          <p className="settings-tools-hint">{appIconHint}</p>
           <RadioCardGroup
             ariaLabel={t.appIcon}
             className="app-icon-picker"

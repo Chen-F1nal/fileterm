@@ -691,24 +691,24 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building FileTerm Tauri application")
         .run(|_app_handle, _event| {
-            // macOS: clicking the dock icon when the main window is hidden
-            // should bring it back (mirrors Electron `activate`).
-            // `Reopen` is a macOS-only Tauri event and must not be referenced
-            // while compiling the Linux or Windows desktop targets.
-            #[cfg(target_os = "macos")]
+            // Restore the saved icon after native windows are available.
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
             if matches!(_event, tauri::RunEvent::Ready) {
                 if let Ok(preferences) = crate::commands::app_get_ui_preferences(_app_handle.clone()) {
-                    if let Err(error) = crate::macos_icon::set_app_icon(_app_handle, &preferences.app_icon) {
+                    if let Err(error) =
+                        crate::app_icon::set_app_icon(_app_handle, &preferences.app_icon)
+                    {
                         crate::services::logging::warn(
                             _app_handle,
                             "app-icon",
-                            format!("failed to restore macOS app icon preference: {error}"),
+                            format!("failed to restore app icon preference: {error}"),
                         );
                     }
                 }
             }
 
             #[cfg(target_os = "macos")]
+            // Clicking the Dock icon when the main window is hidden should reopen it.
             if let tauri::RunEvent::Reopen { .. } = _event {
                 show_main_window(_app_handle);
             }
