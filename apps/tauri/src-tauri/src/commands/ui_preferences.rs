@@ -41,6 +41,8 @@ pub struct UiPreferences {
     pub auto_check_updates: bool,
     #[serde(default = "default_show_macos_menu_bar_icon")]
     pub show_macos_menu_bar_icon: bool,
+    #[serde(default = "default_app_icon")]
+    pub app_icon: String,
     #[serde(default = "default_update_channel")]
     pub update_channel: String,
     #[serde(default)]
@@ -88,6 +90,7 @@ pub struct UiPreferencesInput {
     pub custom_themes: Option<Vec<SavedTheme>>,
     pub auto_check_updates: Option<bool>,
     pub show_macos_menu_bar_icon: Option<bool>,
+    pub app_icon: Option<String>,
     pub update_channel: Option<String>,
     pub terminal_zoom_locked: Option<bool>,
     pub ui_zoom_locked: Option<bool>,
@@ -141,6 +144,10 @@ fn default_auto_check_updates() -> bool {
 
 fn default_show_macos_menu_bar_icon() -> bool {
     true
+}
+
+fn default_app_icon() -> String {
+    "classic".to_string()
 }
 
 fn default_update_channel() -> String {
@@ -465,6 +472,9 @@ fn normalize_ui_preferences(mut preferences: UiPreferences) -> UiPreferences {
     preferences.ui_zoom_percent = preferences
         .ui_zoom_percent
         .clamp(MIN_UI_ZOOM_PERCENT, MAX_UI_ZOOM_PERCENT);
+    if !matches!(preferences.app_icon.as_str(), "classic" | "material" | "clean") {
+        preferences.app_icon = default_app_icon();
+    }
     if !matches!(
         preferences.theme.as_str(),
         "fileterm-dark"

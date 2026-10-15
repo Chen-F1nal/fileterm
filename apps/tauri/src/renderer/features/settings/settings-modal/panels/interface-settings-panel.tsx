@@ -3,6 +3,7 @@ import './interface-font-settings.css'
 import './interface-settings-panel.css'
 import type { Dispatch, SetStateAction, PointerEvent as ReactPointerEvent } from 'react'
 import type {
+  AppIconVariant,
   FileTermDesktopApi,
   ImportedFont,
   OverviewSectionId,
@@ -17,6 +18,7 @@ import { targetsNestedManagerControl } from '../../../common/manager-interaction
 import { ConfirmActionDialog } from '../../../common/confirm-action-dialog'
 import { DropdownSelect } from '../../../common/dropdown-select'
 import { SelectionControl } from '../../../common/selection-control'
+import { RadioCardGroup } from '../../../common/radio-card-group'
 import { StableButtonContent } from '../../../common/stable-button-content'
 import { type LocaleMessages } from '../../../../i18n'
 import { useSettingsModalContext } from '../context'
@@ -28,6 +30,9 @@ import {
   ThemeColorField,
   type ThemePresetVariant
 } from '../constants'
+import dockClassic from '../../../../assets/app-icons/dock-classic.png'
+import dockMaterial from '../../../../assets/app-icons/dock-material.png'
+import dockClean from '../../../../assets/app-icons/dock-clean.png'
 
 type InterfaceSettingsPanelContext = {
   t: LocaleMessages
@@ -82,6 +87,10 @@ type InterfaceSettingsPanelContext = {
   isSavingMacosMenuBarIcon: boolean
   macosMenuBarIconPreferenceError: string | null
   setMacosMenuBarIconPreference(nextValue: boolean): void
+  appIcon: AppIconVariant
+  isSavingAppIcon: boolean
+  appIconPreferenceError: string | null
+  setAppIconPreference(nextValue: AppIconVariant): void
   uiZoomLocked: boolean
   isSavingUiZoomPreference: boolean
   uiZoomPreferenceError: string | null
@@ -164,6 +173,10 @@ export function InterfaceSettingsPanel() {
     isSavingMacosMenuBarIcon,
     macosMenuBarIconPreferenceError,
     setMacosMenuBarIconPreference,
+    appIcon,
+    isSavingAppIcon,
+    appIconPreferenceError,
+    setAppIconPreference,
     uiZoomLocked,
     isSavingUiZoomPreference,
     uiZoomPreferenceError,
@@ -819,6 +832,54 @@ export function InterfaceSettingsPanel() {
         {uiZoomPreferenceError ? <p className="modal-error">{uiZoomPreferenceError}</p> : null}
         {filePanelPreferenceError ? <p className="modal-error">{filePanelPreferenceError}</p> : null}
       </section>
+
+      {desktopApi?.platform === 'darwin' ? (
+        <section className="settings-section">
+          <h3>{t.appIcon}</h3>
+          <p className="settings-tools-hint">{t.appIconHint}</p>
+          <RadioCardGroup
+            ariaLabel={t.appIcon}
+            className="app-icon-picker"
+            disabled={isSavingAppIcon}
+            name="app-icon-variant"
+            onChange={(value) => setAppIconPreference(value)}
+            options={[
+              {
+                value: 'classic',
+                label: (
+                  <>
+                    <img alt="" src={dockClassic} />
+                    <span>{t.appIconClassic}</span>
+                  </>
+                ),
+                description: t.appIconClassicHint
+              },
+              {
+                value: 'material',
+                label: (
+                  <>
+                    <img alt="" src={dockMaterial} />
+                    <span>{t.appIconMaterial}</span>
+                  </>
+                ),
+                description: t.appIconMaterialHint
+              },
+              {
+                value: 'clean',
+                label: (
+                  <>
+                    <img alt="" src={dockClean} />
+                    <span>{t.appIconClean}</span>
+                  </>
+                ),
+                description: t.appIconCleanHint
+              }
+            ]}
+            value={appIcon}
+          />
+          {appIconPreferenceError ? <p className="modal-error">{appIconPreferenceError}</p> : null}
+        </section>
+      ) : null}
 
       <section className="settings-section">
         <h3>{t.windowStartupSettings}</h3>

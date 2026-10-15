@@ -1,4 +1,6 @@
 pub mod commands;
+#[cfg(target_os = "macos")]
+mod macos_icon;
 pub mod services;
 pub mod sessions;
 pub mod storage;

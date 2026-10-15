@@ -35,6 +35,7 @@ export function useSettingsModalEffects({
     setFilePanelRememberRatio,
     setRememberWindowSize,
     setShowMacosMenuBarIcon,
+    setAppIcon,
     setUiZoomPercent,
     setMcpAgentPreferences,
     setConnectionDefaults,
@@ -134,6 +135,7 @@ export function useSettingsModalEffects({
       setFilePanelRememberRatio(preferences.filePanelRememberRatio)
       setRememberWindowSize(preferences.rememberWindowSize)
       setShowMacosMenuBarIcon(preferences.showMacosMenuBarIcon)
+      setAppIcon(preferences.appIcon)
       setUiZoomPercent(preferences.uiZoomPercent)
       setMcpAgentPreferences({ ...DEFAULT_MCP_AGENT_PREFERENCES, ...preferences.mcpAgent })
       setConnectionDefaults({ ...DEFAULT_SSH_CONNECTION_DEFAULTS, ...preferences.connectionDefaults })

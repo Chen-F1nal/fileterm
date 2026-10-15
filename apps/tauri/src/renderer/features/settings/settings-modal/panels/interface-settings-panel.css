@@ -19,3 +19,31 @@
 .theme-card.light .preview-header::after {
   background: var(--theme-preview-light-divider);
 }
+
+.app-icon-picker {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app-icon-picker .radio-card-group__option {
+  align-items: flex-start;
+  min-height: 0;
+  padding: 8px;
+}
+
+.app-icon-picker .radio-card-group__copy {
+  flex: 1;
+  text-align: center;
+}
+
+.app-icon-picker .radio-card-group__copy strong {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.app-icon-picker img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}

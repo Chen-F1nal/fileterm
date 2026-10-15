@@ -65,6 +65,12 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     setIsSavingMacosMenuBarIcon,
     macosMenuBarIconPreferenceError,
     setMacosMenuBarIconPreferenceError,
+    appIcon,
+    setAppIcon,
+    isSavingAppIcon,
+    setIsSavingAppIcon,
+    appIconPreferenceError,
+    setAppIconPreferenceError,
     uiZoomPercent,
     setUiZoomPercent,
     isSavingUiZoomPercent,
@@ -329,6 +335,25 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
       .finally(() => setIsSavingMacosMenuBarIcon(false))
   }
 
+  const setAppIconPreference = (nextValue: UiPreferences['appIcon']) => {
+    if (!desktopApi || desktopApi.platform !== 'darwin' || isSavingAppIcon || nextValue === appIcon) {
+      return
+    }
+
+    const previousValue = appIcon
+    setAppIcon(nextValue)
+    setAppIconPreferenceError(null)
+    setIsSavingAppIcon(true)
+    void desktopApi
+      .setUiPreferences({ appIcon: nextValue })
+      .then((preferences) => setAppIcon(preferences.appIcon))
+      .catch(() => {
+        setAppIcon(previousValue)
+        setAppIconPreferenceError(t.appIconPreferenceSaveFailed)
+      })
+      .finally(() => setIsSavingAppIcon(false))
+  }
+
   return {
     updateStatus,
     autoCheckUpdates,
@@ -375,6 +400,10 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     isSavingMacosMenuBarIcon,
     macosMenuBarIconPreferenceError,
     setMacosMenuBarIconPreference,
+    appIcon,
+    isSavingAppIcon,
+    appIconPreferenceError,
+    setAppIconPreference,
     uiZoomPercent,
     isSavingUiZoomPercent,
     uiZoomPercentError,

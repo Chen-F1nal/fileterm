@@ -16,6 +16,7 @@ pub fn app_get_ui_preferences(app: AppHandle) -> Result<UiPreferences, AppError>
             custom_themes: Vec::new(),
             auto_check_updates: default_auto_check_updates(),
             show_macos_menu_bar_icon: default_show_macos_menu_bar_icon(),
+            app_icon: default_app_icon(),
             update_channel: default_update_channel(),
             terminal_zoom_locked: false,
             ui_zoom_locked: false,
@@ -56,6 +57,8 @@ pub fn app_set_ui_preferences(
     #[cfg(target_os = "macos")]
     let previous_show_macos_menu_bar_icon = preferences.show_macos_menu_bar_icon;
     #[cfg(target_os = "macos")]
+    let previous_app_icon = preferences.app_icon.clone();
+    #[cfg(target_os = "macos")]
     let previous_ui_zoom_percent = preferences.ui_zoom_percent;
     #[cfg(target_os = "macos")]
     let theme_changed = input.theme.is_some() || input.theme_config.is_some();
@@ -85,6 +88,9 @@ pub fn app_set_ui_preferences(
     }
     if let Some(show_macos_menu_bar_icon) = input.show_macos_menu_bar_icon {
         preferences.show_macos_menu_bar_icon = show_macos_menu_bar_icon;
+    }
+    if let Some(app_icon) = input.app_icon {
+        preferences.app_icon = app_icon;
     }
     if let Some(update_channel) = input.update_channel {
         preferences.update_channel = update_channel;
@@ -184,6 +190,16 @@ pub fn app_set_ui_preferences(
     let content = serde_json::to_string_pretty(&preferences)
         .map_err(|error| AppError::Serialization(error.to_string()))?;
     std::fs::write(path, content).map_err(|error| AppError::Storage(error.to_string()))?;
+    #[cfg(target_os = "macos")]
+    if previous_app_icon != preferences.app_icon {
+        if let Err(error) = crate::macos_icon::set_app_icon(&app, &preferences.app_icon) {
+            crate::services::logging::warn(
+                &app,
+                "ui-preferences",
+                format!("failed to update macOS app icon: {error}"),
+            );
+        }
+    }
     #[cfg(target_os = "macos")]
     if previous_show_macos_menu_bar_icon != preferences.show_macos_menu_bar_icon {
         let result = app
@@ -309,6 +325,7 @@ pub fn app_toggle_terminal_zoom_lock(app: AppHandle) -> Result<UiPreferences, Ap
             custom_themes: None,
             auto_check_updates: None,
             show_macos_menu_bar_icon: None,
+            app_icon: None,
             update_channel: None,
             terminal_zoom_locked: Some(!current.terminal_zoom_locked),
             ui_zoom_locked: None,
@@ -342,6 +359,7 @@ pub fn app_toggle_ui_zoom_lock(app: AppHandle) -> Result<UiPreferences, AppError
             custom_themes: None,
             auto_check_updates: None,
             show_macos_menu_bar_icon: None,
+            app_icon: None,
             update_channel: None,
             terminal_zoom_locked: None,
             ui_zoom_locked: Some(!current.ui_zoom_locked),
@@ -382,6 +400,7 @@ pub fn app_adjust_ui_zoom(app: AppHandle, operation: &str) -> Result<UiPreferenc
             custom_themes: None,
             auto_check_updates: None,
             show_macos_menu_bar_icon: None,
+            app_icon: None,
             update_channel: None,
             terminal_zoom_locked: None,
             ui_zoom_locked: None,

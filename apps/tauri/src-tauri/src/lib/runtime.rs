@@ -696,6 +696,19 @@ pub fn run() {
             // `Reopen` is a macOS-only Tauri event and must not be referenced
             // while compiling the Linux or Windows desktop targets.
             #[cfg(target_os = "macos")]
+            if matches!(_event, tauri::RunEvent::Ready) {
+                if let Ok(preferences) = crate::commands::app_get_ui_preferences(_app_handle.clone()) {
+                    if let Err(error) = crate::macos_icon::set_app_icon(_app_handle, &preferences.app_icon) {
+                        crate::services::logging::warn(
+                            _app_handle,
+                            "app-icon",
+                            format!("failed to restore macOS app icon preference: {error}"),
+                        );
+                    }
+                }
+            }
+
+            #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = _event {
                 show_main_window(_app_handle);
             }

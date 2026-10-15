@@ -8,6 +8,7 @@ import {
   type AiProviderDraft,
   type AiProviderSummary,
   type AppUpdateStatus,
+  type AppIconVariant,
   type BackupDownloadMode,
   type BackupUploadMode,
   type ConnectionProfile,
@@ -66,6 +67,9 @@ export function useSettingsModalState(initialTab: SettingsTab) {
   const [showMacosMenuBarIcon, setShowMacosMenuBarIcon] = useState(true)
   const [isSavingMacosMenuBarIcon, setIsSavingMacosMenuBarIcon] = useState(false)
   const [macosMenuBarIconPreferenceError, setMacosMenuBarIconPreferenceError] = useState<string | null>(null)
+  const [appIcon, setAppIcon] = useState<AppIconVariant>('classic')
+  const [isSavingAppIcon, setIsSavingAppIcon] = useState(false)
+  const [appIconPreferenceError, setAppIconPreferenceError] = useState<string | null>(null)
   const [uiZoomPercent, setUiZoomPercent] = useState(DEFAULT_UI_ZOOM_PERCENT)
   const [isSavingUiZoomPercent, setIsSavingUiZoomPercent] = useState(false)
   const [uiZoomPercentError, setUiZoomPercentError] = useState<string | null>(null)
@@ -206,6 +210,12 @@ export function useSettingsModalState(initialTab: SettingsTab) {
     setIsSavingMacosMenuBarIcon,
     macosMenuBarIconPreferenceError,
     setMacosMenuBarIconPreferenceError,
+    appIcon,
+    setAppIcon,
+    isSavingAppIcon,
+    setIsSavingAppIcon,
+    appIconPreferenceError,
+    setAppIconPreferenceError,
     uiZoomPercent,
     setUiZoomPercent,
     isSavingUiZoomPercent,

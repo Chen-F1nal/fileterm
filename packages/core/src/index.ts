@@ -2104,6 +2104,8 @@ export const MIN_UI_ZOOM_PERCENT = 80
 export const MAX_UI_ZOOM_PERCENT = 200
 export const UI_ZOOM_PERCENT_STEP = 10
 
+export type AppIconVariant = 'classic' | 'material' | 'clean'
+
 export interface UiPreferences {
   theme: ThemeMode
   locale: 'zhCN' | 'enUS'
@@ -2112,6 +2114,7 @@ export interface UiPreferences {
   customThemes: SavedTheme[]
   autoCheckUpdates: boolean
   showMacosMenuBarIcon: boolean
+  appIcon: AppIconVariant
   updateChannel: AppUpdateChannel
   terminalZoomLocked: boolean
   uiZoomLocked: boolean
@@ -2137,6 +2140,7 @@ export interface UiPreferencesInput {
   customThemes?: SavedTheme[]
   autoCheckUpdates?: boolean
   showMacosMenuBarIcon?: boolean
+  appIcon?: AppIconVariant
   updateChannel?: UiPreferences['updateChannel']
   terminalZoomLocked?: boolean
   uiZoomLocked?: boolean
