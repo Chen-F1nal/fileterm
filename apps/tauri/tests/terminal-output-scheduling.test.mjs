@@ -17,6 +17,8 @@ vm.runInNewContext(
   {
     exports,
     queueMicrotask,
+    document: { documentElement: {} },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
     window: {
       requestAnimationFrame: () => {
         throw new Error('Output must drain even when animation frames are suspended')
@@ -24,6 +26,7 @@ vm.runInNewContext(
     },
     require: (name) => {
       if (name === 'react') return { useCallback: (callback) => callback }
+      if (name === '../app/terminal-log-colorizer') return { getTerminalLogColorPalette: (theme) => theme }
       if (name === './terminal-view-utils')
         return {
           TERMINAL_WRITE_CHUNK_SIZE: chunkSize,
@@ -137,4 +140,33 @@ test('transcript replacement settles discarded output without credit leaking', a
   f.callbacks.shift()()
   await next
   assert.equal(f.pendingWriteCompletionsRef.current.length, 0)
+})
+
+test('unchanged terminal themes do not invalidate contrast caches or repaint history', () => {
+  const f = fixture()
+  let themes = 0
+  let recolors = 0
+  let refreshes = 0
+  let currentTheme
+  f.terminalRef.current.options = {
+    get theme() {
+      return currentTheme
+    },
+    set theme(theme) {
+      currentTheme = theme
+      themes++
+    }
+  }
+  f.terminalRef.current.rows = 24
+  f.terminalRef.current.refresh = () => refreshes++
+  f.terminalLogColorizerRef = { current: { setPalette: () => recolors++ } }
+  const { applyTerminalTheme } = exports.useTerminalViewActions(f)
+  for (let index = 0; index < 100; index++) applyTerminalTheme()
+  assert.equal(themes, 1)
+  assert.equal(recolors, 1)
+  assert.equal(refreshes, 1)
+  currentTheme.foreground = '#123456'
+  applyTerminalTheme()
+  assert.equal(themes, 2)
+  assert.equal(recolors, 2)
 })

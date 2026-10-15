@@ -34,7 +34,8 @@ try {
       ['components/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
       ['components/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
       ['components/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
-      ['app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter']
+      ['app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
+      ['app/terminal-render-cache', 'registerTerminalRenderCacheLimits']
     ]) {
       await loadTypeScript(page, root + '/apps/tauri/src/renderer/' + file + '.ts', name)
     }
@@ -54,7 +55,8 @@ try {
         selection: 'registerTerminalSelectionRenderer',
         symbols: 'registerTerminalSymbolGlyphRenderer',
         blocks: 'registerTerminalBlockGlyphRenderer',
-        foreground: 'registerTerminalForegroundAdapter'
+        foreground: 'registerTerminalForegroundAdapter',
+        cache: 'registerTerminalRenderCacheLimits'
       }
       for (const name of Object.values(names)) window[name](terminal)
       let renders = 0,

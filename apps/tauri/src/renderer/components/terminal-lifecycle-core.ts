@@ -9,6 +9,7 @@ import { t } from '../i18n'
 import { getConfiguredMonoFontFamily } from '../app/font-metrics'
 import { getTerminalLogColorPalette, TerminalLogColorizer } from '../app/terminal-log-colorizer'
 import { registerTerminalForegroundAdapter } from '../app/terminal-foreground-adapter'
+import { registerTerminalRenderCacheLimits } from '../app/terminal-render-cache'
 import { scaleTerminalFontSizeForUiZoom } from '../app/ui-zoom'
 import {
   getTerminalFontSize,
@@ -98,6 +99,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   terminal.loadAddon(webLinksAddon)
   terminal.unicode.activeVersion = '11'
   terminal.open(host)
+  const renderCacheLimits = registerTerminalRenderCacheLimits(terminal)
   const selectionRenderer = registerTerminalSelectionRenderer(terminal)
   const symbolGlyphRenderer = registerTerminalSymbolGlyphRenderer(terminal)
   const blockGlyphRenderer = registerTerminalBlockGlyphRenderer(terminal)
@@ -316,6 +318,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
       terminalTextarea?.removeEventListener('compositionupdate', onCompositionUpdate)
       terminalTextarea?.removeEventListener('compositionend', onCompositionEnd)
       terminalLogColorizer.dispose()
+      renderCacheLimits.dispose()
       foregroundAdapter.dispose()
       blockGlyphRenderer.dispose()
       selectionRenderer.dispose()

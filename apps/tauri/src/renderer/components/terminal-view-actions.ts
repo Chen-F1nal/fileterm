@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import { type Terminal } from '@xterm/xterm'
+import { type ITheme, type Terminal } from '@xterm/xterm'
 import { type FitAddon } from '@xterm/addon-fit'
 import { type SearchAddon } from '@xterm/addon-search'
 import { MAX_UI_ZOOM_PERCENT, MIN_UI_ZOOM_PERCENT } from '@fileterm/core'
@@ -155,7 +155,11 @@ export function useTerminalViewActions({
     if (!terminal) {
       return
     }
-    terminal.options.theme = buildTerminalTheme()
+    const theme = buildTerminalTheme()
+    if (Object.entries(theme).every(([key, value]) => terminal.options.theme?.[key as keyof ITheme] === value)) {
+      return
+    }
+    terminal.options.theme = theme
     terminalLogColorizerRef.current?.setPalette(getTerminalLogColorPalette(terminal.options.theme))
     terminal.refresh(0, Math.max(terminal.rows - 1, 0))
   }

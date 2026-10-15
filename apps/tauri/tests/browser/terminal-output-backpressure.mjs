@@ -26,6 +26,7 @@ try {
     ['renderer/components/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
     ['renderer/components/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
     ['renderer/app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
+    ['renderer/app/terminal-render-cache', 'registerTerminalRenderCacheLimits'],
     ['renderer/app/terminal-log-colorizer', 'TerminalLogColorizer']
   ])
     await loadTypeScript(page, root + '/apps/tauri/src/' + file + '.ts', symbol)
@@ -68,6 +69,7 @@ try {
         'registerTerminalSymbolGlyphRenderer',
         'registerTerminalBlockGlyphRenderer',
         'registerTerminalSelectionRenderer',
+        'registerTerminalRenderCacheLimits',
         'registerTerminalForegroundAdapter'
       ])
         window[name](terminal)

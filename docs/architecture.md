@@ -78,6 +78,8 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - `apps/tauri/src/renderer/components/terminal-view.tsx`
   - 从 CSS 变量读取终端主题色，确保终端外观和全局主题联动。
   - `terminal-lifecycle-core.ts` 使用 xterm 的最低文字对比度保护，在显示层处理 ANSI/256 色/RGB 与选区/搜索背景，不改写协议流。
+  - DOM 渲染的颜色对比缓存每组最多 8,192 个颜色对，字符宽度缓存最多 16,384 项；仅淘汰可重新计算的结果，保留字体校准、ASCII 快表和历史内容。适配器按终端创建/销毁，私有缓存结构受 xterm 版本回归约束。
+  - 相同主题与日志颜色不重复失效缓存或扫描历史；文件面板的吸附观察仅覆盖 shell 与侧栏，不订阅终端子树重绘。
   - `terminal-block-glyph-renderer.ts` 将块字符和连续横线 `─`、`━`、`═` 按字符格几何绘入逐行设备像素位图，复用实时 palette 与选区前景，避免字体边缘和 ANSI span 接缝造成断线或粗细变化。
 - `apps/tauri/src/renderer/app/terminal-log-colorizer.ts`
   - 在 xterm 完成解析后对普通缓冲区的时间戳、服务名和常见日志级别着色；不向远端输出注入 ANSI，不处理 `top`、`vim`、`less` 等备用屏幕程序，并随终端主题重新套用颜色。

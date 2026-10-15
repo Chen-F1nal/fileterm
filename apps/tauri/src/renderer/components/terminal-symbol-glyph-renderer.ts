@@ -17,6 +17,7 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   if (!rows || !view || !context) return { dispose() {} }
   const sources = new Map<HTMLElement, SourceStyle>()
   const metrics = new Map<string, { left: number; width: number }>()
+  const reusableCell = terminal.buffer.active.getNullCell()
 
   const collectRow = (row: HTMLElement, rowIndex: number, cellWidth: number, updates: Array<() => void>) => {
     if (!/[\u0080-\u{10ffff}]/u.test(row.textContent ?? '')) return
@@ -31,7 +32,7 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       // Map DOM text back to buffer widths, including wide and combined cells.
       // Fail closed for a joiner/decorator that supplies different text.
       while (offset < text.length && column < line.length) {
-        const cell = line.getCell(column++)!
+        const cell = line.getCell(column++, reusableCell)!
         if (cell.getWidth() === 0) continue
         const chars = cell.isInvisible() ? ' ' : cell.getChars() || ' '
         if (text.slice(offset, offset + chars.length).replace(/\u00a0/g, ' ') !== chars.replace(/\u00a0/g, ' ')) return

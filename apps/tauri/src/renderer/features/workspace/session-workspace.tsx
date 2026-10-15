@@ -26,6 +26,7 @@ import { TerminalDock } from '../terminal/terminal-dock'
 import { t } from '../../i18n'
 import { SplitPaneLayout } from './split-pane-layout'
 import { FILE_PANEL_SNAP_TARGETS, FILE_PANEL_SNAP_TARGET_SELECTORS, type FilePanelSnapTarget } from './file-panel-snap'
+import { observeFilePanelLayout } from './file-panel-layout-observer'
 
 const DEFAULT_FILE_PANEL_HEIGHT = 218
 const DEFAULT_FILE_PANEL_RATIO = 30
@@ -519,43 +520,7 @@ export function SessionWorkspace({
     // the workspace. Observe both sides of the alignment so a window resize
     // or a sidebar content reflow keeps the horizontal boundaries together.
     const layoutRoot = document.querySelector<HTMLElement>('.fs-shell') ?? document.body
-    const sidebar = document.querySelector<HTMLElement>('.fs-sidebar:not(.is-collapsed)')
-    const sidebarCard = sidebar?.querySelector<HTMLElement>('.sys-card')
-    let observedSnapTargets: HTMLElement[] = []
-    const observeSnapTargets = () => {
-      const nextSnapTargets = FILE_PANEL_SNAP_TARGETS.flatMap((target) => {
-        const element = getFilePanelSnapTargetElement(target)
-        return element ? [element] : []
-      })
-      observedSnapTargets.forEach((element) => {
-        if (!nextSnapTargets.includes(element)) {
-          resizeObserver.unobserve(element)
-        }
-      })
-      nextSnapTargets.forEach((element) => {
-        if (!observedSnapTargets.includes(element)) {
-          resizeObserver.observe(element)
-        }
-      })
-      observedSnapTargets = nextSnapTargets
-    }
-    if (sidebar) resizeObserver.observe(sidebar)
-    if (sidebarCard) resizeObserver.observe(sidebarCard)
-    observeSnapTargets()
-
-    // The sidebar can replace its metric card while a session reconnects or
-    // while the compact layout is rebuilt. Keep observing the current header
-    // instead of retaining a detached DOM node from the first render.
-    const layoutMutationObserver = new MutationObserver(() => {
-      observeSnapTargets()
-      syncAfterLayout()
-    })
-    layoutMutationObserver.observe(layoutRoot, {
-      attributes: true,
-      attributeFilter: ['class', 'style'],
-      childList: true,
-      subtree: true
-    })
+    const disposeLayoutObserver = observeFilePanelLayout(layoutRoot, resizeObserver, syncAfterLayout)
 
     const themeObserver = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -587,7 +552,7 @@ export function SessionWorkspace({
         themeTimer = null
       }
       resizeObserver.disconnect()
-      layoutMutationObserver.disconnect()
+      disposeLayoutObserver()
       themeObserver.disconnect()
       window.removeEventListener('resize', syncAfterLayout)
     }
