@@ -63,6 +63,9 @@ export function useSettingsModalState(initialTab: SettingsTab) {
   const [rememberWindowSize, setRememberWindowSize] = useState(false)
   const [isSavingWindowSizePreference, setIsSavingWindowSizePreference] = useState(false)
   const [windowSizePreferenceError, setWindowSizePreferenceError] = useState<string | null>(null)
+  const [showMacosMenuBarIcon, setShowMacosMenuBarIcon] = useState(true)
+  const [isSavingMacosMenuBarIcon, setIsSavingMacosMenuBarIcon] = useState(false)
+  const [macosMenuBarIconPreferenceError, setMacosMenuBarIconPreferenceError] = useState<string | null>(null)
   const [uiZoomPercent, setUiZoomPercent] = useState(DEFAULT_UI_ZOOM_PERCENT)
   const [isSavingUiZoomPercent, setIsSavingUiZoomPercent] = useState(false)
   const [uiZoomPercentError, setUiZoomPercentError] = useState<string | null>(null)
@@ -197,6 +200,12 @@ export function useSettingsModalState(initialTab: SettingsTab) {
     setIsSavingWindowSizePreference,
     windowSizePreferenceError,
     setWindowSizePreferenceError,
+    showMacosMenuBarIcon,
+    setShowMacosMenuBarIcon,
+    isSavingMacosMenuBarIcon,
+    setIsSavingMacosMenuBarIcon,
+    macosMenuBarIconPreferenceError,
+    setMacosMenuBarIconPreferenceError,
     uiZoomPercent,
     setUiZoomPercent,
     isSavingUiZoomPercent,

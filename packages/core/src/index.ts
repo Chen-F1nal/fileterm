@@ -2108,6 +2108,7 @@ export interface UiPreferences {
   filetermThemeResetAppVersion: string | null
   customThemes: SavedTheme[]
   autoCheckUpdates: boolean
+  showMacosMenuBarIcon: boolean
   updateChannel: AppUpdateChannel
   terminalZoomLocked: boolean
   uiZoomLocked: boolean
@@ -2132,6 +2133,7 @@ export interface UiPreferencesInput {
   themeConfig?: ThemeConfig
   customThemes?: SavedTheme[]
   autoCheckUpdates?: boolean
+  showMacosMenuBarIcon?: boolean
   updateChannel?: UiPreferences['updateChannel']
   terminalZoomLocked?: boolean
   uiZoomLocked?: boolean

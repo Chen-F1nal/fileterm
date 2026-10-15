@@ -39,6 +39,8 @@ pub struct UiPreferences {
     pub custom_themes: Vec<SavedTheme>,
     #[serde(default = "default_auto_check_updates")]
     pub auto_check_updates: bool,
+    #[serde(default = "default_show_macos_menu_bar_icon")]
+    pub show_macos_menu_bar_icon: bool,
     #[serde(default = "default_update_channel")]
     pub update_channel: String,
     #[serde(default)]
@@ -85,6 +87,7 @@ pub struct UiPreferencesInput {
     pub theme_config: Option<ThemeConfig>,
     pub custom_themes: Option<Vec<SavedTheme>>,
     pub auto_check_updates: Option<bool>,
+    pub show_macos_menu_bar_icon: Option<bool>,
     pub update_channel: Option<String>,
     pub terminal_zoom_locked: Option<bool>,
     pub ui_zoom_locked: Option<bool>,
@@ -133,6 +136,10 @@ fn is_light_theme_mode(theme: &str) -> bool {
 }
 
 fn default_auto_check_updates() -> bool {
+    true
+}
+
+fn default_show_macos_menu_bar_icon() -> bool {
     true
 }
 

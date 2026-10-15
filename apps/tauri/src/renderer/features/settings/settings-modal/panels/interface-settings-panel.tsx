@@ -78,6 +78,10 @@ type InterfaceSettingsPanelContext = {
   isSavingWindowSizePreference: boolean
   windowSizePreferenceError: string | null
   setRememberWindowSizePreference(nextValue: boolean): void
+  showMacosMenuBarIcon: boolean
+  isSavingMacosMenuBarIcon: boolean
+  macosMenuBarIconPreferenceError: string | null
+  setMacosMenuBarIconPreference(nextValue: boolean): void
   uiZoomLocked: boolean
   isSavingUiZoomPreference: boolean
   uiZoomPreferenceError: string | null
@@ -156,6 +160,10 @@ export function InterfaceSettingsPanel() {
     isSavingWindowSizePreference,
     windowSizePreferenceError,
     setRememberWindowSizePreference,
+    showMacosMenuBarIcon,
+    isSavingMacosMenuBarIcon,
+    macosMenuBarIconPreferenceError,
+    setMacosMenuBarIconPreference,
     uiZoomLocked,
     isSavingUiZoomPreference,
     uiZoomPreferenceError,
@@ -814,6 +822,29 @@ export function InterfaceSettingsPanel() {
 
       <section className="settings-section">
         <h3>{t.windowStartupSettings}</h3>
+        {desktopApi?.platform === 'darwin' ? (
+          <div className="overview-preference-list">
+            <label
+              aria-busy={isSavingMacosMenuBarIcon}
+              className="overview-preference-row"
+              inert={isSavingMacosMenuBarIcon}
+            >
+              <span className="overview-preference-copy">
+                <strong>{t.showMacosMenuBarIcon}</strong>
+                <p>{t.showMacosMenuBarIconHint}</p>
+              </span>
+              <span className="command-toggle overview-preference-toggle">
+                <SelectionControl
+                  checked={showMacosMenuBarIcon}
+                  disabled={!desktopApi}
+                  onChange={(event) => setMacosMenuBarIconPreference(event.target.checked)}
+                  type="checkbox"
+                />
+              </span>
+            </label>
+          </div>
+        ) : null}
+        {macosMenuBarIconPreferenceError ? <p className="modal-error">{macosMenuBarIconPreferenceError}</p> : null}
         <div className="overview-preference-list">
           <label
             aria-busy={isSavingWindowSizePreference}

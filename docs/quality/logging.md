@@ -67,6 +67,21 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 
 业务采样日志应单独限频，不依赖队列满后的保护。监控样本摘要最多每分钟一条，侧栏状态变化去重，详见 monitoring-sidebar-diagnostics.md。
 
+## 长时间运行诊断事件
+
+以下性能事件写入 `app.log`。`renderer-health` 仅在可见 renderer 中每分钟提交一次；JS heap 不是 WebView 或应用进程的总内存。
+
+| 事件 / scope                                     | 级别与触发                                                                           | 记录内容                                                                                                                                                                                                         | 解释限制                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `renderer-health` / `renderer:performance`       | DEBUG；可见页面每分钟                                                                | `uptimeMs`、可用时的 `usedJSHeapBytes` / `totalJSHeapBytes`、`ipcCallbackCount`、`terminalCount`、`domNodeCount`、本分钟 `maxEventLoopGapMs`；支持 Long Tasks API 时包含任务数、总时长和最大时长；应用版本与平台 | 隐藏页面不采样；JS heap 不代表 WebView 进程内存。可选字段可能不存在                  |
+| `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `tokioAliveTasks`、`tokioGlobalQueueDepth`、`sessions`、`workers`、`workerQueuedCommands`、`sessionLogWriters`                                                                                                   | 只记录数量；使用非等待锁，锁忙时相应值为 `null`。全局就绪队列不包含所有 IO 等待任务  |
+| `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `transferTasks`、`transferRuns`、`transferProgressSamples`、`terminalOutput.windows`、`terminalOutput.inFlight`、`terminalOutput.queuedBatches`                                                                  | 只记录数量；锁忙时相应值为 `null`，不是累计历史数或内存字节数                        |
+| `event-loop-gap` / `renderer:performance`        | WARN；可见页面的 1 秒心跳间隔达到 4 秒，最多每 30 秒一次                             | `elapsedMs`、页面是否聚焦、应用版本与平台                                                                                                                                                                        | 在 renderer 恢复后才能记录；不能单独证明键盘输入或按钮响应耗时                       |
+| `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
+| `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口标识与累计跳过字节数                                                                                                                                | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
+
+这些性能记录不包含终端文本、终端输入或传输文件内容。普通 `app.log` 还包含各功能主动写入的运行与错误事件；启用的终端会话 transcript 单独保存在 `session-logs/`，其内容策略见“范围”。
+
 ## 前端异常
 
 `renderer-error-log.ts` 通过同一 IPC 将异常写入 `app.log`，级别为 ERROR、scope 为 `renderer:error`（category 为 workspace）。覆盖 React ErrorBoundary、window error、未处理的 Promise 拒绝和 bridge 就绪后的初始化失败。

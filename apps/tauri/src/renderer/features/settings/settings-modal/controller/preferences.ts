@@ -59,6 +59,12 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     setIsSavingWindowSizePreference,
     windowSizePreferenceError,
     setWindowSizePreferenceError,
+    showMacosMenuBarIcon,
+    setShowMacosMenuBarIcon,
+    isSavingMacosMenuBarIcon,
+    setIsSavingMacosMenuBarIcon,
+    macosMenuBarIconPreferenceError,
+    setMacosMenuBarIconPreferenceError,
     uiZoomPercent,
     setUiZoomPercent,
     isSavingUiZoomPercent,
@@ -299,6 +305,30 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
       .finally(() => setIsSavingUiZoomPercent(false))
   }
 
+  const setMacosMenuBarIconPreference = (nextValue: boolean) => {
+    if (
+      !desktopApi ||
+      desktopApi.platform !== 'darwin' ||
+      isSavingMacosMenuBarIcon ||
+      nextValue === showMacosMenuBarIcon
+    ) {
+      return
+    }
+
+    const previousValue = showMacosMenuBarIcon
+    setShowMacosMenuBarIcon(nextValue)
+    setMacosMenuBarIconPreferenceError(null)
+    setIsSavingMacosMenuBarIcon(true)
+    void desktopApi
+      .setUiPreferences({ showMacosMenuBarIcon: nextValue })
+      .then((preferences) => setShowMacosMenuBarIcon(preferences.showMacosMenuBarIcon))
+      .catch(() => {
+        setShowMacosMenuBarIcon(previousValue)
+        setMacosMenuBarIconPreferenceError(t.macosMenuBarIconPreferenceSaveFailed)
+      })
+      .finally(() => setIsSavingMacosMenuBarIcon(false))
+  }
+
   return {
     updateStatus,
     autoCheckUpdates,
@@ -341,6 +371,10 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     isSavingWindowSizePreference,
     windowSizePreferenceError,
     setRememberWindowSizePreference,
+    showMacosMenuBarIcon,
+    isSavingMacosMenuBarIcon,
+    macosMenuBarIconPreferenceError,
+    setMacosMenuBarIconPreference,
     uiZoomPercent,
     isSavingUiZoomPercent,
     uiZoomPercentError,
