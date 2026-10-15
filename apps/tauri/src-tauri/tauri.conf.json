@@ -7,7 +7,8 @@
     "beforeDevCommand": "npm run dev:renderer",
     "devUrl": "http://localhost:5188",
     "frontendDist": "../dist",
-    "beforeBuildCommand": "npm run build:renderer"
+    "beforeBuildCommand": "npm run build:renderer",
+    "beforeBundleCommand": "node ./src-tauri/scripts/build-dock-tile-plugin.mjs"
   },
   "app": {
     "macOSPrivateApi": true,
@@ -35,7 +36,10 @@
     "targets": "all",
     "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
     "macOS": {
-      "minimumSystemVersion": "10.13"
+      "minimumSystemVersion": "10.13",
+      "files": {
+        "PlugIns/FileTermDockTile.docktileplugin": "./target/dock-tile-plugin/FileTermDockTile.docktileplugin"
+      }
     }
   }
 }
