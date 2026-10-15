@@ -32,9 +32,10 @@ function fixture() {
     {
       exports,
       document,
-      performance: { now: () => now },
+      performance: { now: () => now, memory: { usedJSHeapSize: 1234, totalJSHeapSize: 4567 } },
       window: {
-        fileterm: { appVersion: '2.2.28', platform: 'darwin' },
+        fileterm: { appVersion: '2.2.31', platform: 'win32' },
+        __TAURI_INTERNALS__: { callbacks: new Map([[1, () => {}]]) },
         setInterval: (listener, interval) => {
           assert.equal(interval, 1000)
           callback = listener
@@ -93,5 +94,18 @@ test('hidden timer throttling and the transition back to foreground are ignored'
   assert.equal(f.calls.length, 0)
   f.tick(4000)
   assert.equal(f.calls.length, 1)
+  f.dispose()
+})
+
+test('minute health reports include bounded counters without terminal contents', () => {
+  const f = fixture()
+  for (let index = 0; index < 60; index++) f.tick(1000)
+  assert.equal(f.calls.length, 1)
+  const health = JSON.parse(f.calls[0][2])
+  assert.equal(health.event, 'renderer-health')
+  assert.equal(health.uptimeMs, 60000)
+  assert.equal(health.usedJSHeapBytes, 1234)
+  assert.equal(health.totalJSHeapBytes, 4567)
+  assert.equal(health.ipcCallbackCount, 1)
   f.dispose()
 })

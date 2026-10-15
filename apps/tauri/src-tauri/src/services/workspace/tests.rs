@@ -159,20 +159,26 @@ mod tests {
         );
     }
 
-    #[test]
-    fn terminal_output_channel_preserves_stream_order_under_load() {
+    #[tokio::test]
+    async fn terminal_output_channel_preserves_stream_order_under_load() {
         let received = Arc::new(Mutex::new(Vec::new()));
         let received_messages = Arc::clone(&received);
+        let state = Arc::new(WorkspaceState::default());
+        let receiver_state = Arc::clone(&state);
+        let channel_id = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let receiver_id = Arc::clone(&channel_id);
         let channel = Channel::new(move |body| {
             let payload: serde_json::Value = body.deserialize().unwrap();
+            receiver_state.ack_terminal_output("main", receiver_id.load(std::sync::atomic::Ordering::Relaxed), payload["deliveryId"].as_u64().unwrap());
             received_messages.lock().unwrap().push(payload);
             Ok(())
         });
-        let state = WorkspaceState::default();
-        state.register_terminal_output_channel(channel);
+        channel_id.store(channel.id(), std::sync::atomic::Ordering::Relaxed);
+        state.register_terminal_output_channel("main", channel);
 
         for index in 0..2_000 {
             state.publish_terminal_output("tab-load", &format!("{index}\r\n"));
+            while received.lock().unwrap().len() <= index { tokio::task::yield_now().await; }
         }
 
         let messages = received.lock().unwrap();

@@ -6,7 +6,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use tauri::ipc::Channel;
 use tokio::sync::{oneshot, watch, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 
@@ -32,4 +31,6 @@ include!("monitoring.rs");
 include!("model.rs");
 include!("profiles.rs");
 include!("state.rs");
+mod terminal_output;
+use terminal_output::TerminalOutputSubscription;
 include!("tests.rs");

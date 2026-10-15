@@ -3000,5 +3000,31 @@ mod tests {
         assert!(sha256_kex_pos < sha1_kex_pos);
         assert!(sha1_kex_pos < g1_pos);
     }
+    use super::TerminalOutputPump;
+
+    #[test]
+    fn full_terminal_pump_bounds_display_and_reports_skipped_bytes() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let mut output = TerminalOutputPump {
+            sender,
+            skipped_bytes: 0,
+            last_warning: None,
+        };
+        let mut first = "first 中文\r\n".as_bytes().to_vec();
+        assert_eq!(output.enqueue(&mut first), None);
+        let mut skipped = "skip 🔒\r\n".as_bytes().to_vec();
+        assert_eq!(output.enqueue(&mut skipped), Some("skip 🔒\r\n".len()));
+        assert!(skipped.is_empty());
+        let mut also_skipped = b"again".to_vec();
+        assert_eq!(output.enqueue(&mut also_skipped), None);
+        assert_eq!(receiver.try_recv().unwrap(), "first 中文\r\n");
+        let mut next = b"new frame".to_vec();
+        assert_eq!(output.enqueue(&mut next), None);
+        let delivered = receiver.try_recv().unwrap();
+        assert!(delivered.contains(&format!("skipped {} bytes", "skip 🔒\r\n".len() + 5)));
+        assert!(delivered.ends_with("new frame"));
+        assert_eq!(output.skipped_bytes, 0);
+    }
+
     include!("transport/route_tests.rs");
 }

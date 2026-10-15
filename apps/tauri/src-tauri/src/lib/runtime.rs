@@ -600,6 +600,7 @@ pub fn run() {
             crate::commands::app_open_local_terminal,
             crate::commands::app_write_terminal,
             crate::commands::app_subscribe_terminal_data,
+            crate::commands::app_ack_terminal_data,
             crate::commands::app_resize_terminal,
             crate::commands::app_open_remote_path,
             crate::commands::app_list_remote_directory,

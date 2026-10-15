@@ -27,7 +27,10 @@ vm.runInNewContext(
       if (name === './terminal-view-utils')
         return {
           TERMINAL_WRITE_CHUNK_SIZE: chunkSize,
-          splitPaneShortcutsForPlatform: () => ({})
+          splitPaneShortcutsForPlatform: () => ({}),
+          trimTranscript: (value) => value,
+          toDisplayTerminalText: (value) => value,
+          logTerminalRender: () => {}
         }
       if (
         [
@@ -49,6 +52,7 @@ function fixture() {
   const writes = []
   const callbacks = []
   const terminal = {
+    reset: () => {},
     write: (text, callback) => {
       writes.push(text)
       callbacks.push(callback)
@@ -57,11 +61,16 @@ function fixture() {
   const refs = {
     terminalRef: { current: terminal },
     pendingWriteRef: { current: '' },
+    pendingWriteCompletionsRef: { current: [] },
     isWritingRef: { current: false },
-    transcriptReplayGenerationRef: { current: 0 }
+    transcriptReplayGenerationRef: { current: 0 },
+    renderedTranscriptRef: { current: '' },
+    replayingTranscriptRef: { current: false },
+    tabIdRef: { current: 'tab' },
+    suppressHydratedChunksUntilRef: { current: 0 }
   }
-  const { scheduleTerminalWrite } = exports.useTerminalViewActions(refs)
-  return { ...refs, writes, callbacks, scheduleTerminalWrite }
+  const { scheduleTerminalWrite, replaceTerminalWithTranscript } = exports.useTerminalViewActions(refs)
+  return { ...refs, writes, callbacks, scheduleTerminalWrite, replaceTerminalWithTranscript }
 }
 
 test('idle terminal output reaches xterm without waiting for an animation frame', () => {
@@ -98,4 +107,34 @@ test('late parser callbacks cannot change a replacement terminal or transcript r
     assert.equal(f.pendingWriteRef.current, 'new')
     assert.deepEqual(f.writes, ['old'])
   }
+})
+
+test('credit resolves after the full batch is parsed, including combined writes', async () => {
+  const f = fixture()
+  let completed = 0
+  const first = f.scheduleTerminalWrite('A'.repeat(chunkSize + 10)).then(() => completed++)
+  const second = f.scheduleTerminalWrite('B').then(() => completed++)
+  f.callbacks.shift()()
+  await Promise.resolve()
+  assert.equal(completed, 0)
+  f.callbacks.shift()()
+  await Promise.all([first, second])
+  assert.equal(completed, 2)
+  assert.equal(f.pendingWriteCompletionsRef.current.length, 0)
+})
+
+test('transcript replacement settles discarded output without credit leaking', async () => {
+  const f = fixture()
+  const first = f.scheduleTerminalWrite('old')
+  const second = f.scheduleTerminalWrite('older pending')
+  f.replaceTerminalWithTranscript(f.terminalRef.current, 'snapshot')
+  await Promise.all([first, second])
+  assert.equal(f.pendingWriteCompletionsRef.current.length, 0)
+  const next = f.scheduleTerminalWrite('new')
+  f.callbacks.shift()()
+  assert.equal(f.pendingWriteCompletionsRef.current.length, 1)
+  f.callbacks.shift()()
+  f.callbacks.shift()()
+  await next
+  assert.equal(f.pendingWriteCompletionsRef.current.length, 0)
 })

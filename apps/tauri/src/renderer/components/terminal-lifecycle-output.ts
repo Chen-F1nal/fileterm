@@ -279,10 +279,11 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       }
       appendRenderedTranscript(visibleChunk)
       clearSearchDecorations()
-      scheduleTerminalWrite(formatTerminalChunk(terminal, visibleChunk))
+      const parsed = scheduleTerminalWrite(formatTerminalChunk(terminal, visibleChunk))
       if (pendingPromptResizeRef.current) {
         scheduleSettledHorizontalResize()
       }
+      return parsed
     })
 
     const offState = window.fileterm?.onTerminalState(

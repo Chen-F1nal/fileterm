@@ -359,7 +359,7 @@
         // a flush so memory stays bounded and the next emit does
         // not grow a multi-MB chunk in one shot.
         if batch_buffer.len() >= TERMINAL_BATCH_BUFFER_FLUSH_THRESHOLD {
-            flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
+            flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
             last_emit = Instant::now();
         }
     }

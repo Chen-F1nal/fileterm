@@ -2856,7 +2856,7 @@ export interface FileTermDesktopApi {
     targetPath: string,
     options: PermissionChangeOptions
   ): Promise<WorkspaceSnapshot>
-  onTerminalData(listener: (payload: TerminalDataPayload) => void): () => void
+  onTerminalData(listener: (payload: TerminalDataPayload) => void | Promise<void>): () => void
   onTerminalState(listener: (payload: TerminalStatePayload) => void): () => void
   onTransferUpdate(listener: (transfer: TransferTask) => void): () => void
   onSerialTransferProgress(listener: (progress: SerialTransferProgress) => void): () => void
