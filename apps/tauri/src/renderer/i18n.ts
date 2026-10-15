@@ -1569,9 +1569,9 @@ const zhCN = {
   macosMenuBarIconPreferenceSaveFailed: '无法保存菜单栏图标偏好。',
   appIcon: '应用图标',
   appIconHintMac:
-    '切换 Dock 与 Finder/Launchpad 图标；自定义 Finder 图标可能影响严格代码签名校验，DMG 默认仍为经典银边。',
-  appIconHintWindows: '切换运行中窗口和任务栏图标；安装包与已固定快捷方式仍用经典银边。',
-  appIconHintLinux: '切换窗口图标和当前用户的 FileTerm 启动器条目；桌面环境可能延迟刷新。',
+    '切换运行期间的 Dock 图标；退出后 Dock 显示应用包图标，重新启动后会应用所选样式。Finder/Launchpad 和 DMG 保持经典银边。',
+  appIconHintWindows: '切换运行中窗口、任务栏和托盘图标；安装包与已固定快捷方式仍用经典银边。',
+  appIconHintLinux: '切换窗口、托盘和当前用户 FileTerm 启动器图标；桌面环境可能延迟刷新。',
   appIconClassic: '经典银边',
   appIconClassicHint: '单层终端符号与银色外圈。',
   appIconMaterial: '双材质',
@@ -3666,11 +3666,11 @@ const enUS: typeof zhCN = {
   macosMenuBarIconPreferenceSaveFailed: 'Unable to save the menu bar icon preference.',
   appIcon: 'App icon',
   appIconHintMac:
-    'Changes the Dock and Finder/Launchpad icons; a custom Finder icon may affect strict code-signature checks. The DMG keeps the classic silver rim.',
+    'Changes the Dock icon while FileTerm is running. After quitting, the Dock shows the app bundle icon; the selected style is applied again at launch. Finder/Launchpad and the DMG keep the classic silver rim.',
   appIconHintWindows:
-    'Changes running window and taskbar icons; the installer and pinned shortcuts keep the classic silver rim.',
+    'Changes running window, taskbar, and tray icons; the installer and pinned shortcuts keep the classic silver rim.',
   appIconHintLinux:
-    'Changes window icons and the current user’s FileTerm launcher entry; the desktop may refresh it later.',
+    'Changes window and tray icons and the current user’s FileTerm launcher; the desktop may refresh it later.',
   appIconClassic: 'Classic silver rim',
   appIconClassicHint: 'Single-layer terminal mark with a silver rim.',
   appIconMaterial: 'Two-tone',
