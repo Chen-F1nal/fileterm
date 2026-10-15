@@ -1,4 +1,5 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
+import { registerSharedTerminalGlyphWidths } from './terminal-shared-glyph-widths'
 
 const MAX_CONTRAST_PAIRS = 8192
 const MAX_GLYPH_WIDTHS = 16384
@@ -78,6 +79,8 @@ export function registerTerminalRenderCacheLimits(terminal: Terminal): IDisposab
     })
   }
   // shortcut: private xterm 6 cache shapes; recheck this adapter on xterm upgrades.
+  const sharedWidths = registerSharedTerminalGlyphWidths(terminal)
+  restore.push(() => sharedWidths.dispose())
   return {
     dispose: () => {
       restore.splice(0).forEach((reset) => reset())

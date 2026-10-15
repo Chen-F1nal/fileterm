@@ -20,7 +20,6 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   const reusableCell = terminal.buffer.active.getNullCell()
 
   const collectRow = (row: HTMLElement, rowIndex: number, cellWidth: number, updates: Array<() => void>) => {
-    if (!/[\u0080-\u{10ffff}]/u.test(row.textContent ?? '')) return
     const line = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + rowIndex)
     if (!line || cellWidth <= 0) return
     let column = 0
@@ -97,10 +96,20 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   }
   const renderRows = (indexes: number[]) => {
     for (const source of sources.keys()) if (!rows.contains(source)) sources.delete(source)
+    const affected = indexes.filter((index) => {
+      const row = rows.children[index]
+      const text = row?.textContent ?? ''
+      return (
+        row instanceof view.HTMLElement &&
+        /[\u0080-\u{10ffff}]/u.test(text) &&
+        /[\p{Symbol}\p{Punctuation}]/u.test(text)
+      )
+    })
+    if (!affected.length) return
     const cellWidth = rows.getBoundingClientRect().width / terminal.cols
     const updates: Array<() => void> = []
     // Measure all affected rows before changing DOM, avoiding a layout flush per symbol.
-    for (const index of indexes) {
+    for (const index of affected) {
       const row = rows.children[index]
       if (row instanceof view.HTMLElement) collectRow(row, index, cellWidth, updates)
     }
