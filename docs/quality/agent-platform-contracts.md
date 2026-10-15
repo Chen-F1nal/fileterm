@@ -4,7 +4,7 @@
 
 ### 平台兼容边界
 
-- **macOS 应用图标安全留白**：Dock 和 `⌘Tab` 使用 `icon.icns` 时，macOS 专用主图标必须在 1024×1024 画布中保留约 100px 的透明安全边距（有效图形约 824×824），不得直接使用满版主图标；Windows/Linux/WebView 继续使用完整主图标。macOS 菜单栏托盘仍使用独立的黑色单色透明 Template 图标，不能用 `icon.icns` 代替。
+- **macOS 应用图标**：Finder、Launchpad 和 DMG 使用 `fileterm-macos-1024.png` 生成的经典银边 `icon.icns`，1024×1024 画布保留约 100px 透明安全边距。运行中的 Dock 图标由已保存的选择更新；退出后由 `NSDockTilePlugIn` 继续显示同一选择，插件使用独立的 FileTerm 偏好域监听变化。`setDockTile:` 必须直接赋值 backing ivar，不能通过同名 property setter 递归调用自身。Windows/Linux/WebView 继续使用各自资源。macOS 菜单栏托盘仍使用独立的黑色单色透明 Template 图标，不能用 `icon.icns` 代替。
 - **macOS 菜单栏图标可见性**：设置中的显隐偏好持久化在 UI preferences，默认显示；隐藏仅移除菜单栏图标，Dock Reopen 仍须恢复主窗口。
 - **Linux tray 图标像素格式**：Linux tray 只能使用本地 8-bit RGBA 位图；`tauri.release.linux.conf.json` / `tauri.linux.conf.json` 引用的 `32x32.png`、`128x128.png`、`128x128@2x.png` 必须保持 8-bit RGBA。严禁把 Tauri 根据 bundle 首张 PNG 生成的 `default_window_icon()` 直接传给 Linux tray，避免 16-bit PNG 的原始缓冲触发 `wrong data size` 启动失败。
 - **CWD 目录跟随**：终端工作目录 (CWD) 变化通过底层会话流安全捕获，经 runtime 广播同步给文件管理器，严禁 UI 层轮询或直接探测平台路径。

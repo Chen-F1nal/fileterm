@@ -278,6 +278,9 @@ jobs:
           dock_plugin="$app_bundle/Contents/PlugIns/FileTermDockTile.docktileplugin"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSDockTilePlugIn' "$app_bundle/Contents/Info.plist")" = "FileTermDockTile.docktileplugin"
           codesign --verify --deep --strict "$dock_plugin"
+          xcrun clang -fobjc-arc -framework AppKit apps/tauri/src-tauri/macos-dock-tile/tests/lifecycle.m -o "$RUNNER_TEMP/fileterm-dock-tile-test"
+          "$RUNNER_TEMP/fileterm-dock-tile-test" "$dock_plugin"
+          cmp apps/tauri/src-tauri/icons/icon.icns "$app_bundle/Contents/Resources/icon.icns"
           "$bundle_root/macos/FileTerm.app/Contents/MacOS/fileterm" mcp --help
           node ./scripts/mcp-stdio-smoke.mjs "$bundle_root/macos/FileTerm.app/Contents/MacOS/fileterm"
 

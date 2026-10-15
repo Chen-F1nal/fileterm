@@ -1568,7 +1568,8 @@ const zhCN = {
   showMacosMenuBarIconHint: '关闭后可通过 Dock 图标重新打开窗口。',
   macosMenuBarIconPreferenceSaveFailed: '无法保存菜单栏图标偏好。',
   appIcon: '应用图标',
-  appIconHintMac: 'Dock 会在运行期间和退出后保留所选图标。Finder/Launchpad 和 DMG 保持经典银边。',
+  appIconHintMac:
+    '仅切换 Dock 图标，退出应用后仍会保留所选样式。Finder 和 Launchpad 固定使用经典银边图标，不会随此设置切换。',
   appIconHintWindows: '切换运行中窗口、任务栏和托盘图标；安装包与已固定快捷方式仍用经典银边。',
   appIconHintLinux: '切换窗口、托盘和当前用户 FileTerm 启动器图标；桌面环境可能延迟刷新。',
   appIconClassic: '经典银边',
@@ -3665,7 +3666,7 @@ const enUS: typeof zhCN = {
   macosMenuBarIconPreferenceSaveFailed: 'Unable to save the menu bar icon preference.',
   appIcon: 'App icon',
   appIconHintMac:
-    'The selected icon stays in the Dock while FileTerm is running and after it quits. Finder/Launchpad and the DMG keep the classic silver rim.',
+    'Only changes the Dock icon, which keeps the selected style after FileTerm quits. Finder and Launchpad always use the classic silver rim icon and are not affected by this setting.',
   appIconHintWindows:
     'Changes running window, taskbar, and tray icons; the installer and pinned shortcuts keep the classic silver rim.',
   appIconHintLinux:

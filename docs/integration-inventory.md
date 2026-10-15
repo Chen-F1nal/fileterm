@@ -125,7 +125,7 @@ FileTerm 当前采用“拖拽期间冻结列数，稳定后同步真实宽度�
 
 ### 桌面壳资源和布局约定
 
-- 桌面主图标的唯一源文件为 `apps/tauri/assets/icons/fileterm-1024.png`；Tauri 原生图标产物统一放在 `apps/tauri/src-tauri/icons/`，WebView 使用 `apps/tauri/public/icon.png` 副本。
+- 桌面主图标源文件为 `apps/tauri/assets/icons/fileterm-1024.png`；macOS Finder、Launchpad 与安装包静态图标使用 `fileterm-macos-1024.png` 生成 `apps/tauri/src-tauri/icons/icon.icns`。Dock 变体来自 `apps/tauri/src/renderer/assets/app-icons/`，应用退出后由内置 Dock 插件读取独立偏好域并继续显示所选变体；Windows/Linux 图标继续使用各自原生资源，WebView 使用 `apps/tauri/public/icon.png` 副本。
 - macOS 菜单栏托盘图标由 Tauri 维护：使用 `apps/tauri/src-tauri/icons/trayTemplate*.png` 与 Rust tray API；可编辑源文件位于 `apps/tauri/assets/icons/trayTemplate.svg`。
 - Windows 应用图标由 `apps/tauri/src-tauri/icons/icon.ico` 提供；不要把 Windows app icon 缩放后当作 macOS menu bar template。
 - 顶部标签栏、工作区焦点模式、侧栏收起状态和文件面板抽屉都是 renderer UI 状态；不要把这些布局状态扩散到 main service。
