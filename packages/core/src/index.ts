@@ -433,6 +433,8 @@ export interface SshProfile extends NetworkProfile {
   proxyProfileId?: string
   tunnelProfileId?: string
   jumpProfileId?: string
+  /** Ordered SSH profile IDs for this connection's explicit jump route. */
+  jumpProfileIds?: string[]
   forwards?: SshForwardRule[]
   disableShellIntegration?: boolean
   /** 兼容老服务器：追加 SHA-1 类 MAC/KEX 算法到偏好列表末尾（SHA-2 仍优先） */
@@ -1295,6 +1297,7 @@ export interface CreateProfileInput {
   proxyProfileId?: string
   tunnelProfileId?: string
   jumpProfileId?: string
+  jumpProfileIds?: string[]
   forwards?: SshForwardRule[]
   disableShellIntegration?: boolean
   /** Transient only; persisted by Rust in profile-secrets.json. */
@@ -2101,6 +2104,8 @@ export const MIN_UI_ZOOM_PERCENT = 80
 export const MAX_UI_ZOOM_PERCENT = 200
 export const UI_ZOOM_PERCENT_STEP = 10
 
+export type AppIconVariant = 'classic' | 'material' | 'clean'
+
 export interface UiPreferences {
   theme: ThemeMode
   locale: 'zhCN' | 'enUS'
@@ -2108,6 +2113,8 @@ export interface UiPreferences {
   filetermThemeResetAppVersion: string | null
   customThemes: SavedTheme[]
   autoCheckUpdates: boolean
+  showMacosMenuBarIcon: boolean
+  appIcon: AppIconVariant
   updateChannel: AppUpdateChannel
   terminalZoomLocked: boolean
   uiZoomLocked: boolean
@@ -2132,6 +2139,8 @@ export interface UiPreferencesInput {
   themeConfig?: ThemeConfig
   customThemes?: SavedTheme[]
   autoCheckUpdates?: boolean
+  showMacosMenuBarIcon?: boolean
+  appIcon?: AppIconVariant
   updateChannel?: UiPreferences['updateChannel']
   terminalZoomLocked?: boolean
   uiZoomLocked?: boolean
@@ -2856,7 +2865,7 @@ export interface FileTermDesktopApi {
     targetPath: string,
     options: PermissionChangeOptions
   ): Promise<WorkspaceSnapshot>
-  onTerminalData(listener: (payload: TerminalDataPayload) => void): () => void
+  onTerminalData(listener: (payload: TerminalDataPayload) => void | Promise<void>): () => void
   onTerminalState(listener: (payload: TerminalStatePayload) => void): () => void
   onTransferUpdate(listener: (transfer: TransferTask) => void): () => void
   onSerialTransferProgress(listener: (progress: SerialTransferProgress) => void): () => void

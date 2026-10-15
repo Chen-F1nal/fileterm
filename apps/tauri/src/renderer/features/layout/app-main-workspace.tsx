@@ -11,6 +11,7 @@ import type { AppViewModel } from './app-view-model'
 import { WindowMenubar } from './window-menubar'
 import { DEFAULT_SIDEBAR_WIDTH, STATUS_MESSAGE_TIMEOUT_MS } from '../../app/app-shell-utils'
 import { t, setLocale } from '../../i18n'
+import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
 
 export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   const [dismissedInteractiveGatewayNoticeTabId, setDismissedInteractiveGatewayNoticeTabId] = useState<string | null>(
@@ -189,10 +190,9 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
 
   const hasStatusMessage = Boolean(error || isInteractiveGatewayNoticeVisible)
   const resolvedSidebarWidth = isSystemSidebarCollapsed ? 44 : sidebarWidth
-  const activeJumpHost =
-    activeProfile?.type === 'ssh' && activeProfile.jumpProfileId
-      ? (workspace.profiles.find((profile) => profile.id === activeProfile.jumpProfileId) ?? null)
-      : null
+  const activeJumpHosts =
+    activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
+  const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined
   // Home and session titlebars share the expanded sidebar's live width.
   // A collapsed sidebar keeps enough titlebar space for the native window controls.
   const brandWidth = isSystemSidebarCollapsed ? DEFAULT_SIDEBAR_WIDTH : resolvedSidebarWidth
@@ -510,9 +510,8 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
           activeProfileId={activeTab?.profileId}
           activeTabId={activeTab?.id ?? null}
           activeTabStatus={activeTab?.status ?? null}
-          activeJumpHost={
-            activeJumpHost ? { name: activeJumpHost.name, host: activeJumpHost.host, port: activeJumpHost.port } : null
-          }
+          activeJumpHosts={activeJumpHosts}
+          activeRouteTarget={activeRouteTarget}
           activeTabSource={activeTab?.source ?? null}
           desktopApi={desktopApi}
           fullWidth={!shouldShowSystemSidebar}

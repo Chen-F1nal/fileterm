@@ -274,6 +274,10 @@ jobs:
           bundle_root="apps/tauri/src-tauri/target/${{ matrix.rust_target }}/release/bundle"
           test -d "$bundle_root/macos/FileTerm.app"
           test -n "$(find "$bundle_root/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          app_bundle="$bundle_root/macos/FileTerm.app"
+          dock_plugin="$app_bundle/Contents/PlugIns/FileTermDockTile.docktileplugin"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSDockTilePlugIn' "$app_bundle/Contents/Info.plist")" = "FileTermDockTile.docktileplugin"
+          codesign --verify --deep --strict "$dock_plugin"
           "$bundle_root/macos/FileTerm.app/Contents/MacOS/fileterm" mcp --help
           node ./scripts/mcp-stdio-smoke.mjs "$bundle_root/macos/FileTerm.app/Contents/MacOS/fileterm"
 

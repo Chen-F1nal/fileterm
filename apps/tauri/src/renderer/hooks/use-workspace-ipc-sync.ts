@@ -14,6 +14,7 @@ export type {
   WorkspacePaneFocusRequest
 } from './workspace-ipc-sync-types'
 import { applyMonitoringUpdate, mergeMonitoringSnapshot } from './workspace-monitoring'
+import { retainTransferHistory, updateTransferHistory } from '../features/transfers/transfer-history'
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import {
   type LocalFileItem,
@@ -163,7 +164,9 @@ export function useWorkspaceIpcSync({
       if (typeof incomingRevision === 'number') {
         latestWorkspaceRevisionRef.current = incomingRevision
       }
-      setWorkspace((current) => mergeMonitoringSnapshot(current, snapshot))
+      setWorkspace((current) =>
+        mergeMonitoringSnapshot(current, { ...snapshot, transfers: retainTransferHistory(snapshot.transfers) })
+      )
       const disabledResourceMonitoringSessions = Object.values(snapshot.sessions).filter(
         (session) => session.capabilities?.resourceMonitoring === false
       ).length
@@ -208,20 +211,8 @@ export function useWorkspaceIpcSync({
   const applyTransferUpdate = useCallback((transfer: TransferTask) => {
     startTransition(() => {
       setWorkspace((current) => {
-        const transferIndex = current.transfers.findIndex((item) => item.id === transfer.id)
-        if (transferIndex === -1) {
-          return {
-            ...current,
-            transfers: [transfer, ...current.transfers]
-          }
-        }
-
-        if (current.transfers[transferIndex] === transfer) {
-          return current
-        }
-
-        const transfers = [...current.transfers]
-        transfers[transferIndex] = transfer
+        const transfers = updateTransferHistory(current.transfers, transfer)
+        if (transfers === current.transfers) return current
         return {
           ...current,
           transfers
@@ -229,6 +220,13 @@ export function useWorkspaceIpcSync({
       })
     })
   }, [])
+
+  useEffect(() => {
+    const failures = notifiedTransferFailuresRef.current
+    if (!failures.size) return
+    const retained = new Set(workspace.transfers.map((task) => task.id))
+    for (const id of failures.keys()) if (!retained.has(id)) failures.delete(id)
+  }, [workspace.transfers])
 
   useEffect(() => {
     const platform = resolveRendererPlatform(desktopApi?.platform ?? 'browser')
@@ -499,7 +497,7 @@ export function useWorkspaceIpcSync({
     const pendingMetrics: SessionMetricsUpdate[] = []
     let receivedMetricsEventCount = 0
     const lastMetricsDiagnosticAtByTab = new Map<string, number>()
-    const pendingTransfers: TransferTask[] = []
+    let pendingTransfers: TransferTask[] = []
     const pendingRemoteFiles: RemoteFilesUpdate[] = []
     let unsubscribeSnapshot: (() => void) | null = null
     let snapshotListenerReadyTimer: ReturnType<typeof window.setTimeout> | null = null
@@ -627,7 +625,7 @@ export function useWorkspaceIpcSync({
             return
           }
           if (!hydrated) {
-            pendingTransfers.push(transfer)
+            pendingTransfers = updateTransferHistory(pendingTransfers, transfer)
             return
           }
           processTransferUpdate(transfer)

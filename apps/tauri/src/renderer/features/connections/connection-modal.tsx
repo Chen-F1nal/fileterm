@@ -4,9 +4,11 @@ import type {
   CreateProfileInput,
   ResourceMonitoringMetric,
   SerialPortInfo,
-  SshConnectionDefaults
+  SshConnectionDefaults,
+  SshProfile
 } from '@fileterm/core'
 import { t } from '../../i18n'
+import { getSshRoutingMode, hasIncompleteSshJumpRoute, resolveSshJumpRoute } from '../../app/ssh-jump-route'
 import './connection-modal.css'
 import { CloseButton } from '../common/close-button'
 import { FeedbackText } from '../common/feedback-text'
@@ -76,7 +78,7 @@ export function ConnectionModal({
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const [isTestRetryCoolingDown, setIsTestRetryCoolingDown] = useState(false)
   const [connectionTestSucceeded, setConnectionTestSucceeded] = useState(false)
-  const [routingMode, setRoutingMode] = useState<'direct' | 'jump'>(() => (form.jumpProfileId ? 'jump' : 'direct'))
+  const routingMode = getSshRoutingMode(form)
   const serialPortRefreshInFlightRef = useRef(false)
   const supportsNetwork = form.type === 'ssh' || form.type === 'telnet' || form.type === 'ftp'
   const supportsFilePaneMode = form.type === 'ftp' || (form.type === 'ssh' && form.deviceMode !== 'network-device')
@@ -89,7 +91,23 @@ export function ConnectionModal({
   const isMacOs = platform === 'darwin'
   const supportsBuiltInRs485 = ['linux', 'darwin'].includes(platform ?? '') && form.flowControl !== 'hardware'
   const supportsExtendedParity = ['linux', 'win32'].includes(platform ?? '') || (isMacOs && form.dataBits === 7)
-  const jumpHosts = profiles.filter((profile) => profile.type === 'ssh' && profile.id !== editingProfileId)
+  const jumpRoute = resolveSshJumpRoute({ ...form, id: editingProfileId ?? undefined }, profiles)
+  const jumpHosts = profiles.filter(
+    (profile): profile is SshProfile => profile.type === 'ssh' && profile.id !== editingProfileId
+  )
+  const jumpRouteErrors = {
+    cycle: t.sshJumpRouteCycle,
+    missing: t.sshJumpRouteMissing,
+    type: t.sshJumpRouteType,
+    'too-long': t.sshJumpRouteTooLong,
+    'proxy-conflict': t.sshJumpRouteProxyConflict
+  }
+  const jumpHostSelectionIncomplete = routingMode === 'jump' && hasIncompleteSshJumpRoute(form)
+  const jumpRouteError = jumpHostSelectionIncomplete
+    ? t.jumpHostSelectionRequired
+    : jumpRoute.error
+      ? jumpRouteErrors[jumpRoute.error]
+      : null
   const serialDevicePathPlaceholder =
     platform === 'darwin'
       ? '/dev/cu.usbserial / /dev/tty.usbserial'
@@ -142,6 +160,11 @@ export function ConnectionModal({
         : null
 
   const handleTestConnection = async () => {
+    if (form.type === 'ssh' && (jumpRouteError || (routingMode === 'jump' && !jumpRoute.jumpHosts.length))) {
+      setSection('network')
+      setSerialValidationError(jumpRouteError ?? t.selectJumpHost)
+      return
+    }
     if (isTestBusy) {
       return
     }
@@ -231,6 +254,12 @@ export function ConnectionModal({
   })
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (form.type === 'ssh' && (jumpRouteError || (routingMode === 'jump' && !jumpRoute.jumpHosts.length))) {
+      event.preventDefault()
+      setSection('network')
+      setSerialValidationError(jumpRouteError ?? t.selectJumpHost)
+      return
+    }
     if (form.type === 'ftp' && form.securityMode === 'implicit' && form.proxy?.type && form.proxy.type !== 'none') {
       event.preventDefault()
       setSection('network')
@@ -393,9 +422,10 @@ export function ConnectionModal({
               <ConnectionNetworkSection
                 form={form}
                 jumpHosts={jumpHosts}
+                jumpRoute={jumpRoute.jumpHosts}
+                routeError={jumpRouteError}
                 routingMode={routingMode}
                 setForm={setForm}
-                setRoutingMode={setRoutingMode}
               />
             ) : null}
             {section === 'terminal' && supportsTerminal ? (

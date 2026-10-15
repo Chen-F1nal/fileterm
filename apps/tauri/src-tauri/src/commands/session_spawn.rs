@@ -19,7 +19,7 @@ async fn spawn_session_for_profile(
     connection_operation_id: Option<&str>,
     options: SessionSpawnOptions,
 ) -> Result<String, AppError> {
-    let resolved_profile = resolve_profile_for_session(app, profile)?;
+    let resolved_profile = resolve_profile_for_session(app, profile, true)?;
     let profile = &resolved_profile;
     let profile_type = profile
         .get("type")

@@ -566,6 +566,15 @@ pub fn app_write_diagnostic_log(
     if scope.trim().is_empty() {
         return Err(AppError::Command("诊断日志 scope 不能为空".to_string()));
     }
+    let message = if scope == "renderer:performance" {
+        crate::services::workspace::augment_renderer_health(
+            &app.state::<crate::services::workspace::WorkspaceState>(),
+            &message,
+        )
+        .unwrap_or(message)
+    } else {
+        message
+    };
     crate::services::logging::write_level(&app, level, &scope, message);
     Ok(())
 }

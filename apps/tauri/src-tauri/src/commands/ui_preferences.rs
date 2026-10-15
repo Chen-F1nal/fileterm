@@ -39,6 +39,10 @@ pub struct UiPreferences {
     pub custom_themes: Vec<SavedTheme>,
     #[serde(default = "default_auto_check_updates")]
     pub auto_check_updates: bool,
+    #[serde(default = "default_show_macos_menu_bar_icon")]
+    pub show_macos_menu_bar_icon: bool,
+    #[serde(default = "default_app_icon")]
+    pub app_icon: String,
     #[serde(default = "default_update_channel")]
     pub update_channel: String,
     #[serde(default)]
@@ -85,6 +89,8 @@ pub struct UiPreferencesInput {
     pub theme_config: Option<ThemeConfig>,
     pub custom_themes: Option<Vec<SavedTheme>>,
     pub auto_check_updates: Option<bool>,
+    pub show_macos_menu_bar_icon: Option<bool>,
+    pub app_icon: Option<String>,
     pub update_channel: Option<String>,
     pub terminal_zoom_locked: Option<bool>,
     pub ui_zoom_locked: Option<bool>,
@@ -134,6 +140,14 @@ fn is_light_theme_mode(theme: &str) -> bool {
 
 fn default_auto_check_updates() -> bool {
     true
+}
+
+fn default_show_macos_menu_bar_icon() -> bool {
+    true
+}
+
+fn default_app_icon() -> String {
+    "classic".to_string()
 }
 
 fn default_update_channel() -> String {
@@ -458,6 +472,9 @@ fn normalize_ui_preferences(mut preferences: UiPreferences) -> UiPreferences {
     preferences.ui_zoom_percent = preferences
         .ui_zoom_percent
         .clamp(MIN_UI_ZOOM_PERCENT, MAX_UI_ZOOM_PERCENT);
+    if !matches!(preferences.app_icon.as_str(), "classic" | "material" | "clean") {
+        preferences.app_icon = default_app_icon();
+    }
     if !matches!(
         preferences.theme.as_str(),
         "fileterm-dark"
@@ -612,28 +629,37 @@ fn resolve_profile_with_connection_defaults(
     Value::Object(resolved)
 }
 
-fn resolve_profile_for_session(app: &AppHandle, profile: &Value) -> Result<Value, AppError> {
+// Tests use the edited form; live sessions use the latest saved credentials and settings.
+fn session_profile_input<'a>(
+    profile: &'a Value,
+    profiles: &'a [Value],
+    prefer_saved_profile: bool,
+) -> &'a Value {
+    if prefer_saved_profile {
+        if let Some(current) = profile.get("id").and_then(Value::as_str).and_then(|id| {
+            profiles.iter().find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(id))
+        }) {
+            return current;
+        }
+    }
+    profile
+}
+
+fn resolve_profile_for_session(
+    app: &AppHandle,
+    profile: &Value,
+    prefer_saved_profile: bool,
+) -> Result<Value, AppError> {
     let preferences = app_get_ui_preferences(app.clone())?;
     // Opening a profile starts from the public profiles.json record. Resolve
     // reusable proxy/tunnel references from the canonical stores here so a
     // connection always sees the latest shared definition instead of the
     // copied values that happened to be present when it was edited.
-    let mut effective_profile = profile.clone();
     let (profiles, _) = crate::services::profile_ops::read_and_heal_profiles(app)?;
-    if let Some(current) = profile
-        .get("id")
-        .and_then(Value::as_str)
-        .and_then(|id| {
-            profiles
-                .iter()
-                .find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(id))
-        })
-    {
-        effective_profile = current.clone();
-    }
+    let effective_profile = session_profile_input(profile, &profiles, prefer_saved_profile);
 
     let mut resolved = resolve_profile_with_connection_defaults(
-        &effective_profile,
+        effective_profile,
         &preferences.connection_defaults,
     );
     if resolved.get("type").and_then(Value::as_str) == Some("ssh") {

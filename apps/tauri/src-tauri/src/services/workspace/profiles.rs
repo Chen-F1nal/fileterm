@@ -126,7 +126,7 @@ pub struct WorkspaceState {
     /// Tauri IPC channels are the ordered streaming boundary for terminal
     /// output. Ordinary app events remain appropriate for low-frequency state
     /// updates, but can fall behind sustained PTY traffic in WKWebView.
-    pub terminal_output_channels: Arc<StdMutex<HashMap<u32, Channel<serde_json::Value>>>>,
+    pub(crate) terminal_output_channels: Arc<StdMutex<HashMap<u32, Arc<TerminalOutputSubscription>>>>,
     /// Cancels the runtime owned by each worker. Dropping the command sender
     /// alone cannot interrupt a worker that is currently parsing a large
     /// remote metrics payload or waiting on an SSH operation.

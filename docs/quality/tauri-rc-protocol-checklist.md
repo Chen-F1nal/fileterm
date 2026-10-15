@@ -8,7 +8,7 @@
 - [ ] 待该 Synology 管理员确认启用 SFTP 并应用/重启 SSH 服务后，用打包 Tauri 应用验证目录列表、上传、下载、取消、断线重连及文件面板错误恢复。
 - [ ] 在真实 OpenSSH `sshd` 上使用 PAM/keyboard-interactive MFA：密码和 OTP 分两轮、同一轮混合提示、取消和错误 OTP 各跑一次。
 - [ ] 经 HTTP CONNECT 和 SOCKS5（含用户名/密码）连接；记录代理拒绝、超时和正常断开后的 UI 状态。
-- [ ] 用一台 bastion 和一台 target 执行单级 Jump Host；验证 target host key、SFTP、shell、断开重连。
+- [ ] 用两台及以上 bastion 和一台 target 执行多级 Jump Host；验证完整路径、每跳 host key/认证、SFTP、shell、取消和断开重连；覆盖循环、缺失引用、非 SSH 引用和 8 跳上限。
 - [ ] 对真实 target 验证 `-L`、`-R`、`-D`：本地/远端端口冲突、开始/停止、tab 关闭与应用退出回收。
 - [ ] 在有 sudo 权限的真实账户验证 root 文件读写、暂停/继续 staging 文件及密码错误路径。
 - [ ] Linux/BusyBox target 上验证 shell `cd` 后 OSC7/RemoteUser CWD 与文件面板同步；Windows target 确认不注入 POSIX hook。

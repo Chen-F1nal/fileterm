@@ -605,7 +605,8 @@ mod ui_preferences_tests {
     use std::collections::BTreeMap;
 
     use super::{
-        default_local_terminal_shells, default_overview_section_order, default_ui_locale,
+        default_app_icon, default_local_terminal_shells, default_overview_section_order,
+        default_ui_locale,
         default_resource_monitoring_metric_order, default_resource_monitoring_metrics,
         default_theme_config, default_update_channel, normalize_local_terminal_shells,
         normalize_mcp_operation_policy, normalize_resource_monitoring_metric_order,
@@ -614,6 +615,17 @@ mod ui_preferences_tests {
         LocalTerminalShellPreferences, McpAgentPreferences, SavedTheme, SshConnectionDefaults,
         UiPreferences, UiPreferencesInput,
     };
+
+    #[test]
+    fn connection_tests_keep_unsaved_jump_route_and_credentials() {
+        let saved = serde_json::json!({"id":"target", "type":"ssh", "jumpProfileId":"old", "password":"saved"});
+        let edited = serde_json::json!({"id":"target", "type":"ssh", "jumpProfileId":"new", "password":"edited"});
+        let profiles = vec![saved.clone()];
+        assert_eq!(super::session_profile_input(&edited, &profiles, false), &edited);
+        assert_eq!(super::session_profile_input(&edited, &profiles, true), &saved);
+        let new_profile = serde_json::json!({"type":"ssh", "jumpProfileId":"new"});
+        assert_eq!(super::session_profile_input(&new_profile, &profiles, true), &new_profile);
+    }
 
     #[test]
     fn normalizes_theme_config_colors_fonts_and_variant() {
@@ -776,6 +788,8 @@ mod ui_preferences_tests {
                 },
             ],
             auto_check_updates: true,
+            show_macos_menu_bar_icon: true,
+            app_icon: default_app_icon(),
             update_channel: default_update_channel(),
             terminal_zoom_locked: false,
             ui_zoom_locked: false,
@@ -818,6 +832,8 @@ mod ui_preferences_tests {
             theme_config: custom_theme,
             custom_themes: Vec::new(),
             auto_check_updates: true,
+            show_macos_menu_bar_icon: true,
+            app_icon: default_app_icon(),
             update_channel: default_update_channel(),
             terminal_zoom_locked: false,
             ui_zoom_locked: false,
@@ -851,6 +867,8 @@ mod ui_preferences_tests {
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
+            show_macos_menu_bar_icon: true,
+            app_icon: default_app_icon(),
             update_channel: "nightly".to_string(),
             terminal_zoom_locked: false,
             ui_zoom_locked: false,
@@ -952,6 +970,8 @@ mod ui_preferences_tests {
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
+            show_macos_menu_bar_icon: true,
+            app_icon: default_app_icon(),
             update_channel: "beta".to_string(),
             terminal_zoom_locked: true,
             ui_zoom_locked: false,
@@ -1004,6 +1024,8 @@ mod ui_preferences_tests {
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
+            show_macos_menu_bar_icon: true,
+            app_icon: default_app_icon(),
             update_channel: default_update_channel(),
             terminal_zoom_locked: false,
             ui_zoom_locked: false,
@@ -1058,6 +1080,8 @@ mod ui_preferences_tests {
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
+            show_macos_menu_bar_icon: true,
+            app_icon: default_app_icon(),
             update_channel: default_update_channel(),
             terminal_zoom_locked: false,
             ui_zoom_locked: false,
@@ -1102,6 +1126,8 @@ mod ui_preferences_tests {
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
+            show_macos_menu_bar_icon: true,
+            app_icon: default_app_icon(),
             update_channel: default_update_channel(),
             terminal_zoom_locked: false,
             ui_zoom_locked: false,
@@ -1236,8 +1262,16 @@ mod ui_preferences_tests {
 
     #[test]
     fn uses_camel_case_for_the_update_check_preference_contract() {
+        let legacy: UiPreferences = serde_json::from_value(serde_json::json!({
+            "theme": "fileterm-dark",
+            "locale": "enUS"
+        }))
+        .expect("legacy preferences without the tray setting should deserialize");
+        assert!(legacy.show_macos_menu_bar_icon);
+
         let input: UiPreferencesInput = serde_json::from_value(serde_json::json!({
             "autoCheckUpdates": false,
+            "showMacosMenuBarIcon": false,
             "updateChannel": "beta",
             "overviewShowStats": false,
             "overviewShowRecent": false,
@@ -1248,6 +1282,7 @@ mod ui_preferences_tests {
         }))
         .expect("renderer preference input should deserialize");
         assert_eq!(input.auto_check_updates, Some(false));
+        assert_eq!(input.show_macos_menu_bar_icon, Some(false));
         assert_eq!(input.update_channel.as_deref(), Some("beta"));
         assert_eq!(input.overview_show_stats, Some(false));
         assert_eq!(input.overview_show_recent, Some(false));
@@ -1276,6 +1311,8 @@ mod ui_preferences_tests {
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
+            show_macos_menu_bar_icon: false,
+            app_icon: default_app_icon(),
             update_channel: "beta".to_string(),
             terminal_zoom_locked: true,
             ui_zoom_locked: false,
@@ -1301,6 +1338,7 @@ mod ui_preferences_tests {
         })
         .expect("preferences should serialize");
         assert_eq!(preferences["autoCheckUpdates"], false);
+        assert_eq!(preferences["showMacosMenuBarIcon"], false);
         assert_eq!(preferences["updateChannel"], "beta");
         assert_eq!(preferences["overviewShowStats"], false);
         assert_eq!(preferences["overviewShowRecent"], false);

@@ -1,23 +1,19 @@
 import type {
   FileTermDesktopApi,
   TransferTask,
+  SshProfile,
   WorkspaceSessionSource,
   WorkspaceSnapshot,
   WorkspaceTab
 } from '@fileterm/core'
 import { TransferCenter } from './transfer-center'
 
-type JumpHostSummary = {
-  name: string
-  host: string
-  port: number
-}
-
 export function TransferCenterHost({
   activeProfileId,
   activeTabId,
   activeTabStatus,
-  activeJumpHost,
+  activeJumpHosts,
+  activeRouteTarget,
   activeTabSource,
   desktopApi,
   fullWidth,
@@ -32,7 +28,8 @@ export function TransferCenterHost({
   activeProfileId?: string
   activeTabId: string | null
   activeTabStatus: WorkspaceTab['status'] | null
-  activeJumpHost?: JumpHostSummary | null
+  activeJumpHosts?: SshProfile[]
+  activeRouteTarget?: SshProfile
   activeTabSource: WorkspaceSessionSource | null
   desktopApi?: FileTermDesktopApi
   fullWidth: boolean
@@ -49,7 +46,8 @@ export function TransferCenterHost({
       activeProfileId={activeProfileId}
       activeTabId={activeTabId}
       activeTabStatus={activeTabStatus}
-      activeJumpHost={activeJumpHost}
+      activeJumpHosts={activeJumpHosts}
+      activeRouteTarget={activeRouteTarget}
       activeTabSource={activeTabSource}
       desktopApi={desktopApi}
       fullWidth={fullWidth}

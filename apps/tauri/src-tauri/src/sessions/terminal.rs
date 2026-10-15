@@ -54,8 +54,20 @@ fn truncate_transcript(value: &mut String) {
 }
 
 pub async fn emit_terminal_data(app: &AppHandle, tab_id: &str, chunk: &str) {
+    record_terminal_output(app, tab_id, chunk).await;
+    // Serial/Telnet share input and output in one worker; display credit must not stop device IO.
+    app.state::<crate::services::workspace::WorkspaceState>()
+        .publish_uncontrolled_terminal_output(tab_id, chunk);
+}
+
+pub async fn emit_flow_controlled_terminal_data(app: &AppHandle, tab_id: &str, chunk: &str) {
+    record_terminal_output(app, tab_id, chunk).await;
+    app.state::<crate::services::workspace::WorkspaceState>()
+        .publish_terminal_output(tab_id, chunk);
+}
+
+async fn record_terminal_output(app: &AppHandle, tab_id: &str, chunk: &str) {
     let state = app.state::<crate::services::workspace::WorkspaceState>();
-    state.publish_terminal_output(tab_id, chunk);
     crate::services::session_logs::append_chunk(app, tab_id, chunk).await;
     let mut sessions = state.sessions.write().await;
     if let Some(session) = sessions.get_mut(tab_id) {
@@ -119,6 +131,7 @@ pub async fn emit_local_terminal_data(
         session.terminal_transcript.push_str(chunk);
         truncate_transcript(&mut session.terminal_transcript);
     }
+    drop(sessions);
     state.publish_terminal_output(tab_id, chunk);
     true
 }

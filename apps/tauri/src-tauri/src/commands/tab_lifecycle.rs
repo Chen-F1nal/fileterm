@@ -83,7 +83,7 @@ pub async fn app_reconnect_tab(
             .iter()
             .find(|p| p.get("id").and_then(|id| id.as_str()) == Some(&pid))
         {
-            let resolved_profile = resolve_profile_for_session(&app, profile)?;
+            let resolved_profile = resolve_profile_for_session(&app, profile, true)?;
             let profile = &resolved_profile;
             // Claim the reconnect before awaiting worker shutdown. Tauri can
             // dispatch Enter/button/auto-reconnect commands concurrently; a

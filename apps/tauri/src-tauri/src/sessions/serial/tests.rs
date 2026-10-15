@@ -37,7 +37,6 @@ mod tests {
 
         use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
         use tokio::process::Command;
-        use tokio_serial::SerialPortBuilderExt;
 
         // `openpty` is provided by Python's standard library. Linux's serial
         // backend accepts a PTY as a real serial endpoint, so CI can exercise
@@ -69,9 +68,11 @@ while True:
                 .expect("virtual serial fixture output failed")
                 .expect("virtual serial fixture did not provide a device path");
 
-        let stream = tokio_serial::new(&device_path, 115_200)
-            .open_native_async()
-            .expect("virtual serial device must open");
+        let stream = super::open_serial_port(
+            tokio_serial::new(&device_path, 115_200),
+            super::SerialControlState::from_profile(&serde_json::json!({})),
+            &tokio_util::sync::CancellationToken::new(),
+        ).await.expect("virtual serial device must open");
         let (mut reader, mut writer) = tokio::io::split(stream);
         writer.write_all(b"ping\n").await.unwrap();
         writer.flush().await.unwrap();

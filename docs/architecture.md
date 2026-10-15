@@ -30,7 +30,7 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - 本地文件读写
 - SSH 会话连接
 - SSH shell 输出接入
-- SSH keyboard-interactive/MFA、SOCKS5/HTTP outbound proxy、单级 Jump Host 与运行时 `-L/-R/-D` tunnel service；隧道运行状态归属具体 workspace tab，断线自动回收。
+- SSH keyboard-interactive/MFA、SOCKS5/HTTP outbound proxy、多级 Jump Host（最多 8 个跳板） 与运行时 `-L/-R/-D` tunnel service；隧道运行状态归属具体 workspace tab，断线自动回收。
 - SSH 私钥库：私钥、元数据和可选口令分离存储；连接 profile 仅保存 `privateKeyId`，口令交互通过 `ssh:interaction` 返回 renderer。
 - SSH 私钥导入同时支持文件和临时文本输入；文本只在导入弹窗与一次 IPC 调用期间存在，不进入 profile、workspace snapshot 或日志。
 - 终端写入与 resize IPC
@@ -50,6 +50,7 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - macOS 菜单栏 template 托盘图标资源
 - 单一连接导入入口同时支持 `~/.ssh/config`、SSH 配置文本和外部 JSON；导入统一采用 main-process preview plan，renderer 不接收导入 secret。
 - Telnet（RFC 854 基础协商）和 Serial（Rust device handle）终端会话；Serial 设备枚举通过 `app_list_serial_ports` 和 `serial:ports-changed` 经 Tauri bridge 暴露，连接表单同时保留手动设备路径。Serial 的换行、Text/Hex 收发、本地回显、调制解调器控制、X/Y/ZMODEM、Kermit 文件传输和断线策略随 profile/会话边界处理；两者不进入 SFTP、CWD、sudo 或系统指标链路。
+- Serial 普通发送等待期间继续接收，复用同一流式解码、日志和终端输出路径；文件传输仍独占协议流。设备打开在 blocking worker 中执行，连接和测试连接共用 15 秒打开等待上限，取消或超时后的迟到句柄负责线路清理。连接列表和首页显示设备、波特率及帧格式摘要。
 - 设置页的 WebDAV 手动配置同步：完整包包含连接密码、私钥口令和代理密码，上传使用 ETag 检测冲突；renderer 仍不接触明文 payload，界面明确要求仅使用可信 HTTPS WebDAV。
 - 设置页的 S3 兼容配置备份：完整包复用 WebDAV 的安全导入、hash 校验和 ETag 冲突策略；S3 签名、Access Key、Secret Access Key 与含凭据 payload 全部停留在 Rust 服务层。Cloudflare R2 作为预设，固定使用 `region=auto` 与 path-style 地址。
 - 设置页的会话安全由 Rust `security.json` 保存：主密码只在 Rust 侧验证，空闲锁定由主工作区的 renderer 覆盖层执行；WebDAV/S3 备份包共用安全页中的加密密码，未配置时备份操作返回稳定错误并引导回安全页。Windows portable 使用 exe 旁的 `config` 存储该文件及其设备绑定密钥。
@@ -57,7 +58,7 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 ### 2.1 Rust/Tauri 迁移边界
 
 - Tauri bridge 位于 `apps/tauri/src/bridge/tauri-api.ts`，Rust commands/services/sessions 位于 `apps/tauri/src-tauri/src/`；仓库内不存在第二个运行时目录。
-- Tauri 当前已覆盖桌面壳、JSON 存储、Workspace snapshot、可迁移的 SSH 私钥库，以及 russh SSH shell/SFTP/MFA/host verification、系统指标、CWD 跟随、重连水化、自动重连、远程编码、递归 chmod、单级 Jump Host、SOCKS5/HTTP CONNECT 代理和运行时 SSH `-L/-R/-D` 隧道。
+- Tauri 当前已覆盖桌面壳、JSON 存储、Workspace snapshot、可迁移的 SSH 私钥库，以及 russh SSH shell/SFTP/MFA/host verification、系统指标、CWD 跟随、重连水化、自动重连、远程编码、递归 chmod、多级 Jump Host（最多 8 个跳板）、SOCKS5/HTTP CONNECT 代理和运行时 SSH `-L/-R/-D` 隧道。
 - Tauri 已覆盖 Transfer、FTP/FTPS、Telnet、Serial、WebDAV 同步及 SSH 网络能力；Phase 3/4 的真实服务、实体设备和三平台验收仍是发行候选门禁。SFTP 被服务端拒绝时，Tauri 保留 SSH shell/隧道，并将文件通道故障单独广播到 renderer，而不误报为整条 SSH 连接失败。
 - SSH shell 与 SFTP 可能处于不同的文件系统根；`shellCwd` 保留 Shell 物理路径，`remotePath` 保存当前文件通道的路径：user 模式为 SFTP 命名空间，root 模式为 Shell 物理路径。CWD 跟随先尝试原路径，遇到明确 `NoSuchFile` 后按实际 `/volumeN`、`/var/services` 和 Home chroot 候选探测，无法确认时保留最近有效的 SFTP 目录。初始 SFTP 目录明确不存在时，后台初始化保留错误提示，并依次验证服务器当前目录 `.` 与 SFTP `/`；成功目录与列表一起更新，避免缺失账号 home 导致空文件区。完整背景、群晖示例和排查方式见 [ADR-0006](./decisions/0006-ssh-sftp-path-namespaces.md)。
 - SSH 初始文件目录以 SFTP `canonicalize(".")` 返回的服务端 Home 为准，不写死 `/volume1`、`/home` 或 `/usr/home`；初始目录列表、符号链接元数据和取消路径均有独立超时收口。远程系统指标对 FreeBSD 优先使用官方 `rctl`/`quota` 账号接口，缺失时回退到 `sysctl`/`swapinfo`/`df`/`ps` 主机级基础命令，不复用 Linux `/proc` 采集器；共享托管主机的 `devil info limits` 仅作为提供商补充来源。完整兼容边界、Debian 12 与 Serv00 记录见 [ADR-0007](./decisions/0007-portable-ssh-sftp-home-and-freebsd.md)。
@@ -77,7 +78,12 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - `apps/tauri/src/renderer/components/terminal-view.tsx`
   - 从 CSS 变量读取终端主题色，确保终端外观和全局主题联动。
   - `terminal-lifecycle-core.ts` 使用 xterm 的最低文字对比度保护，在显示层处理 ANSI/256 色/RGB 与选区/搜索背景，不改写协议流。
+  - DOM 渲染的颜色对比缓存每组最多 8,192 个颜色对，字符宽度缓存最多 16,384 项；仅淘汰可重新计算的结果，保留字体校准、ASCII 快表和历史内容。适配器按终端创建/销毁，私有缓存结构受 xterm 版本回归约束。
+  - 同一 WebView 文档内，字体、字号、字重/斜体、字体特性、语言、字距和 DPI 等测量环境一致的终端，复用实际测得的字符宽度。共享测量结果总计最多 32,768 项，超过 64 个 UTF-16 单元的字符组合不进入共享缓存；字体加载/失败和校准失效时清空结果，最后一个终端销毁时移除字体监听器并释放共享状态。
+  - 相同主题与日志颜色不重复失效缓存或扫描历史；文件面板的吸附观察仅覆盖 shell 与侧栏，不订阅终端子树重绘。
+  - 符号防遮挡只依据字体实际笔画边界，忽略 advance 与两侧留白；越界时先平移，笔画本身超宽才等比缩小，保持形状、缓冲区列宽与原始复制文本。
   - `terminal-block-glyph-renderer.ts` 将块字符和连续横线 `─`、`━`、`═` 按字符格几何绘入逐行设备像素位图，复用实时 palette 与选区前景，避免字体边缘和 ANSI span 接缝造成断线或粗细变化。
+  - 图形适配器先筛选需要处理的行，再读取布局；普通文本不触发符号/块字符几何测量。行数缩小时移除越界位图，图形变为普通文字时仍清理旧画布。
 - `apps/tauri/src/renderer/app/terminal-log-colorizer.ts`
   - 在 xterm 完成解析后对普通缓冲区的时间戳、服务名和常见日志级别着色；不向远端输出注入 ANSI，不处理 `top`、`vim`、`less` 等备用屏幕程序，并随终端主题重新套用颜色。
 - `apps/tauri/src/renderer/app/terminal-foreground-adapter.ts`
@@ -220,7 +226,7 @@ Renderer 只显示遮罩、倒计时和操作反馈，`app_retry_monitoring` 只
 - Windows 下严禁从同步 Tauri command、托盘回调或原生菜单回调直接执行 `WebviewWindowBuilder::build()`；WebView2 会在该上下文发生建窗死锁并阻塞后续全部 invoke。Renderer 建窗入口必须使用 async command，实际 builder 工作进入 blocking worker；原生事件入口也必须先交给 worker。
 - macOS 菜单栏托盘图标使用 `apps/tauri/src-tauri/icons/trayTemplate*.png` template 资源（源文件位于 `apps/tauri/assets/icons/trayTemplate.svg`），由 Rust/Tauri backend 设置 template 属性。
 - macOS 主窗口保留原生红黄绿按钮；`tauri*.conf.json` 不保存 traffic-light 坐标。macOS 配置以 `visible: false` 创建主窗口；Rust 恢复窗口尺寸、读取保存的 `uiZoomPercent` 并校准原生布局，renderer 应用主题和偏好、提交首屏后再显示窗口，确保红绿灯和内容都在首次可见帧前就位。从 `NSWindow` 真实 frame 计算顶栏高度（`48 × uiZoomPercent / 100` 逻辑点），同步原生标题栏容器，并经按钮 superview 的 AppKit 坐标转换移动三个原生按钮中心。原生 frame/bounds、圆形绘制及横向中心间距保留。原生窗口 update / resize / 退出全屏以及标题栏 frame 通知同步校准，取代页面加载后的定位和 140ms 去抖；布局使用重入保护和几何差异检查，避免重复绘制。缩放偏好缓存于原生布局状态，UI preferences 变更刷新缓存后主动校准，通知回调不读取存储。全屏期间由系统管理自动隐藏标题栏；退出全屏恢复自定义几何。系统共享指示器沿用 AppKit 原生布局，不按私有类名查找或单独搬动；通知观察者在进程退出时移除。Debug、Release、本地打包和 GitHub Actions 共用同一算法，不允许 `debug_assertions` 分支、Release 垂直偏移或 renderer CSS 伪造按钮；精确设计基线见 `docs/design.md` 的“macOS 原生标题栏基线”。
-- Tauri 托盘由 Rust backend 显式创建：macOS 使用独立 template 图标，Windows/Linux 使用应用图标。主窗口与可见子窗口隐藏到托盘后会成组恢复；普通关闭请求与真正退出请求保持分离。
+- Tauri 托盘由 Rust backend 显式创建：macOS 使用独立 template 图标，Windows/Linux 使用应用图标。macOS 可在「设置 → 界面 → 窗口启动」中隐藏菜单栏图标，默认显示；隐藏时仍可从 Dock 图标重新打开主窗口。主窗口与可见子窗口隐藏到托盘后会成组恢复；普通关闭请求与真正退出请求保持分离。
 - 应用更新通过 Rust/Tauri update service 统一管理，renderer 仅经 `Rust commands/events -> tauri-api.ts -> renderer` 查询状态和触发检查；更新通道持久化为 `stable` / `beta`，默认使用 `beta`；稳定版只选择非 prerelease Release，测试版选择 prerelease 与正式版中 SemVer 最新的一项，以便测试版自然升级到正式版。Windows 按选中的 Release tag 动态读取 `latest.json`，安装版按运行架构选择 `windows-x86_64` 或 `windows-aarch64` 的签名 NSIS 安装器，便携版选择对应的 `-portable` 独立签名 EXE；两者复用“下载验签 → 重启更新”界面。便携版通过原程序副本运行专用辅助入口，在取得父进程句柄并确认就绪后请求 Tauri 退出，等待进程结束再替换原目录、原文件名的 EXE；保留 `config` 与 `portable` 标记，替换或启动失败时回滚，更新事务与备份位于程序目录下的独立子目录。旧 Release 缺少便携签名条目时回退到下载页；macOS 发行构建使用 ad hoc 签名并保持检查后跳转选中的 GitHub Release 下载页（不接入 Apple 证书、公证或应用内 updater）。
 - 原生关闭快捷键由 Rust/Tauri backend 统一收口：macOS 使用 `Cmd+Q` 请求应用退出确认、`Cmd+W` 请求关闭当前工作区项/子窗口；Windows/Linux 分别保持 `Alt+F4` 退出与 `Ctrl+W` 关闭窗口语义。最后一个工作区项只触发普通窗口关闭/隐藏，不得直接销毁主窗口；托盘退出和应用退出快捷键必须走同一确认与 transfer journal 清理链路。真正退出前还必须逐个等待独立 Monaco 编辑器完成保存或确认丢弃，任一编辑器取消都会中止 session/transfer shutdown。
 - 主题和语言属于 Rust backend 持久化的 UI preferences；Tauri 应用菜单、托盘菜单与 Windows/Linux 自绘 menubar 必须从同一份 locale 构建并在语言切换后刷新。Linux 不安装 GTK 全局应用菜单，避免它注入每个独立窗口并破坏 renderer 主题。macOS 应用菜单保留 About/Services/Hide/Bring All to Front 等标准角色，但 Quit 仍走 FileTerm 自己的脏编辑器、活动连接和 transfer cleanup 确认链路。资源监控是 SSH 连接配置，关闭后该连接不采集资源数据，工作区仅保留窄侧栏；开启时支持 1/5/15/30/60 秒采样，默认保持 1 秒，用户可按需切换到低频模式。
@@ -518,6 +524,15 @@ interface WorkspaceTab {
 - 终端与文件面板天然联动
 - 未来可扩展端口转发、远端命令、路径跟随
 
+### SSH 多级跳板生命周期
+
+SSH profile 继续通过 `jumpProfileId` 引用上游连接，最多经过 8 个普通 SSH 跳板。
+后端在打开网络前解析完整链路并校验 SSH 类型、引用、循环、端口及逐节点的 proxy/jump
+互斥规则，再从最外层依次通过 `direct-tcpip` 建立 SSH 会话。每跳独立认证和校验主机
+指纹，`hopIndex` 按实际路径递增；终端、SFTP 和运行时转发使用最终目标的会话。
+整条链的 handles 由当前连接拥有，认证失败、取消、测试完成或关闭会话时显式断开。
+连接表单和工作区底部显示已解析的跳板路径，候选项排除循环和失效链路。
+
 ### FTP
 
 - 独立协议
@@ -581,10 +596,11 @@ SSH/SFTP 和 FTP/FTPS 会在会话建立后上报实际能力，而不是把所�
 - Tauri 的 SSH 终端输入使用 renderer 到 Rust backend 的单向 command，并进入每个 tab 独立的无界输入 channel；SSH worker 在写入 PTY 前按序合并当前积压，不能与 SFTP/文件操作共用有界 worker command 队列，也不能因该队列满而丢失按键。
 - 终端 resize 同样使用单向 command；终端输出在 Rust backend 按 16ms 合并，再交给 renderer 按 16 KiB 分批写入 xterm；空闲时立即提交，积压由解析完成回调继续排空，绘制帧交给 xterm，避免后台 WebView 暂停动画帧时停止消费输出。
 - 终端日志颜色属于 renderer 的 xterm 表现层：远端原有 ANSI 继续由 xterm 解析，纯文本日志只在普通缓冲区完成解析后按主题色补充语义颜色；备用屏幕程序保持原始输出，避免破坏 TUI。
-- Tauri 终端输出必须使用持久的 IPC `Channel` 流式传送；普通 Tauri events 只承载低频状态和 snapshot，避免持续 PTY 输出与状态广播争用同一事件路径。
+- Tauri 终端输出使用持久的 IPC `Channel`，SSH/本地 PTY 输出按 UTF-8 边界分为至多 16 KiB 的批次，每窗口最多 4 批待确认；renderer 在 xterm 解析完成后经 `app_ack_terminal_data` 归还额度。通道按原生窗口绑定，每窗口独立转发并保留 8 项待发送队列，慢窗口不阻塞其他窗口或 SSH IO；重订阅和销毁时取消旧转发并释放等待者。SSH pump 保留有界显示队列并持续读取共享连接，饱和时沿用显示跳过策略，限频告警并在后续输出中标记跳过字节数，输入/取消仍由 worker 单独处理；空闲不启动输出刷新定时器。串口/Telnet 的读取和输入共用 worker，沿用非等待显示额度的发送路径，避免暂停设备 IO。普通 Tauri events 只承载低频状态和 snapshot，避免持续 PTY 输出与状态广播争用同一事件路径。
 - SSH transcript 由 controller 的有界分块缓冲统一维护，runtime 不重复拼接第二份历史。
 - 系统指标首次绑定时发送完整历史，稳定轮询只发送最新样本，由 renderer 追加到固定长度历史。
 - 同一 Renderer 的并发完整快照采用单飞和尾随合并，确保最终状态可达，同时避免重复磁盘读取与大对象序列化。
+- 每分钟 `renderer-health` 在原有 IPC 日志中附带 Rust 活跃任务数、全局就绪队列深度、worker 命令队列占用、传输运行数和输出积压。只采集数量，不采集会话内容；使用非等待锁，繁忙时记 `null`，不会等待业务锁或额外启动周期任务。全局就绪队列深度不等于所有等待 IO 的任务数。
 
 文件编辑器的 Monaco 资源通过动态 import 独立分块，只在文件编辑器窗口需要时加载，主工作区不静态携带编辑器与语言服务代码。
 
@@ -596,6 +612,7 @@ SSH/SFTP 和 FTP/FTPS 会在会话建立后上报实际能力，而不是把所�
 - SFTP 与 FTP/FTPS 分别在 controller 内实现 offset 读写和远端收尾，不把协议命令伪统一到 renderer 或 transfer UI。
 - 传输调度使用 `profileId` 作为跨重启身份，不依赖生命周期短暂的 `tabId` 恢复连接；所有中断任务都等待用户手动继续，root 任务继续前还需要恢复 root 授权。
 - 高频字节进度仍只走 `transfer:update`，UI 投影直接构造且不深拷贝 manifest。目录条目按索引同步内存状态，journal 在任务创建、状态切换、目录检查点和收尾时更新；序列化与 fsync 在 blocking pool 中持有写锁完成，恢复 offset 以实际临时文件大小为准。
+- 传输历史在运行内存、renderer 和 journal 使用同一 200 项保留规则；只淘汰不可恢复且无待清理数据的已结束任务，未完成/可恢复/待清理工作全部保留，因此必要任务超过 200 时不强行裁剪。已结束且无需恢复或清理的目录任务释放 manifest 文件/目录数组；首次快照等待期间，传输事件按任务合并为最新状态。
 - 普通断线和暂停保留临时文件；只有显式丢弃才清理断点。
 - 本地最终替换采用可回滚的备份重命名。Windows 文件占用导致替换失败时保留 `.fileterm-part`，避免丢失已传数据。
 - 目录任务持久化逐文件 manifest：已完成文件经过目标大小复核后跳过，当前文件按真实 `.fileterm-part` 长度继续。

@@ -431,32 +431,20 @@ fn replace_changed_remote_files(current: &mut Vec<Value>, files: &[Value]) -> bo
     true
 }
 
-/// Flush the batch buffer to the terminal output pump channel.
-///
-/// 非阻塞：用 `try_send` 把 chunk 推到 bounded channel，由独立的 pump
-/// task 异步消费并推送到 renderer。通道满时丢弃 chunk 并限频记录——终端
-/// 输出是尽力而为的，丢几帧不影响功能，但 worker 主循环的 select! 必须
-/// 立即返回以保证 Ctrl+C 路径畅通。
+/// Keep display traffic bounded without stopping the shared SSH receive loop.
 fn flush_batch(
     batch: &mut Vec<u8>,
-    output_tx: &tokio::sync::mpsc::Sender<String>,
+    output: &mut TerminalOutputPump,
     app: &AppHandle,
     tab_id: &str,
 ) {
-    if batch.is_empty() {
-        return;
-    }
-    let chunk = String::from_utf8_lossy(batch).into_owned();
-    batch.clear();
-    if let Err(tokio::sync::mpsc::error::TrySendError::Full(_)) = output_tx.try_send(chunk) {
-        // 通道满说明 pump task 跟不上（renderer IPC 或 RwLock 竞争）。
-        // 丢弃 chunk 避免阻塞主循环。限频日志避免在极端高吞吐下刷屏。
+    if let Some(skipped_bytes) = output.enqueue(batch) {
         crate::services::logging::session(
             app,
             "WARN",
             "ssh",
             tab_id,
-            "terminal output pump saturated, dropping chunk",
+            format!("terminal output pump saturated skipped_display_bytes={skipped_bytes}"),
         );
     }
 }

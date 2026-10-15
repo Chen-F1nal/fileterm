@@ -84,15 +84,40 @@ pub async fn app_write_terminal(
 }
 
 #[tauri::command]
-pub fn app_subscribe_terminal_data(app: AppHandle, channel: Channel<serde_json::Value>) {
+pub fn app_subscribe_terminal_data(
+    app: AppHandle,
+    window: WebviewWindow,
+    channel: Channel<serde_json::Value>,
+) {
     let state = app.state::<crate::services::workspace::WorkspaceState>();
     let channel_id = channel.id();
-    state.register_terminal_output_channel(channel);
+    state.register_terminal_output_channel(window.label(), channel);
+    let channels = Arc::clone(&state.terminal_output_channels);
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            if let Ok(mut channels) = channels.lock() {
+                if let Some(subscription) = channels.remove(&channel_id) {
+                    subscription.close();
+                }
+            }
+        }
+    });
     crate::services::logging::debug(
         &app,
         "terminal",
         format!("terminal output channel registered id={channel_id}"),
     );
+}
+
+#[tauri::command]
+pub fn app_ack_terminal_data(
+    app: AppHandle,
+    window: WebviewWindow,
+    channel_id: u32,
+    delivery_id: u64,
+) {
+    app.state::<crate::services::workspace::WorkspaceState>()
+        .ack_terminal_output(window.label(), channel_id, delivery_id);
 }
 
 #[tauri::command]

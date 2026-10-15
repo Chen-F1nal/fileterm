@@ -25,7 +25,7 @@ pub async fn app_update_profile(
 ) -> Result<serde_json::Value, AppError> {
     let _guard = lock_library_after_transfer_hydration(&app).await?;
     let profile = crate::services::profile_ops::update_profile(&app, &profile_id, input)?;
-    let resolved_profile = resolve_profile_for_session(&app, &profile)?;
+    let resolved_profile = resolve_profile_for_session(&app, &profile, true)?;
     let reconnect_mode = crate::services::workspace::reconnect_mode_for_profile(&resolved_profile);
     let state = app.state::<crate::services::workspace::WorkspaceState>();
     let mut sessions = state.sessions.write().await;
@@ -73,7 +73,7 @@ pub async fn app_test_connection(
         profile_id.as_deref(),
         input,
     )?;
-    let resolved_profile = resolve_profile_for_session(&app, &profile)?;
+    let resolved_profile = resolve_profile_for_session(&app, &profile, false)?;
     drop(library_guard);
 
     // A connection test can remain in the SSH handshake while it waits for a

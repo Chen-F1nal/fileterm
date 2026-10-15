@@ -8,7 +8,8 @@ pub async fn ensure_loaded(app: &AppHandle) -> Result<(), AppError> {
     // The first load also rewrites the normalized snapshot; taking these
     // locks in the opposite order would deadlock with a concurrent persist.
     let _write = state.transfer_journal_write.lock().await;
-    let tasks = read_journal(app)?;
+    let mut tasks = read_journal(app)?;
+    prune_transfer_history(&mut tasks);
     *state.transfers.write().await = tasks.clone();
     write_journal(app, &tasks)?;
     drop(_write);
@@ -40,7 +41,11 @@ pub async fn list(app: &AppHandle) -> Result<Vec<TransferTask>, AppError> {
 async fn persist(app: &AppHandle) -> Result<(), AppError> {
     let state = app.state::<crate::services::workspace::WorkspaceState>();
     let write_guard = state.transfer_journal_write.clone().lock_owned().await;
-    let tasks = state.transfers.read().await.clone();
+    let tasks = {
+        let mut tasks = state.transfers.write().await;
+        prune_transfer_history(&mut tasks);
+        tasks.clone()
+    };
     let journal_app = app.clone();
     // Serialization and fsync for large directory journals must not occupy
     // a Tokio worker also responsible for terminal IO and UI commands.

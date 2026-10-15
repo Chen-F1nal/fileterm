@@ -35,6 +35,7 @@ export type TerminalLifecycleOptions = {
   bootTextRef: MutableRef<string>
   renderedTranscriptRef: MutableRef<string>
   pendingWriteRef: MutableRef<string>
+  pendingWriteCompletionsRef: MutableRef<Array<{ remaining: number; resolve(): void }>>
   resizeTimerRef: MutableRef<number | null>
   resizeSettleTimerRef: MutableRef<number | null>
   pendingResizeForceRef: MutableRef<boolean>
@@ -85,7 +86,7 @@ export type TerminalLifecycleOptions = {
   shouldHydrateTranscript(currentTranscript: string, nextTranscript: string, connected: boolean): boolean
   formatTerminalChunk(terminal: Terminal | null, value: string): string
   appendRenderedTranscript(chunk: string): void
-  scheduleTerminalWrite(text: string): void
+  scheduleTerminalWrite(text: string): Promise<void>
   buildExitAlternateScreenSequence(): string
   snapshotTerminalBuffer(terminal: Terminal): string
   clearSearchDecorations(): void

@@ -59,6 +59,18 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     setIsSavingWindowSizePreference,
     windowSizePreferenceError,
     setWindowSizePreferenceError,
+    showMacosMenuBarIcon,
+    setShowMacosMenuBarIcon,
+    isSavingMacosMenuBarIcon,
+    setIsSavingMacosMenuBarIcon,
+    macosMenuBarIconPreferenceError,
+    setMacosMenuBarIconPreferenceError,
+    appIcon,
+    setAppIcon,
+    isSavingAppIcon,
+    setIsSavingAppIcon,
+    appIconPreferenceError,
+    setAppIconPreferenceError,
     uiZoomPercent,
     setUiZoomPercent,
     isSavingUiZoomPercent,
@@ -299,6 +311,54 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
       .finally(() => setIsSavingUiZoomPercent(false))
   }
 
+  const setMacosMenuBarIconPreference = (nextValue: boolean) => {
+    if (
+      !desktopApi ||
+      desktopApi.platform !== 'darwin' ||
+      isSavingMacosMenuBarIcon ||
+      nextValue === showMacosMenuBarIcon
+    ) {
+      return
+    }
+
+    const previousValue = showMacosMenuBarIcon
+    setShowMacosMenuBarIcon(nextValue)
+    setMacosMenuBarIconPreferenceError(null)
+    setIsSavingMacosMenuBarIcon(true)
+    void desktopApi
+      .setUiPreferences({ showMacosMenuBarIcon: nextValue })
+      .then((preferences) => setShowMacosMenuBarIcon(preferences.showMacosMenuBarIcon))
+      .catch(() => {
+        setShowMacosMenuBarIcon(previousValue)
+        setMacosMenuBarIconPreferenceError(t.macosMenuBarIconPreferenceSaveFailed)
+      })
+      .finally(() => setIsSavingMacosMenuBarIcon(false))
+  }
+
+  const setAppIconPreference = (nextValue: UiPreferences['appIcon']) => {
+    if (
+      !desktopApi ||
+      !['darwin', 'win32', 'linux'].includes(desktopApi.platform) ||
+      isSavingAppIcon ||
+      nextValue === appIcon
+    ) {
+      return
+    }
+
+    const previousValue = appIcon
+    setAppIcon(nextValue)
+    setAppIconPreferenceError(null)
+    setIsSavingAppIcon(true)
+    void desktopApi
+      .setUiPreferences({ appIcon: nextValue })
+      .then((preferences) => setAppIcon(preferences.appIcon))
+      .catch(() => {
+        setAppIcon(previousValue)
+        setAppIconPreferenceError(t.appIconPreferenceSaveFailed)
+      })
+      .finally(() => setIsSavingAppIcon(false))
+  }
+
   return {
     updateStatus,
     autoCheckUpdates,
@@ -341,6 +401,14 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     isSavingWindowSizePreference,
     windowSizePreferenceError,
     setRememberWindowSizePreference,
+    showMacosMenuBarIcon,
+    isSavingMacosMenuBarIcon,
+    macosMenuBarIconPreferenceError,
+    setMacosMenuBarIconPreference,
+    appIcon,
+    isSavingAppIcon,
+    appIconPreferenceError,
+    setAppIconPreference,
     uiZoomPercent,
     isSavingUiZoomPercent,
     uiZoomPercentError,

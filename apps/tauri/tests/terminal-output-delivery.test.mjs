@@ -1,0 +1,120 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+import vm from 'node:vm'
+import ts from 'typescript'
+
+const exports = {}
+vm.runInNewContext(
+  ts.transpileModule(readFileSync(new URL('../src/bridge/events/terminal-output.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText,
+  { exports, performance }
+)
+const tick = () => new Promise((resolve) => setImmediate(resolve))
+
+test('delivery acknowledges only after all listeners parse and isolates failures', async () => {
+  let parsed
+  const waiting = new Promise((resolve) => {
+    parsed = resolve
+  })
+  const listeners = new Set([
+    () => waiting,
+    () => {
+      throw new Error('broken view')
+    }
+  ])
+  const acknowledgements = []
+  const diagnostics = []
+  const deliver = exports.createTerminalOutputDelivery(
+    listeners,
+    async (id) => {
+      acknowledgements.push(id)
+    },
+    (message) => diagnostics.push(message)
+  )
+  deliver({ tabId: 'ssh', chunk: 'private terminal output', deliveryId: 8 })
+  await tick()
+  assert.equal(acknowledgements.length, 0)
+  parsed()
+  await tick()
+  assert.deepEqual(acknowledgements, [8])
+  assert.equal(JSON.parse(diagnostics[0]).failed, true)
+  assert.ok(!diagnostics[0].includes('private terminal output'))
+  listeners.clear()
+  deliver({ tabId: 'closed', chunk: '', deliveryId: 9 })
+  await tick()
+  assert.deepEqual(acknowledgements, [8, 9])
+})
+
+test('ten terminal listeners receive 20000 ordered batches without retained parsing work', async () => {
+  const counts = Array(10).fill(0)
+  const listeners = new Set(
+    counts.map((_, index) => (payload) => {
+      if (payload.tabId === String(index)) {
+        assert.equal(payload.chunk, String(counts[index]++))
+        return Promise.resolve()
+      }
+    })
+  )
+  let completed = 0
+  const deliver = exports.createTerminalOutputDelivery(
+    listeners,
+    async () => {
+      completed++
+    },
+    () => {
+      throw new Error('Unexpected stall')
+    }
+  )
+  for (let sequence = 0; sequence < 20000; sequence += 4) {
+    for (let offset = 0; offset < 4; offset++) {
+      const id = sequence + offset
+      deliver({ tabId: String(id % 10), chunk: String(Math.floor(id / 10)), deliveryId: id })
+    }
+    await tick()
+    assert.equal(completed, sequence + 4)
+  }
+  assert.deepEqual(counts, Array(10).fill(2000))
+})
+
+test('serial and telnet deliveries keep their existing non-credit path', async () => {
+  let completed = 0
+  const listeners = new Set([
+    async () => {
+      completed++
+    }
+  ])
+  let acknowledged = false
+  const deliver = exports.createTerminalOutputDelivery(
+    listeners,
+    async () => {
+      acknowledged = true
+    },
+    () => {}
+  )
+  deliver({ tabId: 'serial', chunk: 'device response' })
+  await tick()
+  assert.equal(completed, 1)
+  assert.equal(acknowledged, false)
+})
+
+test('saturation markers are visible and counted without logging output text', async () => {
+  const received = []
+  const diagnostics = []
+  const deliver = exports.createTerminalOutputDelivery(
+    new Set([
+      async (payload) => {
+        received.push(payload.chunk)
+      }
+    ]),
+    async () => {},
+    (message) => diagnostics.push(message)
+  )
+  deliver({ tabId: 'ssh', chunk: 'private new frame', deliveryId: 1, skippedBytesBefore: 123 })
+  await tick()
+  assert.ok(received[0].includes('skipped 123 bytes'))
+  assert.ok(received[0].endsWith('private new frame'))
+  assert.equal(JSON.parse(diagnostics[0]).skippedBytesBefore, 123)
+  assert.ok(!diagnostics[0].includes('private new frame'))
+})

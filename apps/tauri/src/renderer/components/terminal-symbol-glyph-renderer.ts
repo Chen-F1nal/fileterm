@@ -17,9 +17,9 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   if (!rows || !view || !context) return { dispose() {} }
   const sources = new Map<HTMLElement, SourceStyle>()
   const metrics = new Map<string, { left: number; width: number }>()
+  const reusableCell = terminal.buffer.active.getNullCell()
 
   const collectRow = (row: HTMLElement, rowIndex: number, cellWidth: number, updates: Array<() => void>) => {
-    if (!/[\u0080-\u{10ffff}]/u.test(row.textContent ?? '')) return
     const line = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + rowIndex)
     if (!line || cellWidth <= 0) return
     let column = 0
@@ -31,7 +31,7 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       // Map DOM text back to buffer widths, including wide and combined cells.
       // Fail closed for a joiner/decorator that supplies different text.
       while (offset < text.length && column < line.length) {
-        const cell = line.getCell(column++)!
+        const cell = line.getCell(column++, reusableCell)!
         if (cell.getWidth() === 0) continue
         const chars = cell.isInvisible() ? ' ' : cell.getChars() || ' '
         if (text.slice(offset, offset + chars.length).replace(/\u00a0/g, ' ') !== chars.replace(/\u00a0/g, ' ')) return
@@ -56,14 +56,14 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
         let ink = metrics.get(key)
         if (!ink) {
           const measured = context.measureText(cell.text)
-          const left = Math.min(0, -measured.actualBoundingBoxLeft)
-          ink = { left, width: Math.max(measured.width, measured.actualBoundingBoxRight) - left }
+          const left = -measured.actualBoundingBoxLeft
+          ink = { left, width: measured.actualBoundingBoxRight - left }
           metrics.set(key, ink)
           if (metrics.size > 2048) metrics.clear()
         }
         // Even a subpixel overhang can contain an entire device-pixel edge on
         // Retina displays. Only tolerate floating-point measurement noise.
-        return ink.width > cellWidth * cell.width + 0.01 ? ink : undefined
+        return ink.left < -0.01 || ink.left + ink.width > cellWidth * cell.width + 0.01 ? ink : undefined
       })
       if (!fits.some(Boolean)) continue
       updates.push(() => {
@@ -81,11 +81,14 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
           const ink = fits[index]
           if (ink) {
             const glyph = row.ownerDocument.createElement('span')
-            const scale = (cellWidth * cell.width) / ink.width
+            const available = cellWidth * cell.width
+            // Fit ink, not font side bearings; preserve circles/emoji proportions.
+            const scale = Math.min(1, available / ink.width)
+            const shift = Math.max(-ink.left * scale, Math.min(0, available - (ink.left + ink.width) * scale))
             glyph.textContent = cell.text
             glyph.style.fontWeight = 'inherit'
             glyph.style.transformOrigin = 'left center'
-            glyph.style.transform = `translateX(${-ink.left * scale}px) scaleX(${scale})`
+            glyph.style.transform = `translateX(${shift}px) scale(${scale})`
             slot.append(glyph)
           } else slot.textContent = cell.text
           fragment.append(slot)
@@ -96,10 +99,20 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   }
   const renderRows = (indexes: number[]) => {
     for (const source of sources.keys()) if (!rows.contains(source)) sources.delete(source)
+    const affected = indexes.filter((index) => {
+      const row = rows.children[index]
+      const text = row?.textContent ?? ''
+      return (
+        row instanceof view.HTMLElement &&
+        /[\u0080-\u{10ffff}]/u.test(text) &&
+        /[\p{Symbol}\p{Punctuation}]/u.test(text)
+      )
+    })
+    if (!affected.length) return
     const cellWidth = rows.getBoundingClientRect().width / terminal.cols
     const updates: Array<() => void> = []
     // Measure all affected rows before changing DOM, avoiding a layout flush per symbol.
-    for (const index of indexes) {
+    for (const index of affected) {
       const row = rows.children[index]
       if (row instanceof view.HTMLElement) collectRow(row, index, cellWidth, updates)
     }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   FileTermDesktopApi,
   TransferTask,
+  SshProfile,
   WorkspaceSessionSource,
   WorkspaceSnapshot,
   WorkspaceTab
@@ -12,17 +13,12 @@ import { TransferPopover } from './transfer-popover'
 import { scopeTransfersToSession, type TransferSessionTab } from './transfer-scope'
 import { t } from '../../i18n'
 
-type JumpHostSummary = {
-  name: string
-  host: string
-  port: number
-}
-
 export function TransferCenter({
   activeProfileId,
   activeTabId,
   activeTabStatus,
-  activeJumpHost,
+  activeJumpHosts,
+  activeRouteTarget,
   activeTabSource,
   desktopApi,
   fullWidth,
@@ -37,7 +33,8 @@ export function TransferCenter({
   activeProfileId?: string
   activeTabId?: string | null
   activeTabStatus?: WorkspaceTab['status'] | null
-  activeJumpHost?: JumpHostSummary | null
+  activeJumpHosts?: SshProfile[]
+  activeRouteTarget?: SshProfile
   activeTabSource?: WorkspaceSessionSource | null
   desktopApi?: FileTermDesktopApi
   fullWidth: boolean
@@ -107,7 +104,8 @@ export function TransferCenter({
           activeCount={activeCount}
           activeTabId={activeTabId}
           activeTabStatus={activeTabStatus ? tabStatusClass(activeTabStatus) : null}
-          activeJumpHost={activeJumpHost}
+          activeJumpHosts={activeJumpHosts}
+          activeRouteTarget={activeRouteTarget}
           activeTabSource={activeTabSource}
           fullWidth={fullWidth}
           isPending={isPending}

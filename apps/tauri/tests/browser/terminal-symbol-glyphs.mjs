@@ -16,7 +16,7 @@ const browser = await engine.launch({
   executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH
 })
 let reproduced = false
-const glyphs = ['▢', '▣', '☐', '□', '✻', '┌', '→', '※']
+const glyphs = ['▢', '▣', '☐', '□', '✻', '┌', '→', '※', '⚠️', '•', '✅', '❌']
 try {
   for (const scale of [1, 1.25, 2]) {
     for (const fontSize of [14, 24]) {
@@ -130,9 +130,8 @@ try {
             const x = (i / 3) % baseline.info.width
             if (x < cellWidth * 4 || x >= cellWidth * 6) continue
             if (
-              baseline.data[i] < 32 &&
-              baseline.data[i + 1] < 32 &&
-              baseline.data[i + 2] < 32 &&
+              // Include saturated color-emoji ink as well as black text.
+              Math.min(baseline.data[i], baseline.data[i + 1], baseline.data[i + 2]) < 32 &&
               // Background changes alter WebKit glyph antialiasing. Count ink
               // actually replaced by the blue background, not darker blue
               // pixels that still contain the stroke.
@@ -151,7 +150,7 @@ try {
                   if (x + dx < 0 || x + dx >= baseline.info.width || y + dy < 0 || y + dy >= baseline.info.height)
                     continue
                   const pixel = ((y + dy) * baseline.info.width + x + dx) * 3
-                  if (after[pixel] < 178 * 0.6 && after[pixel + 1] < 217 * 0.6 && after[pixel + 2] < 255 * 0.6)
+                  if (after[pixel] < 178 * 0.6 || after[pixel + 1] < 217 * 0.6 || after[pixel + 2] < 255 * 0.6)
                     nearbyInk = true
                 }
               }

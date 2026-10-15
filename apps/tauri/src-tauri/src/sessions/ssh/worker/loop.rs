@@ -47,9 +47,10 @@ async fn run_worker_loop(
     let profile = &routed_profile;
     let username = normalized_username.unwrap_or(configured_username);
     let jump_host_configured = profile
-        .get("jumpProfileId")
-        .and_then(Value::as_str)
-        .is_some();
+        .get("jumpProfileIds")
+        .and_then(Value::as_array)
+        .map(|ids| !ids.is_empty())
+        .unwrap_or_else(|| profile.get("jumpProfileId").and_then(Value::as_str).is_some());
     let direct_login_hint =
         crate::sessions::system_metrics::jumpserver_direct_login_hint(&username);
     let route_hint = if jump_host_configured {
@@ -91,7 +92,6 @@ async fn run_worker_loop(
             tab_id,
             SSH_INTERACTION_TIMEOUT,
             Some("main".to_string()),
-            SshAuthenticationTarget::Direct,
             SshInteractionFlow::new(),
             cancellation.clone(),
         ) => result,
@@ -120,7 +120,8 @@ async fn run_worker_loop(
     );
     let remote_sshid = session.remote_sshid;
     let disconnect_reason = session.disconnect_reason;
-    let handle: Arc<Handle<ClientHandler>> = Arc::new(session.handle);
+    let _session_cleanup = session.cleanup;
+    let handle = session.handle;
     let resolution = resolve_ssh_device_mode(profile, &remote_sshid);
     log_ssh_device_mode_resolution(app, tab_id, profile, &remote_sshid, resolution);
     let effective_profile = profile_with_resolved_device_mode(profile, resolution);

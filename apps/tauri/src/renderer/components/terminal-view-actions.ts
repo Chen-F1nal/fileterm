@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import { type Terminal } from '@xterm/xterm'
+import { type ITheme, type Terminal } from '@xterm/xterm'
 import { type FitAddon } from '@xterm/addon-fit'
 import { type SearchAddon } from '@xterm/addon-search'
 import { MAX_UI_ZOOM_PERCENT, MIN_UI_ZOOM_PERCENT } from '@fileterm/core'
@@ -39,6 +39,7 @@ export type TerminalViewActionsOptions = {
   findOpenRef: MutableRef<boolean>
   renderedTranscriptRef: MutableRef<string>
   pendingWriteRef: MutableRef<string>
+  pendingWriteCompletionsRef: MutableRef<Array<{ remaining: number; resolve(): void }>>
   isWritingRef: MutableRef<boolean>
   suppressHydratedChunksUntilRef: MutableRef<number>
   preserveVisibleBufferRef: MutableRef<boolean>
@@ -74,6 +75,7 @@ export function useTerminalViewActions({
   findOpenRef,
   renderedTranscriptRef,
   pendingWriteRef,
+  pendingWriteCompletionsRef,
   isWritingRef,
   suppressHydratedChunksUntilRef,
   preserveVisibleBufferRef,
@@ -153,7 +155,11 @@ export function useTerminalViewActions({
     if (!terminal) {
       return
     }
-    terminal.options.theme = buildTerminalTheme()
+    const theme = buildTerminalTheme()
+    if (Object.entries(theme).every(([key, value]) => terminal.options.theme?.[key as keyof ITheme] === value)) {
+      return
+    }
+    terminal.options.theme = theme
     terminalLogColorizerRef.current?.setPalette(getTerminalLogColorPalette(terminal.options.theme))
     terminal.refresh(0, Math.max(terminal.rows - 1, 0))
   }
@@ -353,10 +359,25 @@ export function useTerminalViewActions({
     onCloseTabRef.current?.()
   }
 
+  const settleParsedWrite = (length: number) => {
+    let remaining = length
+    while (pendingWriteCompletionsRef.current.length && remaining > 0) {
+      const completion = pendingWriteCompletionsRef.current[0]
+      const parsed = Math.min(remaining, completion.remaining)
+      completion.remaining -= parsed
+      remaining -= parsed
+      if (completion.remaining === 0) {
+        pendingWriteCompletionsRef.current.shift()
+        completion.resolve()
+      }
+    }
+  }
+
   const flushPendingWrite = () => {
     const terminal = terminalRef.current
     if (!terminal) {
       pendingWriteRef.current = ''
+      pendingWriteCompletionsRef.current.splice(0).forEach((completion) => completion.resolve())
       return
     }
 
@@ -375,21 +396,20 @@ export function useTerminalViewActions({
     terminal.write(nextChunk, () => {
       if (terminalRef.current !== terminal || transcriptReplayGenerationRef.current !== generation) return
       isWritingRef.current = false
+      settleParsedWrite(nextChunk.length)
       // Parsing owns backpressure; hidden WebViews may stop animation frames entirely.
       if (pendingWriteRef.current) queueMicrotask(flushPendingWrite)
     })
   }
 
-  const scheduleTerminalWrite = (text: string) => {
-    if (!text) {
-      return
-    }
-
+  const scheduleTerminalWrite = (text: string): Promise<void> => {
+    if (!text || !terminalRef.current) return Promise.resolve()
+    const completion = new Promise<void>((resolve) => {
+      pendingWriteCompletionsRef.current.push({ remaining: text.length, resolve })
+    })
     pendingWriteRef.current += text
-    if (!isWritingRef.current) {
-      // xterm already batches parsing/rendering; do not delay an idle terminal another frame.
-      flushPendingWrite()
-    }
+    if (!isWritingRef.current) flushPendingWrite()
+    return completion
   }
 
   const buildExitAlternateScreenSequence = () => '\x1b[?1049l\x1b[?1047l\x1b[?47l\x1b[?25h'
@@ -425,6 +445,7 @@ export function useTerminalViewActions({
   const replaceTerminalWithTranscript = (terminal: Terminal, transcript: string) => {
     renderedTranscriptRef.current = trimTranscript(transcript)
     pendingWriteRef.current = ''
+    pendingWriteCompletionsRef.current.splice(0).forEach((completion) => completion.resolve())
     isWritingRef.current = false
     const replayGeneration = transcriptReplayGenerationRef.current + 1
     transcriptReplayGenerationRef.current = replayGeneration

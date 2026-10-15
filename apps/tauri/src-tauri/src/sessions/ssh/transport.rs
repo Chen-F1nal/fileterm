@@ -2,6 +2,7 @@
 // opening remain private implementation fragments in this module directory.
 
 include!("transport/host.rs");
+include!("transport/route.rs");
 include!("transport/jump.rs");
 include!("transport/proxy.rs");
 include!("transport/credentials.rs");

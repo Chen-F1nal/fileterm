@@ -4,15 +4,19 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-function fixture() {
+function fixture({ supportsLongTasks = false } = {}) {
   let now = 0
   let callback
   let reset
   let cleared = false
+  let longTaskCallback
+  let observerDisconnected = false
   const calls = []
   const document = {
     hidden: false,
     hasFocus: () => true,
+    querySelectorAll: () => Array(10),
+    getElementsByTagName: () => Array(8000),
     addEventListener: (_, listener) => {
       reset = listener
     },
@@ -32,9 +36,24 @@ function fixture() {
     {
       exports,
       document,
-      performance: { now: () => now },
+      performance: { now: () => now, memory: { usedJSHeapSize: 1234, totalJSHeapSize: 4567 } },
+      PerformanceObserver: supportsLongTasks
+        ? class {
+            static supportedEntryTypes = ['longtask']
+            constructor(callback) {
+              longTaskCallback = callback
+            }
+            observe(options) {
+              assert.equal(options.type, 'longtask')
+            }
+            disconnect() {
+              observerDisconnected = true
+            }
+          }
+        : undefined,
       window: {
-        fileterm: { appVersion: '2.2.28', platform: 'darwin' },
+        fileterm: { appVersion: '2.2.31', platform: 'win32' },
+        __TAURI_INTERNALS__: { callbacks: new Map([[1, () => {}]]) },
         setInterval: (listener, interval) => {
           assert.equal(interval, 1000)
           callback = listener
@@ -59,6 +78,10 @@ function fixture() {
     get cleared() {
       return cleared
     },
+    get observerDisconnected() {
+      return observerDisconnected
+    },
+    longTasks: (...durations) => longTaskCallback({ getEntries: () => durations.map((duration) => ({ duration })) }),
     tick: (elapsed) => {
       now += elapsed
       callback()
@@ -94,4 +117,39 @@ test('hidden timer throttling and the transition back to foreground are ignored'
   f.tick(4000)
   assert.equal(f.calls.length, 1)
   f.dispose()
+})
+
+test('minute health reports include bounded counters without terminal contents', () => {
+  const f = fixture()
+  for (let index = 0; index < 60; index++) f.tick(1000)
+  assert.equal(f.calls.length, 1)
+  const health = JSON.parse(f.calls[0][2])
+  assert.equal(health.event, 'renderer-health')
+  assert.equal(health.uptimeMs, 60000)
+  assert.equal(health.usedJSHeapBytes, 1234)
+  assert.equal(health.totalJSHeapBytes, 4567)
+  assert.equal(health.ipcCallbackCount, 1)
+  assert.equal(health.terminalCount, 10)
+  assert.equal(health.domNodeCount, 8000)
+  assert.equal(health.maxEventLoopGapMs, 1000)
+  assert.equal(health.longTaskCount, undefined)
+  f.dispose()
+})
+
+test('long task summaries reset each minute and across visibility, then disconnect', () => {
+  const f = fixture({ supportsLongTasks: true })
+  f.longTasks(50, 123)
+  for (let index = 0; index < 60; index++) f.tick(1000)
+  const health = JSON.parse(f.calls[0][2])
+  assert.equal(health.longTaskCount, 2)
+  assert.equal(health.longTaskTotalMs, 173)
+  assert.equal(health.maxLongTaskMs, 123)
+  f.document.hidden = true
+  f.longTasks(999)
+  f.document.hidden = false
+  f.visibility()
+  for (let index = 0; index < 60; index++) f.tick(1000)
+  assert.equal(JSON.parse(f.calls[1][2]).longTaskCount, 0)
+  f.dispose()
+  assert.equal(f.observerDisconnected, true)
 })

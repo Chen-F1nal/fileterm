@@ -10,13 +10,7 @@ async fn connect_target_through_jump(
     let host_verification_waiting = handler.host_verification_waiting.clone();
     let log_app = handler.app.clone();
     let log_tab_id = handler.tab_id.clone();
-    let channel = wait_for_ssh_stage("SSH jump-host channel setup", connect_timeout, async {
-        jump_handle
-            .channel_open_direct_tcpip(host, port as u32, "127.0.0.1", 0)
-            .await
-            .map_err(|error| format!("Jump Host direct-tcpip failed: {error}"))
-    })
-    .await?;
+    let channel = open_jump_channel(jump_handle, host, port, connect_timeout).await?;
     crate::services::logging::session(
         &log_app,
         "INFO",
@@ -46,4 +40,19 @@ async fn connect_target_through_jump(
         );
     }
     result
+}
+
+async fn open_jump_channel<H: Handler>(
+    jump_handle: &Handle<H>,
+    host: &str,
+    port: u16,
+    connect_timeout: Duration,
+) -> Result<Channel<russh::client::Msg>, String> {
+    wait_for_ssh_stage("SSH jump-host channel setup", connect_timeout, async {
+        jump_handle
+            .channel_open_direct_tcpip(host, u32::from(port), "127.0.0.1", 0)
+            .await
+            .map_err(|error| format!("Jump Host direct-tcpip failed: {error}"))
+    })
+    .await
 }

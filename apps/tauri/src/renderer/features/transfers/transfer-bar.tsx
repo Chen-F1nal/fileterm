@@ -1,4 +1,4 @@
-import type { WorkspaceSessionSource } from '@fileterm/core'
+import type { SshProfile, WorkspaceSessionSource } from '@fileterm/core'
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
 import { StatusIndicator, type StatusIndicatorStatus } from '../common/status-indicator'
@@ -7,17 +7,12 @@ function sessionSourceLabel(source: WorkspaceSessionSource) {
   return source === 'mcp' ? t.sessionSourceMcp : t.sessionSourceCli
 }
 
-type JumpHostSummary = {
-  name: string
-  host: string
-  port: number
-}
-
 export function TransferBar({
   activeCount,
   activeTabId,
   activeTabStatus,
-  activeJumpHost,
+  activeJumpHosts,
+  activeRouteTarget,
   activeTabSource,
   fullWidth = false,
   isPending,
@@ -27,13 +22,18 @@ export function TransferBar({
   activeCount: number
   activeTabId?: string | null
   activeTabStatus?: StatusIndicatorStatus | null
-  activeJumpHost?: JumpHostSummary | null
+  activeJumpHosts?: SshProfile[]
+  activeRouteTarget?: SshProfile
   activeTabSource?: WorkspaceSessionSource | null
   fullWidth?: boolean
   isPending: boolean
   onHideToBackground?(tabId: string): void | Promise<void>
   onOpen(): void
 }) {
+  const activeRouteProfiles = [...(activeJumpHosts ?? []), ...(activeRouteTarget ? [activeRouteTarget] : [])]
+  const activeRouteNames = activeRouteProfiles.map((profile) => profile.name).join(' → ')
+  const activeRouteEndpoints = activeRouteProfiles.map((profile) => `${profile.host}:${profile.port}`).join(' → ')
+
   return (
     <footer className={`transfer-strip ${fullWidth ? 'full-width' : ''}`}>
       <div className="transfer-strip-context">
@@ -68,14 +68,15 @@ export function TransferBar({
             ) : null}
           </span>
         ) : null}
-        {activeTabId && activeJumpHost ? (
+        {activeTabId && activeJumpHosts?.length ? (
           <span
-            aria-label={`${t.viaJumpHost}: ${activeJumpHost.name}`}
+            aria-label={`${t.viaJumpHost}: ${activeRouteNames}`}
             className="transfer-session-jump"
-            title={`${t.viaJumpHost}: ${activeJumpHost.name} (${activeJumpHost.host}:${activeJumpHost.port})`}
+            tabIndex={0}
+            title={`${t.viaJumpHost}: ${activeRouteNames} (${activeRouteEndpoints})`}
           >
             <span className="transfer-session-jump-label">{t.viaJumpHost}</span>
-            <span className="transfer-session-jump-name">{activeJumpHost.name}</span>
+            <span className="transfer-session-jump-name">{activeRouteNames}</span>
           </span>
         ) : null}
       </div>

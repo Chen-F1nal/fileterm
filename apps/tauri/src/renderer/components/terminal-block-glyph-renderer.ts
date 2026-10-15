@@ -138,10 +138,10 @@ function replaceBlockGlyphs(
   sourceBackgrounds: WeakMap<HTMLElement, SourceBackground>,
   screenBounds: DOMRect,
   rowBounds: DOMRect,
-  lineThickness: number
+  lineThickness: number,
+  existingCanvas: HTMLCanvasElement | undefined
 ) {
   const document = row.ownerDocument
-  const existingCanvas = screen.querySelector<HTMLCanvasElement>(`.xterm-block-glyph-row[data-row-index="${rowIndex}"]`)
   const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
   const textNodes: Text[] = []
   let current = walker.nextNode()
@@ -336,13 +336,14 @@ function replaceBlockGlyphs(
 }
 
 /**
- * xterm's DOM renderer draws blocks and box drawing from the active font. Ghostty
- * rasterizes graphical cells from terminal-cell geometry, so draw each row into
+ * xterm's DOM renderer draws blocks and box drawing from the active font.
+ * Rasterize graphical cells from terminal-cell geometry, drawing each row into
  * one device-pixel bitmap using the terminal buffer's exact cell columns. This
  * keeps ANSI style-span boundaries and glyph bearings from shifting block art.
  */
 export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
   const sourceBackgrounds = new WeakMap<HTMLElement, SourceBackground>()
+  const reusableCell = terminal.buffer.active.getNullCell()
   const renderRows = (start: number, end: number) => {
     const element = terminal.element
     const screen = element?.querySelector<HTMLElement>('.xterm-screen')
@@ -353,6 +354,27 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
     if (!screen || !rows?.length || !palette || terminal.cols < 1 || terminal.rows < 1) {
       return
     }
+
+    const canvases = new Map<number, HTMLCanvasElement>()
+    screen.querySelectorAll<HTMLCanvasElement>('.xterm-block-glyph-row').forEach((canvas) => {
+      const index = Number(canvas.dataset.rowIndex)
+      if (index >= rows.length) canvas.remove()
+      else canvases.set(index, canvas)
+    })
+    const first = Math.max(0, start)
+    const last = Math.min(end, rows.length - 1)
+    const affected = []
+    for (let index = first; index <= last; index++) {
+      const row = rows[index]
+      if (
+        row instanceof HTMLElement &&
+        (/[\u2500-\u259f]/u.test(row.textContent ?? '') ||
+          canvases.has(index) ||
+          row.querySelector(`.${BLOCK_GLYPH_SOURCE_CLASS}, .${BLOCK_GLYPH_PLACEHOLDER_CLASS}`))
+      )
+        affected.push(index)
+    }
+    if (!affected.length) return
 
     const bounds = screen.getBoundingClientRect()
     const cellWidth = bounds.width / terminal.cols
@@ -367,14 +389,10 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
     // pixel. Such hairlines can disappear during WebView2 composition/capture.
     const lineThickness = Math.max(Math.ceil(pixelRatio), Math.round((cellHeight * pixelRatio) / 16))
 
-    const first = Math.max(0, start)
-    const last = Math.min(end, rows.length - 1)
     // Snapshot geometry before any row canvas/wrapper mutations force layout.
-    const rowBounds = Array.from(rows)
-      .slice(first, last + 1)
-      .map((row) => row.getBoundingClientRect())
+    const rowBounds = new Map(affected.map((index) => [index, rows[index].getBoundingClientRect()]))
     const updates: Array<() => void> = []
-    for (let rowIndex = first; rowIndex <= last; rowIndex++) {
+    for (const rowIndex of affected) {
       const row = rows[rowIndex]
       if (row instanceof HTMLElement) {
         const buffer = terminal.buffer.active
@@ -382,7 +400,7 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
         const bufferGlyphs: BufferGlyph[] = []
         if (bufferLine) {
           for (let column = 0; column < Math.min(terminal.cols, bufferLine.length); column++) {
-            const cell = bufferLine.getCell(column)
+            const cell = bufferLine.getCell(column, reusableCell)
             const codepoint = cell?.getCode() ?? 0
             if (isGraphicGlyph(codepoint)) {
               bufferGlyphs.push({
@@ -403,8 +421,9 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
           bufferGlyphs,
           sourceBackgrounds,
           bounds,
-          rowBounds[rowIndex - first],
-          lineThickness
+          rowBounds.get(rowIndex)!,
+          lineThickness,
+          canvases.get(rowIndex)
         )
         if (update) updates.push(update)
       }

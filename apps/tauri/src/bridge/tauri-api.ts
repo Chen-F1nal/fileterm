@@ -1,3 +1,8 @@
+import {
+  createTerminalOutputDelivery,
+  type TerminalOutputDelivery,
+  type TerminalOutputListener
+} from './events/terminal-output'
 import { subscribe, subscribeReady } from './events/subscriptions'
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { getRuntimeMetadata } from './runtime-metadata'
@@ -21,7 +26,6 @@ import type {
   PermissionChangeOptions,
   SshInteractionResponse,
   RemoteFileAccessOptions,
-  TerminalDataPayload,
   TerminalStatePayload,
   TerminalCommandHistoryEntry,
   CommandSendPreferences,
@@ -98,9 +102,9 @@ let latestNativeDropPaths: string[] = []
 let latestNativeDropAt = 0
 const currentWindow = getCurrentWindow()
 export const showCurrentWindow = () => invoke<void>('app_window_action', { action: 'show' })
-const terminalDataListeners = new Set<(payload: TerminalDataPayload) => void>()
+const terminalDataListeners = new Set<TerminalOutputListener>()
 const securitySettingsListeners = new Set<(settings: SecuritySettings) => void>()
-let terminalDataChannel: Channel<TerminalDataPayload> | null = null
+let terminalDataChannel: Channel<TerminalOutputDelivery> | null = null
 let terminalDataRegistration: Promise<void> | null = null
 let terminalDataRetryTimer: ReturnType<typeof setTimeout> | null = null
 let terminalDataRetryBackoffMs = 1000
@@ -184,12 +188,16 @@ function ensureTerminalDataChannel() {
     return
   }
 
-  const channel = new Channel<TerminalDataPayload>()
-  channel.onmessage = (payload) => {
-    for (const listener of terminalDataListeners) {
-      listener(payload)
+  const channel = new Channel<TerminalOutputDelivery>()
+  channel.onmessage = createTerminalOutputDelivery(
+    terminalDataListeners,
+    (deliveryId) => invoke<void>('app_ack_terminal_data', { channelId: channel.id, deliveryId }),
+    (message) => {
+      void invoke<void>('app_write_diagnostic_log', { level: 'WARN', scope: 'renderer:performance', message }).catch(
+        () => undefined
+      )
     }
-  }
+  )
   terminalDataChannel = channel
   terminalDataRegistration = invoke<void>('app_subscribe_terminal_data', { channel })
     .then(() => {
@@ -213,7 +221,7 @@ function ensureTerminalDataChannel() {
     })
 }
 
-function subscribeTerminalData(listener: (payload: TerminalDataPayload) => void) {
+function subscribeTerminalData(listener: TerminalOutputListener) {
   terminalDataListeners.add(listener)
   ensureTerminalDataChannel()
   return () => {

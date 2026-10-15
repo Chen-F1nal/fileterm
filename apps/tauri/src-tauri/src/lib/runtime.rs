@@ -169,9 +169,16 @@ pub fn run() {
             // Native menu building. Keep shortcuts on the same main-side
             // lifecycle paths as Electron and build labels from persisted UI
             // preferences so the native chrome matches the renderer locale.
-            let is_english = crate::commands::app_get_ui_preferences(app.handle().clone())
-                .map(|preferences| preferences.locale == "enUS")
-                .unwrap_or(false);
+            let ui_preferences =
+                crate::commands::app_get_ui_preferences(app.handle().clone()).ok();
+            let is_english = ui_preferences
+                .as_ref()
+                .is_some_and(|preferences| preferences.locale == "enUS");
+            #[cfg(target_os = "macos")]
+            let show_macos_menu_bar_icon = ui_preferences
+                .as_ref()
+                .map(|preferences| preferences.show_macos_menu_bar_icon)
+                .unwrap_or(true);
             install_localized_application_menu(app.handle(), is_english)
                 .map_err(|error| error.to_string())?;
 
@@ -200,7 +207,7 @@ pub fn run() {
                 .cloned()
                 .ok_or_else(|| "Failed to load the default tray icon".to_string())?;
 
-            TrayIconBuilder::with_id("main")
+            let _tray = TrayIconBuilder::with_id("main")
                 .icon(tray_icon)
                 .icon_as_template(tray_icon_should_be_template(std::env::consts::OS))
                 .tooltip("FileTerm")
@@ -271,6 +278,11 @@ pub fn run() {
                 })
                 .build(app)
                 .map_err(|error| error.to_string())?;
+
+            #[cfg(target_os = "macos")]
+            if !show_macos_menu_bar_icon {
+                _tray.set_visible(false).map_err(|error| error.to_string())?;
+            }
 
             // 启动后仅在用户允许时触发更新检查。延迟 1s 让前端先完成
             // onUpdateStatus 订阅；updates::check 内部已有 single-flight
@@ -600,6 +612,7 @@ pub fn run() {
             crate::commands::app_open_local_terminal,
             crate::commands::app_write_terminal,
             crate::commands::app_subscribe_terminal_data,
+            crate::commands::app_ack_terminal_data,
             crate::commands::app_resize_terminal,
             crate::commands::app_open_remote_path,
             crate::commands::app_list_remote_directory,
@@ -678,11 +691,24 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building FileTerm Tauri application")
         .run(|_app_handle, _event| {
-            // macOS: clicking the dock icon when the main window is hidden
-            // should bring it back (mirrors Electron `activate`).
-            // `Reopen` is a macOS-only Tauri event and must not be referenced
-            // while compiling the Linux or Windows desktop targets.
+            // Restore the saved icon after native windows are available.
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+            if matches!(_event, tauri::RunEvent::Ready) {
+                if let Ok(preferences) = crate::commands::app_get_ui_preferences(_app_handle.clone()) {
+                    if let Err(error) =
+                        crate::app_icon::set_app_icon(_app_handle, &preferences.app_icon)
+                    {
+                        crate::services::logging::warn(
+                            _app_handle,
+                            "app-icon",
+                            format!("failed to restore app icon preference: {error}"),
+                        );
+                    }
+                }
+            }
+
             #[cfg(target_os = "macos")]
+            // Clicking the Dock icon when the main window is hidden should reopen it.
             if let tauri::RunEvent::Reopen { .. } = _event {
                 show_main_window(_app_handle);
             }

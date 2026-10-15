@@ -1,6 +1,6 @@
 [package]
 name = "fileterm"
-version = "2.2.31"
+version = "2.3.1-beta.1"
 description = "FileTerm desktop workspace"
 authors = ["FileTerm"]
 edition = "2021"
@@ -106,10 +106,12 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
   "NSOperation",
   "NSString",
   "NSURL",
+  "NSUserDefaults",
 ] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "std",
   "NSApplication",
+  "NSImage",
   "NSAttributedString",
   "NSButton",
   "NSCell",
@@ -119,6 +121,7 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "NSEvent",
   "NSView",
   "NSWindow",
+  "NSWorkspace",
   "block2",
   "objc2-quartz-core",
 ] }

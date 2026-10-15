@@ -33,8 +33,8 @@ fn build_legacy_preferred() -> russh::Preferred {
     }
 }
 
-#[allow(clippy::too_many_arguments)] // Recursive jump-host setup keeps transport and interaction policy explicit.
-async fn open_session(
+#[allow(clippy::too_many_arguments)] // Each hop keeps its own transport and authentication identity.
+async fn open_session_hop(
     profile: &Value,
     app: &AppHandle,
     tab_id: &str,
@@ -43,12 +43,10 @@ async fn open_session(
     authentication_target: SshAuthenticationTarget,
     flow: SshInteractionFlow,
     cancellation: CancellationToken,
-) -> Result<OpenSshSession, String> {
+    cleanup: &mut SshSessionCleanup<ClientHandler>,
+) -> Result<(Vec<u8>, SharedSshDisconnectReason), String> {
+    let upstream = cleanup.handles.last().cloned();
     let mut effective_profile = profile.clone();
-    let has_jump_host = effective_profile
-        .get("jumpProfileId")
-        .and_then(Value::as_str)
-        .is_some();
     let host = effective_profile
         .get("host")
         .and_then(|h| h.as_str())
@@ -100,17 +98,17 @@ async fn open_session(
         0,
         format!(
             "started jump_configured={} interaction_timeout_secs={}",
-            has_jump_host,
+            upstream.is_some(),
             interaction_timeout.as_secs(),
         ),
     );
-    // A jump-host flow must authenticate the jump first. Defer a missing
-    // target password until that flow has completed so the renderer never
-    // presents a target-credential dialog before the jump-host dialog.
-    if !has_jump_host {
-        ensure_password_credentials(&mut effective_profile, app, &interaction, interaction_timeout)
-            .await?;
-    }
+    ensure_password_credentials(
+        &mut effective_profile,
+        app,
+        &interaction,
+        interaction_timeout,
+    )
+    .await?;
     let profile = &effective_profile;
     let username = profile
         .get("username")
@@ -172,300 +170,60 @@ async fn open_session(
     };
     let config = Arc::new(config);
 
-    // ── Jump Host support ─────────────────────────────────────────────────
-    // Mirrors Electron's `connectJumpHost`: if the profile has a
-    // `jumpProfileId`, first connect to the jump host, then open a
-    // `direct-tcpip` channel through it to reach the target host.
-    // The jump host's channel is used as the TCP socket for the main
-    // SSH connection.
-    let jump_profile_id = profile
-        .get("jumpProfileId")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    if let Some(jpid) = jump_profile_id {
-        // Proxy + JumpHost 互斥校验：参考 OpenSSH ProxyJump 与 ProxyCommand
-        // 互斥的设计。如果 profile 同时配了 proxy 和 jumpProfileId，proxy
-        // 会被静默忽略——目标主机是通过跳板机的 direct-tcpip 通道到达的，
-        // 不经过 SOCKS5/HTTP 代理。用户以为走了代理其实没走，既是安全隐患
-        // （流量没走预期路径）也是 UX 问题（调试困难）。
-        let proxy_type = profile
-            .get("proxy")
-            .and_then(|p| p.get("type"))
-            .and_then(Value::as_str)
-            .unwrap_or("none");
-        if proxy_type != "none" {
-            return Err(
-                "Proxy and Jump Host are mutually exclusive: the target is reached via the jump host's direct-tcpip channel, the proxy setting is ignored. Please remove one of them.".to_string()
-            );
-        }
-
-        interaction.log_interaction(
-            app,
-            "INFO",
-            "-",
-            "session",
-            "jump-host",
-            0,
-            "resolving jump host",
-        );
-        // Load the jump profile from disk (same directory as profiles.json)
-        let jump_profile = load_jump_profile(app, &jpid)?;
-
-        // Validate: jump must be a different SSH profile, and must not
-        // itself have a jumpProfileId (no chained jumps).
-        let jump_id = jump_profile
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if jump_id == profile.get("id").and_then(|v| v.as_str()).unwrap_or("") {
-            return Err("Jump Host must reference a different profile".to_string());
-        }
-        if jump_profile.get("jumpProfileId").is_some() {
-            return Err("Jump Host cannot itself reference another Jump Host".to_string());
-        }
-
-        interaction.log_interaction(
-            app,
-            "INFO",
-            "-",
-            "session",
-            "jump-host",
-            0,
-            "connecting through jump host",
-        );
-
-        // Connect + authenticate to the jump host.
-        // Box::pin is required because `open_session` is recursive (the jump
-        // host itself could be resolved via another open_session call) and
-        // Rust requires indirection for recursive async fns to avoid
-        // infinitely-sized futures.
-        let jump_session = Box::pin(open_session(
-            &jump_profile,
-            app,
-            tab_id,
-            interaction_timeout,
-            interaction_window_label.clone(),
-            SshAuthenticationTarget::JumpHost,
-            flow.clone(),
-            cancellation.clone(),
-        ))
-        .await?;
-        let jump_identification = normalize_ssh_identification(&jump_session.remote_sshid);
-        crate::services::logging::session(
-            app,
-            "INFO",
-            "ssh",
-            tab_id,
-            format!(
-                "jump host SSH session ready flow_role=jump-host identification={}",
-                if jump_identification.is_empty() {
-                    "unknown"
-                } else {
-                    jump_identification.as_str()
-                }
-            ),
-        );
-        if jump_identification
-            .to_ascii_lowercase()
-            .starts_with("ssh-2.0-go")
-        {
-            crate::services::logging::session(
-                app,
-                "WARN",
-                "ssh",
-                tab_id,
-                "jump host identifies as SSH-2.0-Go; direct-tcpip target routing may be policy-gated by an application gateway (for KoKo use a direct asset username or an ordinary OpenSSH jump host)",
-            );
-        }
-        let jump_handle = jump_session.handle;
-
-        let mut target_profile = effective_profile.clone();
-        let target_interaction = SshInteractionContext::from_profile(
-            &flow,
-            tab_id,
-            &target_profile,
-            &host,
-            port,
-            SshAuthenticationTarget::Target,
-            interaction_window_label.clone(),
-            cancellation.clone(),
-        );
-        ensure_password_credentials(
-            &mut target_profile,
-            app,
-            &target_interaction,
-            interaction_timeout,
-        )
-        .await?;
-        let target_username = target_profile
-            .get("username")
-            .and_then(Value::as_str)
-            .unwrap_or("root")
-            .to_string();
-        let target_auth_type = target_profile
-            .get("authType")
-            .and_then(Value::as_str)
-            .unwrap_or("password")
-            .to_string();
-
-        interaction.log_interaction(
-            app,
-            "INFO",
-            "-",
-            "session",
-            "target",
-            0,
-            "jump host connected; opening target channel",
-        );
-
-        // 将跳板机目标连接 + 认证封装在 async block 中，以便在失败路径上
-        // 显式发送 SSH_MSG_DISCONNECT 清理每个 session。参考 OpenSSH
-        // 在 ProxyJump 失败时对每跳发送 disconnect 的做法——仅靠 Drop 不会
-        // 发送 disconnect 消息，服务端可能残留半开 session 直到 TCP 超时。
-        // target / retry handle 也需要显式 disconnect，否则目标机的
-        // MaxStartups 统计可能虚高，极端情况下导致后续连接被拒绝。
-        let target_result: Result<OpenSshSession, String> = async {
-            let remote_sshid = Arc::new(StdMutex::new(None));
-            let disconnect_reason = Arc::new(StdMutex::new(None));
-            let target_host_verification_waiting = Arc::new(AtomicBool::new(false));
-            let mut target_handle = connect_target_through_jump(
-                &jump_handle,
-                config.clone(),
-                new_client_handler(
-                    app,
-                    tab_id,
-                    &profile_id,
-                    &host,
-                    port,
-                    trusted.clone(),
-                    target_host_verification_waiting,
-                    interaction_timeout,
-                    interaction_window_label.clone(),
-                    target_interaction.clone(),
-                    remote_sshid.clone(),
-                    disconnect_reason.clone(),
-                ),
-                &host,
-                port,
-                connect_timeout,
-                interaction_timeout,
-            )
-            .await?;
-            let target_remote_sshid = read_shared_remote_sshid(&remote_sshid);
-            let target_identification = normalize_ssh_identification(&target_remote_sshid);
-            crate::services::logging::session(
-                app,
-                "INFO",
-                "ssh",
-                tab_id,
-                format!(
-                    "target SSH session ready flow_role=target transport=direct-tcpip identification={}",
-                    if target_identification.is_empty() {
-                        "unknown"
-                    } else {
-                        target_identification.as_str()
-                    }
-                ),
-            );
-            if authenticate_session(
-                &mut target_handle,
-                &target_username,
-                &target_auth_type,
-                &target_profile,
-                app,
-                &target_interaction,
-                interaction_timeout,
-            )
-            .await?
-            {
-                Ok(OpenSshSession {
-                    handle: target_handle,
-                    remote_sshid: target_remote_sshid,
-                    disconnect_reason,
-                })
-            } else {
-                let _ = timeout(
-                    Duration::from_secs(3),
-                    target_handle.disconnect(
-                        Disconnect::ByApplication,
-                        "authentication rejected",
-                        "en",
-                    ),
-                )
-                .await;
-                Err("SSH Authentication failed (via jump host)".to_string())
-            }
-        }
-        .await;
-
-        match target_result {
-            Ok(session) => return Ok(session),
-            Err(error) => {
-                // 显式断开跳板机 session，3s 超时防止 disconnect 本身卡住
-                // （网络已中断时 russh 可能无法发送 disconnect 消息）。
-                let _ = timeout(
-                    Duration::from_secs(3),
-                    jump_handle.disconnect(
-                        Disconnect::ByApplication,
-                        "target authentication failed",
-                        "en",
-                    ),
-                )
-                .await;
-                return Err(error);
-            }
-        }
-    }
-
-    let stream = wait_for_ssh_stage(
-        "SSH transport connection",
-        connect_timeout,
-        connect_ssh_transport(profile, &host, port),
-    )
-    .await?;
-    crate::services::logging::session(
-        app,
-        "INFO",
-        "ssh",
-        tab_id,
-        format!("socket connected target={host}:{port}"),
-    );
     let remote_sshid = Arc::new(StdMutex::new(None));
     let disconnect_reason = Arc::new(StdMutex::new(None));
     let host_verification_waiting = Arc::new(AtomicBool::new(false));
-    let mut handle = wait_for_ssh_handshake_with_network_timeout(
-        "SSH protocol handshake",
+    let handler = new_client_handler(
+        app,
+        tab_id,
+        &profile_id,
+        &host,
+        port,
+        trusted,
         host_verification_waiting.clone(),
-        connect_timeout,
         interaction_timeout,
-        async {
-            russh::client::connect_stream(
-                config.clone(),
-                stream,
-                new_client_handler(
-                    app,
-                    tab_id,
-                    &profile_id,
-                    &host,
-                    port,
-                    trusted.clone(),
-                    host_verification_waiting,
-                    interaction_timeout,
-                    interaction_window_label.clone(),
-                    interaction.clone(),
-                    remote_sshid.clone(),
-                    disconnect_reason.clone(),
-                ),
-            )
-            .await
-            .map_err(|error| format!("SSH connect failed: {error}"))
-        },
-    )
-    .await?;
+        interaction_window_label,
+        interaction.clone(),
+        remote_sshid.clone(),
+        disconnect_reason.clone(),
+    );
+    let handle = if let Some(upstream) = upstream.as_ref() {
+        connect_target_through_jump(
+            upstream,
+            config,
+            handler,
+            &host,
+            port,
+            connect_timeout,
+            interaction_timeout,
+        )
+        .await?
+    } else {
+        let stream = wait_for_ssh_stage(
+            "SSH transport connection",
+            connect_timeout,
+            connect_ssh_transport(profile, &host, port),
+        )
+        .await?;
+        wait_for_ssh_handshake_with_network_timeout(
+            "SSH protocol handshake",
+            host_verification_waiting,
+            connect_timeout,
+            interaction_timeout,
+            async {
+                russh::client::connect_stream(config, stream, handler)
+                    .await
+                    .map_err(|error| format!("SSH connect failed: {error}"))
+            },
+        )
+        .await?
+    };
+    // Register before authentication so canceled MFA and failed credentials also disconnect.
+    cleanup.handles.push(Arc::new(handle));
+    let handle = Arc::get_mut(cleanup.handles.last_mut().unwrap()).unwrap();
     crate::services::logging::session(app, "INFO", "ssh", tab_id, "SSH handshake completed");
     if authenticate_session(
-        &mut handle,
+        handle,
         &username,
         &auth_type,
         profile,
@@ -475,18 +233,20 @@ async fn open_session(
     )
     .await?
     {
-        Ok(OpenSshSession {
-            handle,
-            remote_sshid: read_shared_remote_sshid(&remote_sshid),
-            disconnect_reason,
-        })
+        let remote_sshid = read_shared_remote_sshid(&remote_sshid);
+        if matches!(authentication_target, SshAuthenticationTarget::JumpHost(_))
+            && normalize_ssh_identification(&remote_sshid)
+                .to_ascii_lowercase()
+                .starts_with("ssh-2.0-go")
+        {
+            crate::services::logging::session(
+                app, "WARN", "ssh", tab_id,
+                "jump host identifies as SSH-2.0-Go; direct-tcpip target routing may be policy-gated by an application gateway",
+            );
+        }
+        Ok((remote_sshid, disconnect_reason))
     } else {
-        let _ = timeout(
-            Duration::from_secs(3),
-            handle.disconnect(Disconnect::ByApplication, "authentication rejected", "en"),
-        )
-        .await;
-        Err("SSH Authentication failed".to_string())
+        Err(format!("SSH Authentication failed at {host}:{port}"))
     }
 }
 
@@ -519,7 +279,6 @@ pub async fn test_connection(
         tab_id,
         SSH_CONNECTION_TEST_INTERACTION_TIMEOUT,
         Some(interaction_window_label),
-        SshAuthenticationTarget::Direct,
         flow.clone(),
         cancellation.clone(),
     )

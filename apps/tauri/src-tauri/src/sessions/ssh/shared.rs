@@ -130,7 +130,8 @@ struct SshDisconnectInfo {
 type SharedSshDisconnectReason = Arc<StdMutex<Option<SshDisconnectInfo>>>;
 
 struct OpenSshSession {
-    handle: Handle<ClientHandler>,
+    handle: Arc<Handle<ClientHandler>>,
+    cleanup: SshSessionCleanup<ClientHandler>,
     remote_sshid: Vec<u8>,
     disconnect_reason: SharedSshDisconnectReason,
 }
@@ -141,23 +142,23 @@ struct OpenSshSession {
 #[derive(Clone, Copy)]
 enum SshAuthenticationTarget {
     Direct,
-    JumpHost,
-    Target,
+    JumpHost(u32),
+    Target(u32),
 }
 
 impl SshAuthenticationTarget {
     fn as_str(self) -> &'static str {
         match self {
             Self::Direct => "direct",
-            Self::JumpHost => "jump-host",
-            Self::Target => "target",
+            Self::JumpHost(_) => "jump-host",
+            Self::Target(_) => "target",
         }
     }
 
     fn hop_index(self) -> u32 {
         match self {
-            Self::Direct | Self::JumpHost => 0,
-            Self::Target => 1,
+            Self::Direct => 0,
+            Self::JumpHost(index) | Self::Target(index) => index,
         }
     }
 }

@@ -1,6 +1,7 @@
 import type { ConnectionFolder, ConnectionProfile, OverviewSectionId } from '@fileterm/core'
 import { DEFAULT_OVERVIEW_SECTION_ORDER } from '@fileterm/core'
 import { t } from '../../i18n'
+import { connectionProfileSummary } from '../../app/connection-profile-summary'
 import { buildConnectionTree, flattenConnectionProfiles } from '../connections/connection-tree'
 import './overview-page.css'
 
@@ -65,8 +66,8 @@ export function OverviewPage({
       <div className="recent-card-body">
         <h3 className="recent-name">{profile.name}</h3>
         <div className="recent-info">
-          <span className="recent-user">
-            {profile.username}@{profile.host}
+          <span className="recent-user" title={connectionProfileSummary(profile)}>
+            {connectionProfileSummary(profile)}
           </span>
         </div>
       </div>

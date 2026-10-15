@@ -2,6 +2,7 @@ import type { ConnectionProfile, ConnectionFolder } from '@fileterm/core'
 import { useState, useMemo, useRef, useEffect, type DragEvent } from 'react'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
 import { t } from '../../i18n'
+import { connectionProfileSummary } from '../../app/connection-profile-summary'
 import { AppIcon } from '../common/app-icon'
 import { CloseButton } from '../common/close-button'
 import { ManagerInlineFolderRow } from '../common/manager-inline-folder-row'
@@ -180,7 +181,15 @@ export function ConnectionManagerModal({
         const searchableText =
           node.type === 'folder'
             ? node.name
-            : [node.name, node.host, String(node.port), node.username, node.type, node.note ?? ''].join(' ')
+            : [
+                node.name,
+                node.host,
+                String(node.port),
+                node.username,
+                node.type,
+                node.note ?? '',
+                connectionProfileSummary(node)
+              ].join(' ')
 
         if (searchableText.toLocaleLowerCase().includes(query)) {
           matches.push(node)
@@ -449,9 +458,11 @@ export function ConnectionManagerModal({
               <span className="manager-node-name">{node.name}</span>
             )}
           </span>
-          <span>{isFolder ? '--' : node.host}</span>
-          <span>{isFolder ? '--' : node.port}</span>
-          <span>{isFolder ? '--' : node.username}</span>
+          <span title={node.type === 'serial' ? connectionProfileSummary(node) : undefined}>
+            {isFolder ? '--' : node.type === 'serial' ? connectionProfileSummary(node) : node.host}
+          </span>
+          <span>{isFolder || node.type === 'serial' ? '--' : node.port}</span>
+          <span>{isFolder || node.type === 'serial' ? '--' : node.username}</span>
           <span className={`manager-type-badge ${isFolder ? 'is-folder' : ''}`}>
             {isFolder ? t.homeFolderType : node.type.toUpperCase()}
           </span>

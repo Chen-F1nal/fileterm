@@ -1,4 +1,8 @@
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+mod app_icon;
 pub mod commands;
+#[cfg(target_os = "macos")]
+mod macos_icon;
 pub mod services;
 pub mod sessions;
 pub mod storage;

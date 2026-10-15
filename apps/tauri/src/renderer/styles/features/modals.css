@@ -180,7 +180,7 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-primary);
   text-align: left;
   line-height: 1;
   padding: 0 12px;
@@ -191,12 +191,12 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
 
 .ssh-modal-nav button:hover {
   background: var(--bg-hover) !important;
-  color: var(--text-main) !important;
+  color: var(--text-primary) !important;
 }
 
 .ssh-modal-nav button.active {
   background: var(--bg-hover) !important;
-  color: var(--text-main) !important;
+  color: var(--text-primary) !important;
   font-weight: 500;
 }
 

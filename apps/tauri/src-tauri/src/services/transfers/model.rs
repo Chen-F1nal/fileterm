@@ -342,7 +342,7 @@ fn journal_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf, PathBuf), AppErro
 
 /// Retain every unfinished/resumable task and pending cleanup. The limit
 /// bounds disposable history only when required tasks leave room for it.
-fn select_journal_tasks(tasks: &[TransferTask], limit: usize) -> Vec<TransferTask> {
+fn retained_task_indexes(tasks: &[TransferTask], limit: usize) -> Vec<usize> {
     let mut kept = Vec::new();
     let mut history = Vec::new();
     for (index, task) in tasks.iter().enumerate() {
@@ -354,9 +354,47 @@ fn select_journal_tasks(tasks: &[TransferTask], limit: usize) -> Vec<TransferTas
     }
     history.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.cmp(&a.0)));
     let history_slots = limit.saturating_sub(kept.len());
-    kept.extend(history.into_iter().take(history_slots).map(|(index, _)| index));
+    kept.extend(
+        history
+            .into_iter()
+            .take(history_slots)
+            .map(|(index, _)| index),
+    );
     kept.sort_unstable();
-    kept.into_iter().map(|index| tasks[index].clone()).collect()
+    kept
+}
+
+fn select_journal_tasks(tasks: &[TransferTask], limit: usize) -> Vec<TransferTask> {
+    retained_task_indexes(tasks, limit)
+        .into_iter()
+        .map(|index| tasks[index].clone())
+        .collect()
+}
+
+fn prune_transfer_history(tasks: &mut Vec<TransferTask>) {
+    if tasks.len() > JOURNAL_MAX_TASKS {
+        let kept: HashSet<_> = retained_task_indexes(tasks, JOURNAL_MAX_TASKS)
+            .into_iter()
+            .collect();
+        let mut index = 0;
+        tasks.retain(|_| {
+            let retain = kept.contains(&index);
+            index += 1;
+            retain
+        });
+    }
+    for task in tasks.iter_mut() {
+        if task.terminal() && !task.resumable && !task.cleanup_pending {
+            // Completed history only needs the UI summary; release manifest capacity too.
+            if let Some(manifest) = task.manifest.as_mut() {
+                manifest.files = Vec::new();
+                manifest.directories = Vec::new();
+            }
+        }
+    }
+    if tasks.capacity() > tasks.len().max(JOURNAL_MAX_TASKS).saturating_mul(2) {
+        tasks.shrink_to_fit();
+    }
 }
 
 fn write_journal(app: &AppHandle, tasks: &[TransferTask]) -> Result<(), AppError> {

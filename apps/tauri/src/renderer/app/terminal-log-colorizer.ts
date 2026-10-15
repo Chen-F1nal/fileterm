@@ -1,4 +1,4 @@
-import type { IBufferLine, IDisposable, ITheme, Terminal } from '@xterm/xterm'
+import type { IBufferCell, IBufferLine, IDisposable, ITheme, Terminal } from '@xterm/xterm'
 
 export type TerminalLogColorPalette = Readonly<{
   timestamp: string
@@ -200,7 +200,7 @@ export function getTerminalLogColorPalette(theme: ITheme | undefined): TerminalL
  * This deliberately mutates xterm's parsed cell foregrounds instead of
  * injecting SGR sequences into the stream. Remote ANSI remains intact in the
  * transcript and in copy/serialization paths, while plain journal/system log
- * lines can still get the same semantic colors as Netcatty. Alternate-screen
+ * lines can still get semantic colors. Alternate-screen
  * applications (top, vim, less, etc.) are left untouched.
  */
 export class TerminalLogColorizer implements IDisposable {
@@ -210,11 +210,14 @@ export class TerminalLogColorizer implements IDisposable {
   private readonly originalResize: Terminal['resize']
   private readonly originals = new WeakMap<InternalBufferLine, LineOriginals>()
   private rules: CompiledRule[] = []
+  private paletteKey = ''
+  private readonly cell: IBufferCell
   private disposed = false
   private readonly terminal: Terminal
 
   constructor(terminal: Terminal, palette: TerminalLogColorPalette) {
     this.terminal = terminal
+    this.cell = terminal.buffer.normal.getNullCell()
     this.originalWrite = terminal.write.bind(terminal)
     this.originalReset = terminal.reset.bind(terminal)
     this.originalClear = terminal.clear.bind(terminal)
@@ -227,8 +230,12 @@ export class TerminalLogColorizer implements IDisposable {
   }
 
   setPalette(palette: TerminalLogColorPalette, recolor = true): void {
+    const colors = LOG_COLOR_RULE_DEFINITIONS.map((definition) => parseRgb(palette[definition.color]))
+    const paletteKey = colors.join(',')
+    if (paletteKey === this.paletteKey) return
+    this.paletteKey = paletteKey
     const nextRules = LOG_COLOR_RULE_DEFINITIONS.flatMap((definition, priority) => {
-      const rgb = parseRgb(palette[definition.color])
+      const rgb = colors[priority]
       if (rgb === null) {
         return []
       }
@@ -356,7 +363,7 @@ export class TerminalLogColorizer implements IDisposable {
     let text = ''
     const columns: number[] = []
     for (let column = 0; column < line.length; column += 1) {
-      const chars = line.getCell(column)?.getChars() ?? ''
+      const chars = line.getCell(column, this.cell)?.getChars() ?? ''
       if (!chars) {
         continue
       }

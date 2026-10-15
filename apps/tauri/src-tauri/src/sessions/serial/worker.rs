@@ -183,8 +183,8 @@ async fn run_serial_worker(
     if let Some(dtr_on_open) = control_state.dtr {
         builder = builder.dtr_on_open(dtr_on_open);
     }
-    let mut stream = builder
-        .open_native_async()
+    let mut stream = open_serial_port(builder, control_state, &cancellation)
+        .await
         .map_err(|error| SerialWorkerError::retryable(serial_error(&device_path, error)))?;
     if matches!(parity_wire_mode, SerialParityWireMode::Native) {
         if let Err(error) = apply_platform_parity(&stream, serial_parity) {
@@ -343,15 +343,31 @@ async fn run_serial_worker(
                                     }
                                 }
                             };
-                            let written = match write_serial_bytes(
+                            let receive_encoding = encoding.as_str();
+                            let receive_output_mode = output_mode.as_str();
+                            let written = match write_while_receiving(
+                                &mut reader,
                                 &mut writer,
                                 &encoded,
                                 &cancellation,
                                 pacing,
+                                |bytes| {
+                                    let output = serial_stream_display(&mut text_decoder, &bytes, receive_output_mode)
+                                        .map_err(std::io::Error::other);
+                                    async move {
+                                        let output = output?;
+                                        publish_serial_receive(app, tab_id, &bytes, &output, receive_encoding).await;
+                                        Ok(())
+                                    }
+                                },
                             )
                             .await
                             {
                                 Ok(written) => written,
+                                Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                                    return Ok(finish_serial_disconnect(reader, writer, control_state,
+                                        &mut text_decoder, app, tab_id).await);
+                                }
                                 Err(error)
                                     if error.kind() == std::io::ErrorKind::TimedOut =>
                                 {
@@ -544,14 +560,8 @@ async fn run_serial_worker(
                         close_serial_stream(&mut stream, control_state, app, tab_id).await;
                         return Ok(SerialWorkerExit::Requested);
                     }
-                    crate::services::logging::session(app, "WARN", "serial", tab_id, "device disconnected");
-                    let trailing = text_decoder.finish();
-                    if !trailing.is_empty() {
-                        emit_terminal_data(app, tab_id, &trailing).await;
-                    }
-                    close_serial_halves(reader, writer, control_state, app, tab_id).await;
-                    set_terminal_state(app, tab_id, "串口设备已断开".to_string(), WorkspaceTabStatus::Closed).await;
-                    return Ok(SerialWorkerExit::DeviceDisconnected);
+                    return Ok(finish_serial_disconnect(reader, writer, control_state,
+                        &mut text_decoder, app, tab_id).await);
                 }
                 let output = match serial_stream_display(
                     &mut text_decoder,
@@ -564,19 +574,53 @@ async fn run_serial_worker(
                         return Err(SerialWorkerError::fatal(error));
                     }
                 };
-                crate::services::session_logs::append_serial_bytes(
-                    app,
-                    tab_id,
-                    crate::services::session_logs::SerialLogDirection::Rx,
-                    &buffer[..count],
-                    Some(&output),
-                    &encoding,
-                )
-                .await;
-                if !output.is_empty() {
-                    emit_terminal_data(app, tab_id, &output).await;
-                }
+                publish_serial_receive(app, tab_id, &buffer[..count], &output, &encoding).await;
             }
         }
     }
+}
+
+async fn publish_serial_receive(
+    app: &AppHandle,
+    tab_id: &str,
+    bytes: &[u8],
+    output: &str,
+    encoding: &str,
+) {
+    crate::services::session_logs::append_serial_bytes(
+        app,
+        tab_id,
+        crate::services::session_logs::SerialLogDirection::Rx,
+        bytes,
+        Some(output),
+        encoding,
+    )
+    .await;
+    if !output.is_empty() {
+        emit_terminal_data(app, tab_id, output).await;
+    }
+}
+
+async fn finish_serial_disconnect(
+    reader: tokio::io::ReadHalf<SerialIo>,
+    writer: tokio::io::WriteHalf<SerialIo>,
+    control_state: SerialControlState,
+    decoder: &mut SerialTextDecoder,
+    app: &AppHandle,
+    tab_id: &str,
+) -> SerialWorkerExit {
+    crate::services::logging::session(app, "WARN", "serial", tab_id, "device disconnected");
+    let trailing = decoder.finish();
+    if !trailing.is_empty() {
+        emit_terminal_data(app, tab_id, &trailing).await;
+    }
+    close_serial_halves(reader, writer, control_state, app, tab_id).await;
+    set_terminal_state(
+        app,
+        tab_id,
+        "串口设备已断开".to_string(),
+        WorkspaceTabStatus::Closed,
+    )
+    .await;
+    SerialWorkerExit::DeviceDisconnected
 }

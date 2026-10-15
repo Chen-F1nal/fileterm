@@ -55,6 +55,7 @@ export function useTerminalLifecycle(options: TerminalLifecycleOptions) {
       runtime.pendingResizeFreezeColsRef.current = false
       runtime.isWritingRef.current = false
       runtime.pendingWriteRef.current = ''
+      runtime.pendingWriteCompletionsRef.current.splice(0).forEach((completion) => completion.resolve())
       runtime.renderedTranscriptRef.current = ''
       runtime.suppressHydratedChunksUntilRef.current = 0
       runtime.replayingTranscriptRef.current = false

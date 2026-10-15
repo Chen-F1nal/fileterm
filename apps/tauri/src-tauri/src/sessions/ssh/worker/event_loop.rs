@@ -57,7 +57,7 @@ async fn run_worker_event_loop(
     // heuristic inspects and the setup command races with that input.
     let mut deferred_terminal_input: Vec<Vec<u8>> = Vec::new();
 
-    let terminal_output_tx = spawn_terminal_output_pump(app, tab_id);
+    let mut terminal_output_tx = spawn_terminal_output_pump(app, tab_id);
 
     // sudo / root-mode credentials — kept in worker-local state so they
     // never leak into SessionSnapshot (which is serialized to the renderer).
@@ -156,13 +156,13 @@ async fn run_worker_event_loop(
                 }
             }
             _ = cancellation.cancelled() => {
-                flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
+                flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
                 metrics_shutdown.cancel();
                 return Ok(SshWorkerExit::cancelled());
             }
             input = terminal_input_rx.recv() => {
                 let Some(data) = input else {
-                    flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
+                    flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
                     metrics_shutdown.cancel();
                     return Ok(SshWorkerExit::input_closed());
                 };
@@ -278,7 +278,7 @@ async fn run_worker_event_loop(
             // worker keeps publishing terminal output alongside the new worker.
             cmd = cmd_rx.recv() => {
                 if cmd.is_none() {
-                    flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
+                    flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
                     metrics_shutdown.cancel();
                     return Ok(SshWorkerExit::input_closed());
                 }
@@ -325,7 +325,7 @@ async fn run_worker_event_loop(
                     Ok(true) => {
                         batch_buffer.extend_from_slice(stdout_decoder.finish().as_bytes());
                         batch_buffer.extend_from_slice(stderr_decoder.finish().as_bytes());
-                        flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
+                        flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
                         metrics_shutdown.cancel();
                         return Ok(SshWorkerExit::explicit_disconnect());
                     }
@@ -451,7 +451,7 @@ async fn run_worker_event_loop(
                         )?;
                         batch_buffer.extend_from_slice(visible.as_bytes());
                         if batch_buffer.len() >= TERMINAL_BATCH_BUFFER_FLUSH_THRESHOLD {
-                            flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
+                            flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
                             last_emit = Instant::now();
                         }
                     }
@@ -462,7 +462,7 @@ async fn run_worker_event_loop(
                         // as `exit` would create an endless reconnect loop.
                         batch_buffer.extend_from_slice(stdout_decoder.finish().as_bytes());
                         batch_buffer.extend_from_slice(stderr_decoder.finish().as_bytes());
-                        flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
+                        flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
                         metrics_shutdown.cancel();
                         let disconnect = disconnect_reason
                             .lock()
@@ -493,13 +493,9 @@ async fn run_worker_event_loop(
                 }
             }
             // 3. Periodic flush if there is buffered output.
-            _ = tokio::time::sleep_until(next_batch_deadline) => {
-                if !batch_buffer.is_empty() {
-                    flush_batch(&mut batch_buffer, &terminal_output_tx, app, tab_id);
-                    last_emit = Instant::now();
-                } else {
-                    last_emit = Instant::now();
-                }
+            _ = tokio::time::sleep_until(next_batch_deadline), if !batch_buffer.is_empty() => {
+                flush_batch(&mut batch_buffer, &mut terminal_output_tx, app, tab_id);
+                last_emit = Instant::now();
             }
         }
     }
