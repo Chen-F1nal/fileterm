@@ -15,18 +15,18 @@ static void *FileTermDockTileIconPreferenceContext = &FileTermDockTileIconPrefer
     [self.preferences removeObserver:self
                           forKeyPath:@"app_icon"
                              context:FileTermDockTileIconPreferenceContext];
-    [self.preferences removeSuiteNamed:@"com.fileterm.desktop"];
     self.observesIconPreference = NO;
   }
 
-  self.dockTile = dockTile;
+  // Assign the backing ivar: the property setter is this protocol callback.
+  _dockTile = dockTile;
   if (dockTile == nil) {
     self.preferences = nil;
     return;
   }
 
-  self.preferences = [NSUserDefaults standardUserDefaults];
-  [self.preferences addSuiteNamed:@"com.fileterm.desktop"];
+  // Observe FileTerm's domain directly, rather than the Dock helper's shared defaults.
+  self.preferences = [[NSUserDefaults alloc] initWithSuiteName:@"com.fileterm.desktop"];
   [self.preferences addObserver:self
                      forKeyPath:@"app_icon"
                         options:0
@@ -79,7 +79,6 @@ static void *FileTermDockTileIconPreferenceContext = &FileTermDockTileIconPrefer
     [self.preferences removeObserver:self
                           forKeyPath:@"app_icon"
                              context:FileTermDockTileIconPreferenceContext];
-    [self.preferences removeSuiteNamed:@"com.fileterm.desktop"];
   }
 }
 

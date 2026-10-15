@@ -1,6 +1,6 @@
 {
   "name": "fileterm",
-  "version": "2.3.1-beta.1",
+  "version": "2.3.1-beta.2",
   "private": true,
   "license": "MIT",
   "description": "Modern remote workspace for SSH, SFTP, and FTP.",
@@ -42,10 +42,9 @@
     ],
     "*.{json,md,css,yml,yaml}": "prettier --write"
   },
-  "dependencies": {},
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@eslint-react/eslint-plugin": "^5.18.0",
+    "@eslint/js": "^10.0.1",
     "@typescript-eslint/eslint-plugin": "^8.63.0",
     "@typescript-eslint/parser": "^8.63.0",
     "eslint": "^10.8.0",
