@@ -113,6 +113,19 @@ impl TerminalOutputSubscription {
 }
 
 impl WorkspaceState {
+    pub(super) fn terminal_output_health(&self) -> Option<serde_json::Value> {
+        let channels = self.terminal_output_channels.try_lock().ok()?;
+        let in_flight = channels.values().try_fold(0, |total, subscription| {
+            Some(total + subscription.pending.try_lock().ok()?.len())
+        });
+        Some(serde_json::json!({
+            "windows": channels.len(),
+            "inFlight": in_flight,
+            "queuedBatches": channels.values().map(|subscription|
+                subscription.output.max_capacity() - subscription.output.capacity()).sum::<usize>(),
+        }))
+    }
+
     pub fn register_terminal_output_channel(
         &self,
         window_label: &str,
@@ -265,7 +278,15 @@ mod tests {
         .unwrap();
         assert_eq!(healthy_count.load(Ordering::Relaxed), 2000);
         assert_eq!(slow_count.load(Ordering::Relaxed), IN_FLIGHT_BATCHES);
+        let health = state.terminal_output_health().unwrap();
+        assert_eq!(health["windows"], 2);
+        assert_eq!(health["inFlight"], IN_FLIGHT_BATCHES);
+        assert!(health["queuedBatches"].as_u64().unwrap() <= (PENDING_BATCHES * 2) as u64);
         let mut channels = state.terminal_output_channels.lock().unwrap();
+        assert!(
+            state.terminal_output_health().is_none(),
+            "diagnostics must never wait on a busy queue"
+        );
         for subscription in channels.values() {
             subscription.close();
         }

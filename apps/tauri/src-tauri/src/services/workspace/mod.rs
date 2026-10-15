@@ -31,6 +31,8 @@ include!("monitoring.rs");
 include!("model.rs");
 include!("profiles.rs");
 include!("state.rs");
+mod health;
 mod terminal_output;
+pub use health::augment_renderer_health;
 use terminal_output::TerminalOutputSubscription;
 include!("tests.rs");
