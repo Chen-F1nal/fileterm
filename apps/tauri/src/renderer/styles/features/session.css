@@ -1673,7 +1673,7 @@
   display: inline-flex;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(28vw, 240px);
+  max-width: min(42vw, 420px);
   align-items: center;
   gap: 4px;
   height: 15px;

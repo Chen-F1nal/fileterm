@@ -25,6 +25,15 @@ const hop = (id, jumpProfileId, extra = {}) => ({
   ...extra
 })
 
+test('routing mode follows the current profile fields, including asynchronously hydrated forms', () => {
+  assert.equal(exports.getSshRoutingMode({}), 'direct')
+  assert.equal(exports.getSshRoutingMode({ jumpProfileId: 'entry' }), 'jump')
+  assert.equal(exports.getSshRoutingMode({ jumpProfileIds: ['entry', 'middle'] }), 'jump')
+  assert.equal(exports.getSshRoutingMode({ jumpProfileId: 'legacy', jumpProfileIds: [] }), 'direct')
+  assert.equal(exports.hasIncompleteSshJumpRoute({ jumpProfileIds: [''] }), true)
+  assert.equal(exports.hasIncompleteSshJumpRoute({ jumpProfileIds: ['deleted-profile'] }), false)
+})
+
 test('routes are ordered from entry to target and old direct/single-hop profiles remain valid', () => {
   const profiles = [hop('middle', 'entry'), hop('entry')]
   assert.deepEqual(resolve({}, profiles), { jumpHosts: [], error: null })
@@ -123,4 +132,27 @@ test('connection settings show the complete route and explain invalid references
   )
   assert.match(invalid, /role="alert">Missing jump host/)
   assert.doesNotMatch(invalid, /<ol/)
+})
+
+test('transfer status exposes every jump host and the final target', () => {
+  const { TransferBar } = loadComponent('../src/renderer/features/transfers/transfer-bar.tsx', {
+    '../../i18n': { t: new Proxy({}, { get: (_target, key) => key }) },
+    '../common/app-icon': { AppIcon: () => null },
+    '../common/status-indicator': { StatusIndicator: () => null }
+  })
+  const html = renderToStaticMarkup(
+    createElement(TransferBar, {
+      activeCount: 0,
+      activeTabId: 'tab-1',
+      activeJumpHosts: [hop('hop-1'), hop('hop-2')],
+      activeRouteTarget: hop('target'),
+      isPending: false,
+      onOpen() {}
+    })
+  )
+
+  assert.match(html, /aria-label="viaJumpHost: hop-1 → hop-2 → target"/)
+  assert.match(html, /title="viaJumpHost: hop-1 → hop-2 → target \(hop-1:22 → hop-2:22 → target:22\)"/)
+  assert.match(html, /class="transfer-session-jump-name">hop-1 → hop-2 → target/)
+  assert.match(html, /class="transfer-session-jump" tabindex="0"/)
 })

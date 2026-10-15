@@ -13,8 +13,7 @@ export function ConnectionNetworkSection({
   jumpRoute,
   routeError,
   routingMode,
-  setForm,
-  setRoutingMode
+  setForm
 }: {
   form: CreateProfileInput
   jumpHosts: SshProfile[]
@@ -22,7 +21,6 @@ export function ConnectionNetworkSection({
   routeError: string | null
   routingMode: 'direct' | 'jump'
   setForm: ConnectionFormSetter
-  setRoutingMode(value: 'direct' | 'jump'): void
 }) {
   const supportsRouting = form.type === 'ssh'
   const supportsProxy = form.type === 'ssh' || form.type === 'telnet' || form.type === 'ftp'
@@ -74,7 +72,6 @@ export function ConnectionNetworkSection({
                     aria-checked={routingMode === 'direct'}
                     className={routingMode === 'direct' ? 'is-active' : undefined}
                     onClick={() => {
-                      setRoutingMode('direct')
                       setForm((prev) => ({ ...prev, jumpProfileId: undefined, jumpProfileIds: undefined }))
                     }}
                     role="radio"
@@ -86,7 +83,6 @@ export function ConnectionNetworkSection({
                     aria-checked={routingMode === 'jump'}
                     className={routingMode === 'jump' ? 'is-active' : undefined}
                     onClick={() => {
-                      setRoutingMode('jump')
                       if (!selectedJumpProfileIds.length) updateJumpProfileIds([''])
                     }}
                     role="radio"
@@ -173,30 +169,31 @@ export function ConnectionNetworkSection({
                       {t.addJumpHost}
                     </button>
                   ) : null}
-                  {hasUnavailableJumpHostSlot ? (
-                    <p className="network-field-hint network-field-hint--warning">{t.noAvailableJumpHost}</p>
-                  ) : null}
-                  <p className="network-field-hint">{t.jumpHostHint}</p>
+                  <div className="ssh-jump-hops__feedback">
+                    <p className="network-field-hint">{t.jumpHostHint}</p>
+                    {hasUnavailableJumpHostSlot ? (
+                      <p className="network-field-hint network-field-hint--warning">{t.noAvailableJumpHost}</p>
+                    ) : null}
+                    {routeError ? (
+                      <p className="network-field-hint network-field-hint--warning" role="alert">
+                        {routeError}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ) : null}
 
-            {routingMode === 'jump' && (routeError || selectedJumpProfileIds.length) ? (
-              routeError ? (
-                <p className="network-field-hint network-field-hint--warning" role="alert">
-                  {routeError}
-                </p>
-              ) : (
-                <ol className="ssh-jump-route" aria-label={t.route}>
-                  <li>FileTerm</li>
-                  {jumpRoute.map((hop) => (
-                    <li key={hop.id} title={`${hop.host}:${hop.port}`}>
-                      {hop.name}
-                    </li>
-                  ))}
-                  <li>{form.name?.trim() || form.host || t.sshJumpRouteTarget}</li>
-                </ol>
-              )
+            {routingMode === 'jump' && !routeError && selectedJumpProfileIds.length ? (
+              <ol className="ssh-jump-route" aria-label={t.route}>
+                <li>FileTerm</li>
+                {jumpRoute.map((hop) => (
+                  <li key={hop.id} title={`${hop.host}:${hop.port}`}>
+                    {hop.name}
+                  </li>
+                ))}
+                <li>{form.name?.trim() || form.host || t.sshJumpRouteTarget}</li>
+              </ol>
             ) : null}
           </div>
         </fieldset>

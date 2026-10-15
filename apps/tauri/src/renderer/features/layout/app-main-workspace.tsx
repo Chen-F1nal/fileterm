@@ -192,6 +192,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   const resolvedSidebarWidth = isSystemSidebarCollapsed ? 44 : sidebarWidth
   const activeJumpHosts =
     activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
+  const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined
   // Home and session titlebars share the expanded sidebar's live width.
   // A collapsed sidebar keeps enough titlebar space for the native window controls.
   const brandWidth = isSystemSidebarCollapsed ? DEFAULT_SIDEBAR_WIDTH : resolvedSidebarWidth
@@ -510,6 +511,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
           activeTabId={activeTab?.id ?? null}
           activeTabStatus={activeTab?.status ?? null}
           activeJumpHosts={activeJumpHosts}
+          activeRouteTarget={activeRouteTarget}
           activeTabSource={activeTab?.source ?? null}
           desktopApi={desktopApi}
           fullWidth={!shouldShowSystemSidebar}

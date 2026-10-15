@@ -13,6 +13,7 @@ export function TransferCenterHost({
   activeTabId,
   activeTabStatus,
   activeJumpHosts,
+  activeRouteTarget,
   activeTabSource,
   desktopApi,
   fullWidth,
@@ -28,6 +29,7 @@ export function TransferCenterHost({
   activeTabId: string | null
   activeTabStatus: WorkspaceTab['status'] | null
   activeJumpHosts?: SshProfile[]
+  activeRouteTarget?: SshProfile
   activeTabSource: WorkspaceSessionSource | null
   desktopApi?: FileTermDesktopApi
   fullWidth: boolean
@@ -45,6 +47,7 @@ export function TransferCenterHost({
       activeTabId={activeTabId}
       activeTabStatus={activeTabStatus}
       activeJumpHosts={activeJumpHosts}
+      activeRouteTarget={activeRouteTarget}
       activeTabSource={activeTabSource}
       desktopApi={desktopApi}
       fullWidth={fullWidth}

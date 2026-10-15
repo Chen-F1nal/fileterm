@@ -2,6 +2,15 @@ import type { ConnectionProfile, ProxyConfig, SshProfile } from '@fileterm/core'
 
 export type SshJumpRouteError = 'cycle' | 'missing' | 'type' | 'too-long' | 'proxy-conflict'
 
+export function getSshRoutingMode(target: { jumpProfileId?: string; jumpProfileIds?: string[] }): 'direct' | 'jump' {
+  if (target.jumpProfileIds !== undefined) return target.jumpProfileIds.length ? 'jump' : 'direct'
+  return target.jumpProfileId ? 'jump' : 'direct'
+}
+
+export function hasIncompleteSshJumpRoute(target: { jumpProfileIds?: string[] }): boolean {
+  return target.jumpProfileIds?.some((id) => !id.trim()) ?? false
+}
+
 export function resolveSshJumpRoute(
   target: {
     id?: string

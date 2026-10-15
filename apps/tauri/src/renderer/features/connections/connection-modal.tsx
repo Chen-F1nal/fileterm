@@ -8,7 +8,7 @@ import type {
   SshProfile
 } from '@fileterm/core'
 import { t } from '../../i18n'
-import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
+import { getSshRoutingMode, hasIncompleteSshJumpRoute, resolveSshJumpRoute } from '../../app/ssh-jump-route'
 import './connection-modal.css'
 import { CloseButton } from '../common/close-button'
 import { FeedbackText } from '../common/feedback-text'
@@ -78,15 +78,7 @@ export function ConnectionModal({
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const [isTestRetryCoolingDown, setIsTestRetryCoolingDown] = useState(false)
   const [connectionTestSucceeded, setConnectionTestSucceeded] = useState(false)
-  const [routingMode, setRoutingMode] = useState<'direct' | 'jump'>(() =>
-    form.jumpProfileIds !== undefined
-      ? form.jumpProfileIds.length
-        ? 'jump'
-        : 'direct'
-      : form.jumpProfileId
-        ? 'jump'
-        : 'direct'
-  )
+  const routingMode = getSshRoutingMode(form)
   const serialPortRefreshInFlightRef = useRef(false)
   const supportsNetwork = form.type === 'ssh' || form.type === 'telnet' || form.type === 'ftp'
   const supportsFilePaneMode = form.type === 'ftp' || (form.type === 'ssh' && form.deviceMode !== 'network-device')
@@ -110,10 +102,7 @@ export function ConnectionModal({
     'too-long': t.sshJumpRouteTooLong,
     'proxy-conflict': t.sshJumpRouteProxyConflict
   }
-  const jumpHostSelectionIncomplete =
-    routingMode === 'jump' &&
-    !jumpRoute.error &&
-    (!jumpRoute.jumpHosts.length || (form.jumpProfileIds?.some((id) => !id.trim()) ?? false))
+  const jumpHostSelectionIncomplete = routingMode === 'jump' && hasIncompleteSshJumpRoute(form)
   const jumpRouteError = jumpHostSelectionIncomplete
     ? t.jumpHostSelectionRequired
     : jumpRoute.error
@@ -437,7 +426,6 @@ export function ConnectionModal({
                 routeError={jumpRouteError}
                 routingMode={routingMode}
                 setForm={setForm}
-                setRoutingMode={setRoutingMode}
               />
             ) : null}
             {section === 'terminal' && supportsTerminal ? (

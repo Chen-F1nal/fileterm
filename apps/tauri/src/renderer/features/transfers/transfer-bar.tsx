@@ -12,6 +12,7 @@ export function TransferBar({
   activeTabId,
   activeTabStatus,
   activeJumpHosts,
+  activeRouteTarget,
   activeTabSource,
   fullWidth = false,
   isPending,
@@ -22,12 +23,17 @@ export function TransferBar({
   activeTabId?: string | null
   activeTabStatus?: StatusIndicatorStatus | null
   activeJumpHosts?: SshProfile[]
+  activeRouteTarget?: SshProfile
   activeTabSource?: WorkspaceSessionSource | null
   fullWidth?: boolean
   isPending: boolean
   onHideToBackground?(tabId: string): void | Promise<void>
   onOpen(): void
 }) {
+  const activeRouteProfiles = [...(activeJumpHosts ?? []), ...(activeRouteTarget ? [activeRouteTarget] : [])]
+  const activeRouteNames = activeRouteProfiles.map((profile) => profile.name).join(' → ')
+  const activeRouteEndpoints = activeRouteProfiles.map((profile) => `${profile.host}:${profile.port}`).join(' → ')
+
   return (
     <footer className={`transfer-strip ${fullWidth ? 'full-width' : ''}`}>
       <div className="transfer-strip-context">
@@ -64,12 +70,13 @@ export function TransferBar({
         ) : null}
         {activeTabId && activeJumpHosts?.length ? (
           <span
-            aria-label={`${t.viaJumpHost}: ${activeJumpHosts.map((hop) => hop.name).join(' → ')}`}
+            aria-label={`${t.viaJumpHost}: ${activeRouteNames}`}
             className="transfer-session-jump"
-            title={`${t.viaJumpHost}: ${activeJumpHosts.map((hop) => hop.name).join(' → ')} (${activeJumpHosts.map((hop) => `${hop.host}:${hop.port}`).join(' → ')})`}
+            tabIndex={0}
+            title={`${t.viaJumpHost}: ${activeRouteNames} (${activeRouteEndpoints})`}
           >
             <span className="transfer-session-jump-label">{t.viaJumpHost}</span>
-            <span className="transfer-session-jump-name">{activeJumpHosts.map((hop) => hop.name).join(' → ')}</span>
+            <span className="transfer-session-jump-name">{activeRouteNames}</span>
           </span>
         ) : null}
       </div>
