@@ -14,7 +14,7 @@
 
 ### 本版本包含的主要 PR 和问题修复
 
-- 本版本改动通过 beta2 发布 PR 合入。
+- [PR #319](https://github.com/St0ff3l/fileterm/pull/319)：修复 macOS Dock 自选图标在退出后回退，并加入 Dock 插件生命周期回归检查。
 
 完整变更记录请查看 [v2.3.1-beta.1 与 v2.3.1-beta.2 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.1...v2.3.1-beta.2)。
 
@@ -45,7 +45,7 @@ This beta fixes selected macOS Dock icons reverting after FileTerm quits and cla
 
 ### Main PRs and issues
 
-- The beta2 changes are included in the beta2 release PR.
+- [PR #319](https://github.com/St0ff3l/fileterm/pull/319): Fix the macOS Dock icon reverting after quit and add a Dock plugin lifecycle regression check.
 
 See the [comparison between v2.3.1-beta.1 and v2.3.1-beta.2](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.1...v2.3.1-beta.2) for the complete change set.
 
