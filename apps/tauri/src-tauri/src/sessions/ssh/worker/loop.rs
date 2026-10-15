@@ -47,9 +47,10 @@ async fn run_worker_loop(
     let profile = &routed_profile;
     let username = normalized_username.unwrap_or(configured_username);
     let jump_host_configured = profile
-        .get("jumpProfileId")
-        .and_then(Value::as_str)
-        .is_some();
+        .get("jumpProfileIds")
+        .and_then(Value::as_array)
+        .map(|ids| !ids.is_empty())
+        .unwrap_or_else(|| profile.get("jumpProfileId").and_then(Value::as_str).is_some());
     let direct_login_hint =
         crate::sessions::system_metrics::jumpserver_direct_login_hint(&username);
     let route_hint = if jump_host_configured {

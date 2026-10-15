@@ -250,6 +250,10 @@ export function profileToForm(
     sudoPassword: '',
     suPassword: '',
     jumpProfileId: profile.type === 'ssh' ? profile.jumpProfileId : undefined,
+    jumpProfileIds:
+      profile.type === 'ssh' && Array.isArray(profile.jumpProfileIds)
+        ? profile.jumpProfileIds.filter((id) => typeof id === 'string')
+        : undefined,
     forwards: profile.type === 'ssh' ? (profile.forwards ?? []) : [],
     disableShellIntegration: profile.type === 'ssh' ? profile.disableShellIntegration : false,
     devicePath: profile.type === 'serial' ? (profile.devicePath ?? '') : '',

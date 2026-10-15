@@ -1,6 +1,91 @@
 const MAX_SSH_JUMP_HOSTS: usize = 8;
 
+fn apply_legacy_connection_overrides(profile: &mut Value) {
+    for field in ["useEmptyPassword", "legacyAlgorithms"] {
+        if let Some(value) = profile
+            .get("connectionOverrides")
+            .and_then(|overrides| overrides.get(field))
+            .cloned()
+        {
+            profile[field] = value;
+        }
+    }
+}
+
+fn profile_has_proxy(profile: &Value) -> bool {
+    profile
+        .get("proxyProfileId")
+        .and_then(Value::as_str)
+        .is_some_and(|id| !id.trim().is_empty())
+        || profile
+            .get("proxy")
+            .and_then(|proxy| proxy.get("type"))
+            .and_then(Value::as_str)
+            .unwrap_or("none")
+            != "none"
+}
+
 fn resolve_ssh_route(profile: &Value, profiles: &[Value]) -> Result<Vec<Value>, String> {
+    if let Some(jump_ids) = profile.get("jumpProfileIds") {
+        let jump_ids = jump_ids.as_array().ok_or_else(|| {
+            "SSH Jump Host route must be an array of profile IDs".to_string()
+        })?;
+        if jump_ids.len() > MAX_SSH_JUMP_HOSTS {
+            return Err(format!(
+                "SSH route supports at most {MAX_SSH_JUMP_HOSTS} Jump Hosts"
+            ));
+        }
+        let target_id = profile.get("id").and_then(Value::as_str).unwrap_or("");
+        let mut visited = std::collections::HashSet::new();
+        if !target_id.is_empty() {
+            visited.insert(target_id.to_string());
+        }
+        let mut route = Vec::with_capacity(jump_ids.len() + 1);
+        if !jump_ids.is_empty() && profile_has_proxy(profile) {
+            return Err(format!(
+                "Proxy and Jump Host are mutually exclusive for SSH profile '{target_id}'"
+            ));
+        }
+        for (index, jump_id) in jump_ids.iter().enumerate() {
+            let jump_id = jump_id
+                .as_str()
+                .filter(|id| !id.trim().is_empty())
+                .ok_or_else(|| {
+                    format!("SSH profile '{target_id}' has an invalid Jump Host reference")
+                })?;
+            if !visited.insert(jump_id.to_string()) {
+                return Err(format!(
+                    "SSH Jump Host route contains a cycle at profile '{jump_id}'"
+                ));
+            }
+            let mut hop = profiles
+                .iter()
+                .find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(jump_id))
+                .cloned()
+                .ok_or_else(|| format!("Jump Host profile '{jump_id}' not found"))?;
+            if hop.get("type").and_then(Value::as_str) != Some("ssh") {
+                return Err(format!("Jump Host profile '{jump_id}' must be an SSH profile"));
+            }
+            port_from_profile(&hop, 22, "SSH")?;
+            if index > 0 && profile_has_proxy(&hop) {
+                return Err(format!(
+                    "Proxy and Jump Host are mutually exclusive for SSH profile '{jump_id}'"
+                ));
+            }
+            // The target's ordered list is authoritative; nested route fields on a selected hop are ignored.
+            apply_legacy_connection_overrides(&mut hop);
+            route.push(hop);
+        }
+        let mut target = profile.clone();
+        if target.get("type").and_then(Value::as_str) != Some("ssh") {
+            return Err(format!("Jump Host profile '{target_id}' must be an SSH profile"));
+        }
+        port_from_profile(&target, 22, "SSH")?;
+        apply_legacy_connection_overrides(&mut target);
+        route.push(target);
+        return Ok(route);
+    }
+
     let mut route = Vec::new();
     let mut current = profile.clone();
     let mut visited = std::collections::HashSet::new();
@@ -30,33 +115,13 @@ fn resolve_ssh_route(profile: &Value, profiles: &[Value]) -> Result<Vec<Value>, 
             ),
             None => None,
         };
-        let has_proxy_reference = current
-            .get("proxyProfileId")
-            .and_then(Value::as_str)
-            .is_some_and(|id| !id.trim().is_empty());
-        if jump_id.is_some()
-            && (has_proxy_reference
-                || current
-                    .get("proxy")
-                    .and_then(|proxy| proxy.get("type"))
-                    .and_then(Value::as_str)
-                    .unwrap_or("none")
-                    != "none")
-        {
+        if jump_id.is_some() && profile_has_proxy(&current) {
             return Err(format!(
                 "Proxy and Jump Host are mutually exclusive for SSH profile '{id}'"
             ));
         }
         // Legacy per-profile overrides also belong to an intermediate hop's transport.
-        for field in ["useEmptyPassword", "legacyAlgorithms"] {
-            if let Some(value) = current
-                .get("connectionOverrides")
-                .and_then(|overrides| overrides.get(field))
-                .cloned()
-            {
-                current[field] = value;
-            }
-        }
+        apply_legacy_connection_overrides(&mut current);
         route.push(current);
         let Some(jump_id) = jump_id else { break };
         if visited.contains(&jump_id) {
@@ -110,10 +175,16 @@ async fn open_session(
     flow: SshInteractionFlow,
     cancellation: CancellationToken,
 ) -> Result<OpenSshSession, String> {
-    let profiles = if profile
-        .get("jumpProfileId")
-        .is_some_and(|value| !value.is_null())
-    {
+    let has_jump_route = profile
+        .get("jumpProfileIds")
+        .and_then(Value::as_array)
+        .map(|ids| !ids.is_empty())
+        .unwrap_or_else(|| {
+            profile
+                .get("jumpProfileId")
+                .is_some_and(|value| !value.is_null())
+        });
+    let profiles = if has_jump_route {
         let state = app.state::<crate::services::workspace::WorkspaceState>();
         let _guard = state.library_mutation.lock().await;
         crate::services::profile_ops::read_and_heal_profiles(app)

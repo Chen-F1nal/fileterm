@@ -38,7 +38,8 @@ export function invalidateChangedConnectionHostTrust(
     previous.trustedHostFingerprint &&
     next.trustedHostFingerprint === previous.trustedHostFingerprint &&
     (!sshEndpointMatches(next, previous.host, Number(previous.port) || 22) ||
-      next.jumpProfileId !== previous.jumpProfileId)
+      next.jumpProfileId !== previous.jumpProfileId ||
+      JSON.stringify(next.jumpProfileIds ?? []) !== JSON.stringify(previous.jumpProfileIds ?? []))
   )
     return { ...next, trustedHostFingerprint: '' }
 

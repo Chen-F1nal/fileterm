@@ -1,6 +1,5 @@
-import type { ConnectionProfile, CreateProfileInput, SshProfile } from '@fileterm/core'
+import type { CreateProfileInput, SshProfile } from '@fileterm/core'
 import { t } from '../../i18n'
-import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
 import './ssh-jump-route.css'
 import { AppIcon } from '../common/app-icon'
 import { DropdownSelect } from '../common/dropdown-select'
@@ -11,7 +10,6 @@ import type { ConnectionFormSetter } from './connection-modal-utils'
 export function ConnectionNetworkSection({
   form,
   jumpHosts,
-  profiles,
   jumpRoute,
   routeError,
   routingMode,
@@ -19,8 +17,7 @@ export function ConnectionNetworkSection({
   setRoutingMode
 }: {
   form: CreateProfileInput
-  jumpHosts: ConnectionProfile[]
-  profiles: ConnectionProfile[]
+  jumpHosts: SshProfile[]
   jumpRoute: SshProfile[]
   routeError: string | null
   routingMode: 'direct' | 'jump'
@@ -30,6 +27,33 @@ export function ConnectionNetworkSection({
   const supportsRouting = form.type === 'ssh'
   const supportsProxy = form.type === 'ssh' || form.type === 'telnet' || form.type === 'ftp'
   const supportsTunnel = form.type === 'ssh'
+  const selectedJumpProfileIds =
+    form.jumpProfileIds ?? (form.jumpProfileId ? jumpRoute.map((profile) => profile.id) : [])
+
+  const updateJumpProfileIds = (ids: string[]) =>
+    setForm((prev) => ({ ...prev, jumpProfileId: undefined, jumpProfileIds: ids }))
+
+  const jumpHostOptions = (index: number) => {
+    const selectedId = selectedJumpProfileIds[index]
+    return jumpHosts
+      .filter((profile) => {
+        if (profile.id === selectedId) return true
+        if (selectedJumpProfileIds.some((id, selectedIndex) => selectedIndex !== index && id === profile.id)) {
+          return false
+        }
+        if (profile.jumpProfileId || profile.jumpProfileIds?.length) return false
+        const hasProxy =
+          Boolean(profile.proxyProfileId) || Boolean(profile.proxy?.type && profile.proxy.type !== 'none')
+        return index === 0 || !hasProxy
+      })
+      .map((profile) => ({
+        value: profile.id,
+        label: `${profile.name} (${profile.host}:${profile.port})`
+      }))
+  }
+  const hasUnavailableJumpHostSlot = selectedJumpProfileIds.length
+    ? selectedJumpProfileIds.some((id, index) => !id && jumpHostOptions(index).length === 0)
+    : jumpHostOptions(0).length === 0
 
   return (
     <div className="ssh-form-page network-form-page">
@@ -51,7 +75,7 @@ export function ConnectionNetworkSection({
                     className={routingMode === 'direct' ? 'is-active' : undefined}
                     onClick={() => {
                       setRoutingMode('direct')
-                      setForm((prev) => ({ ...prev, jumpProfileId: undefined }))
+                      setForm((prev) => ({ ...prev, jumpProfileId: undefined, jumpProfileIds: undefined }))
                     }}
                     role="radio"
                     type="button"
@@ -61,7 +85,10 @@ export function ConnectionNetworkSection({
                   <button
                     aria-checked={routingMode === 'jump'}
                     className={routingMode === 'jump' ? 'is-active' : undefined}
-                    onClick={() => setRoutingMode('jump')}
+                    onClick={() => {
+                      setRoutingMode('jump')
+                      if (!selectedJumpProfileIds.length) updateJumpProfileIds([''])
+                    }}
                     role="radio"
                     type="button"
                   >
@@ -71,37 +98,90 @@ export function ConnectionNetworkSection({
               </div>
             </div>
 
-            {routingMode === 'jump' && jumpHosts.length ? (
+            {routingMode === 'jump' ? (
               <div className="network-setting-subgroup">
-                <div className="network-setting-row">
-                  <label className="network-setting-row__label" htmlFor="connection-jump-host">
-                    {t.jumpHost}
-                  </label>
-                  <div className="network-setting-row__control">
-                    <DropdownSelect
-                      id="connection-jump-host"
-                      ariaLabel={t.jumpHost}
-                      className="network-select-control network-routing-select"
-                      placeholder={t.selectJumpHost}
-                      value={form.jumpProfileId ?? ''}
-                      options={[
-                        { value: '', label: t.selectJumpHost, disabled: true },
-                        ...jumpHosts.map((profile) => ({
-                          value: profile.id,
-                          label: `${resolveSshJumpRoute({ jumpProfileId: profile.id }, profiles)
-                            .jumpHosts.map((hop) => hop.name)
-                            .join(' → ')} (${profile.host})`
-                        }))
-                      ]}
-                      onChange={(value) => setForm((prev) => ({ ...prev, jumpProfileId: value || undefined }))}
-                    />
-                  </div>
+                <div className="ssh-jump-hops">
+                  {selectedJumpProfileIds.map((selectedId, index) => {
+                    const options = jumpHostOptions(index)
+                    return (
+                      <div className="ssh-jump-hop" key={`jump-hop-${index}`}>
+                        <label className="ssh-jump-hop__label" htmlFor={`connection-jump-host-${index}`}>
+                          {t.jumpHost} {index + 1}
+                        </label>
+                        <DropdownSelect
+                          id={`connection-jump-host-${index}`}
+                          ariaLabel={`${t.jumpHost} ${index + 1}`}
+                          className="network-select-control network-routing-select ssh-jump-hop__select"
+                          placeholder={t.selectJumpHost}
+                          value={selectedId}
+                          options={[{ value: '', label: t.selectJumpHost, disabled: true }, ...options]}
+                          onChange={(value) => {
+                            const next = [...selectedJumpProfileIds]
+                            next[index] = value
+                            updateJumpProfileIds(next)
+                          }}
+                        />
+                        <div className="ssh-jump-hop__actions">
+                          <button
+                            aria-label={`${t.moveJumpHostUp}: ${t.jumpHost} ${index + 1}`}
+                            className="ssh-jump-hop__action"
+                            disabled={index === 0}
+                            onClick={() => {
+                              const next = [...selectedJumpProfileIds]
+                              ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
+                              updateJumpProfileIds(next)
+                            }}
+                            title={t.moveJumpHostUp}
+                            type="button"
+                          >
+                            <AppIcon name="arrow-up" size={13} />
+                          </button>
+                          <button
+                            aria-label={`${t.moveJumpHostDown}: ${t.jumpHost} ${index + 1}`}
+                            className="ssh-jump-hop__action"
+                            disabled={index === selectedJumpProfileIds.length - 1}
+                            onClick={() => {
+                              const next = [...selectedJumpProfileIds]
+                              ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
+                              updateJumpProfileIds(next)
+                            }}
+                            title={t.moveJumpHostDown}
+                            type="button"
+                          >
+                            <AppIcon name="arrow-down" size={13} />
+                          </button>
+                          <button
+                            aria-label={`${t.removeJumpHost}: ${t.jumpHost} ${index + 1}`}
+                            className="ssh-jump-hop__action ssh-jump-hop__action--remove"
+                            onClick={() => updateJumpProfileIds(selectedJumpProfileIds.filter((_, i) => i !== index))}
+                            title={t.removeJumpHost}
+                            type="button"
+                          >
+                            <AppIcon name="trash" size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {selectedJumpProfileIds.length < 8 ? (
+                    <button
+                      className="ssh-jump-hop__add"
+                      onClick={() => updateJumpProfileIds([...selectedJumpProfileIds, ''])}
+                      type="button"
+                    >
+                      <AppIcon name="plus" size={13} />
+                      {t.addJumpHost}
+                    </button>
+                  ) : null}
+                  {hasUnavailableJumpHostSlot ? (
+                    <p className="network-field-hint network-field-hint--warning">{t.noAvailableJumpHost}</p>
+                  ) : null}
+                  <p className="network-field-hint">{t.jumpHostHint}</p>
                 </div>
-                <p className="network-field-hint">{t.jumpHostHint}</p>
               </div>
             ) : null}
 
-            {routingMode === 'jump' && form.jumpProfileId ? (
+            {routingMode === 'jump' && (routeError || selectedJumpProfileIds.length) ? (
               routeError ? (
                 <p className="network-field-hint network-field-hint--warning" role="alert">
                   {routeError}
@@ -117,10 +197,6 @@ export function ConnectionNetworkSection({
                   <li>{form.name?.trim() || form.host || t.sshJumpRouteTarget}</li>
                 </ol>
               )
-            ) : null}
-
-            {routingMode === 'jump' && !jumpHosts.length ? (
-              <p className="network-field-hint network-field-hint--warning">{t.noAvailableJumpHost}</p>
             ) : null}
           </div>
         </fieldset>
