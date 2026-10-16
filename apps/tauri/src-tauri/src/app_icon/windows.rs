@@ -164,9 +164,9 @@ fn refresh_shortcut_icons_now(app: &AppHandle, variant: &str) -> Result<(), Stri
 
 fn shell_icon_bytes(variant: &str) -> Vec<u8> {
     match variant {
-        "material" => include_bytes!("../../icons/app-platform/windows-material.ico").to_vec(),
-        "clean" => include_bytes!("../../icons/app-platform/windows-clean.ico").to_vec(),
-        _ => include_bytes!("../../icons/icon.ico").to_vec(),
+        "material" => include_bytes!("../../icons/app/windows/material.ico").to_vec(),
+        "clean" => include_bytes!("../../icons/app/windows/clean.ico").to_vec(),
+        _ => include_bytes!("../../icons/app/windows/classic.ico").to_vec(),
     }
 }
 

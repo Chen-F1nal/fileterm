@@ -20,8 +20,9 @@ work_dir="$(mktemp -d "${TMPDIR:-/tmp}/fileterm-arch-packages.XXXXXX")"
 trap 'rm -rf "$work_dir"' EXIT
 mkdir -p "$output_dir"
 cp "$script_dir/verify-linux-icon-files.py" "$work_dir/verify-linux-icon-files.py"
-mkdir -p "$work_dir/src-tauri/icons"
-cp "$repo_root"/apps/tauri/src-tauri/icons/{32x32,128x128,128x128@2x}.png "$work_dir/src-tauri/icons/"
+mkdir -p "$work_dir/src-tauri/icons/app/linux"
+cp "$repo_root"/apps/tauri/src-tauri/icons/app/linux/{32x32,128x128,128x128@2x}.png \
+  "$work_dir/src-tauri/icons/app/linux/"
 
 for entry in "x86_64:x86_64" "arm64:aarch64"; do
   asset_arch="${entry%%:*}"

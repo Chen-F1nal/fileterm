@@ -12,10 +12,10 @@ Tauri 会把 Linux bundle 配置中第一张 PNG 嵌入为原始像素缓冲。�
 
 ## 决策
 
-1. macOS tray 继续使用独立的 `trayTemplate@2x.png`，并以 template 模式渲染。
-2. Windows tray 使用 `app-tray/tray-windows-*-32.png`，Linux tray 使用 `app-tray/tray-linux-*-32.png`。两者必须是满版 8-bit RGBA PNG，不复用大尺寸 app icon 或 Tauri 自动生成的 `default_window_icon()`。
+1. macOS tray 继续使用独立的 `tray/macos/template@2x.png`，并以 template 模式渲染。
+2. Windows tray 使用 `tray/windows/*-32.png`，Linux tray 使用 `tray/linux/*-32.png`。两者必须是满版 8-bit RGBA PNG，不复用大尺寸 app icon 或 Tauri 自动生成的 `default_window_icon()`。
 3. Windows 快捷方式 ICO 包含 16、20、24、32、40、48、64、128、256px 图层；运行窗口分别使用 32px 小图标与 256px 大图标。Windows/Linux 的应用图标资源从 `dock-*.png` 去除 macOS 安全边距后生成；Linux 包内图标及窗口/启动器图标必须保持 8-bit RGBA 与满版构图。
-4. Linux bundle 使用的 `32x32.png`、`128x128.png` 和 `128x128@2x.png` 必须为 8-bit RGBA，且不带 macOS Dock 透明安全边距。运行 `apps/tauri/scripts/generate-platform-app-icons.py` 生成 Windows/Linux 图标；该脚本不得修改 Dock 图或 `icon.icns`。
+4. Linux bundle 使用的 `app/linux/32x32.png`、`128x128.png` 和 `128x128@2x.png` 必须为 8-bit RGBA，且不带 macOS Dock 透明安全边距。运行 `apps/tauri/scripts/generate-platform-app-icons.py` 生成 Windows/Linux 图标；该脚本不得修改 Dock 图或 `app/macos/icon.icns`。
 5. Rust 回归测试检查 PNG 的 IHDR 位深、RGBA 颜色类型、原生尺寸和透明边界，防止后续资产更新重新引入缩小图案或 16-bit 图像。
 
 ## 影响
@@ -34,8 +34,10 @@ Tauri 会把 Linux bundle 配置中第一张 PNG 嵌入为原始像素缓冲。�
 ## 实现位置
 
 - `apps/tauri/src-tauri/src/lib/runtime.rs`：按平台选择 tray 图标。
-- `apps/tauri/src-tauri/icons/app-tray/tray-linux-*-32.png` 与 `tray-windows-*-32.png`：平台 tray 的显式 8-bit RGBA 输入。
+- `apps/tauri/src-tauri/icons/tray/{linux,windows}/*-32.png`：平台 tray 的显式 8-bit RGBA 输入。
 - `apps/tauri/src/renderer/assets/app-icons/platform/`：Windows/Linux 使用的满版窗口图标与设置预览资源。
-- `apps/tauri/src-tauri/icons/app-platform/`：Windows 动态多尺寸 ICO。
+- `apps/tauri/src-tauri/icons/app/windows/`：Windows 动态多尺寸 ICO。
+- `apps/tauri/src-tauri/icons/app/{linux,macos}/`：Linux bundle 图标与 macOS ICNS。
+- `apps/tauri/src-tauri/icons/tray/macos/`：macOS template tray 资源。
 - `apps/tauri/scripts/generate-platform-app-icons.py`：从 Dock 原图生成 Windows/Linux 图标及 Linux bundle 图标。
 - `apps/tauri/src-tauri/src/lib/tests.rs`：Linux bundle 图标格式回归测试。

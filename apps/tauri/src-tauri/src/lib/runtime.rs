@@ -191,7 +191,7 @@ pub fn run() {
             // tray-icon renders the source at 18 logical points on macOS.
             // Feed it the 36px Retina representation so the status item has
             // one physical source pixel per output pixel on @2x displays.
-            let tray_icon = Image::from_bytes(include_bytes!("../../icons/trayTemplate@2x.png"))
+            let tray_icon = Image::from_bytes(include_bytes!("../../icons/tray/macos/template@2x.png"))
                 .map_err(|error| error.to_string())?;
             #[cfg(target_os = "windows")]
             let tray_icon = windows_icon_image().map_err(|error| error.to_string())?;
@@ -199,7 +199,7 @@ pub fn run() {
             // Tauri embeds the first Linux bundle PNG as raw pixels. The
             // tray backend accepts 32bpp RGBA only, so use the checked-in
             // 8-bit source directly instead of the generated window icon.
-            let tray_icon = Image::from_bytes(include_bytes!("../../icons/32x32.png"))
+            let tray_icon = Image::from_bytes(include_bytes!("../../icons/app/linux/32x32.png"))
                 .map_err(|error| error.to_string())?;
             #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
             let tray_icon = app

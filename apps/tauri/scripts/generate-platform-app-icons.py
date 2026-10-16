@@ -17,8 +17,10 @@ ROOT = Path(__file__).resolve().parents[3]
 SOURCE_DIR = ROOT / "apps/tauri/src/renderer/assets/app-icons"
 PLATFORM_ASSET_DIR = SOURCE_DIR / "platform"
 ICON_DIR = ROOT / "apps/tauri/src-tauri/icons"
-WINDOWS_ICON_DIR = ICON_DIR / "app-platform"
-TRAY_ICON_DIR = ICON_DIR / "app-tray"
+APP_ICON_DIR = ICON_DIR / "app"
+WINDOWS_ICON_DIR = APP_ICON_DIR / "windows"
+LINUX_ICON_DIR = APP_ICON_DIR / "linux"
+TRAY_ICON_DIR = ICON_DIR / "tray"
 VARIANTS = ("classic", "material", "clean")
 ICO_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
 
@@ -35,10 +37,33 @@ def save_png(image: Image.Image, path: Path) -> None:
 def main() -> None:
     PLATFORM_ASSET_DIR.mkdir(parents=True, exist_ok=True)
     WINDOWS_ICON_DIR.mkdir(parents=True, exist_ok=True)
-    TRAY_ICON_DIR.mkdir(parents=True, exist_ok=True)
-    (WINDOWS_ICON_DIR / "windows-classic.ico").unlink(missing_ok=True)
-    for obsolete in TRAY_ICON_DIR.glob("tray-windows-*-256.png"):
-        obsolete.unlink()
+    LINUX_ICON_DIR.mkdir(parents=True, exist_ok=True)
+    for platform in ("linux", "windows"):
+        (TRAY_ICON_DIR / platform).mkdir(parents=True, exist_ok=True)
+
+    # Remove only generated resources from the previous flat layout. macOS
+    # source assets are intentionally migrated separately and are never owned
+    # by this generator.
+    for path in (
+        ICON_DIR / "icon.ico",
+        ICON_DIR / "icon.png",
+        ICON_DIR / "32x32.png",
+        ICON_DIR / "128x128.png",
+        ICON_DIR / "128x128@2x.png",
+        ICON_DIR / "app-platform" / "windows-classic.ico",
+        ICON_DIR / "app-platform" / "windows-clean.ico",
+        ICON_DIR / "app-platform" / "windows-material.ico",
+        *(ICON_DIR / "app-tray" / f"tray-{platform}-{variant}-32.png"
+          for platform in ("linux", "windows") for variant in VARIANTS),
+        *(ICON_DIR / "app-tray" / f"tray-windows-{variant}-256.png"
+          for variant in VARIANTS),
+    ):
+        path.unlink(missing_ok=True)
+    for directory in (ICON_DIR / "app-platform", ICON_DIR / "app-tray"):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
 
     cropped: dict[str, Image.Image] = {}
     for variant in VARIANTS:
@@ -57,26 +82,21 @@ def main() -> None:
         for platform in ("linux", "windows"):
             save_png(
                 resized(artwork, 32),
-                TRAY_ICON_DIR / f"tray-{platform}-{variant}-32.png",
+                TRAY_ICON_DIR / platform / f"{variant}-32.png",
             )
 
-        windows_ico = (
-            ICON_DIR / "icon.ico"
-            if variant == "classic"
-            else WINDOWS_ICON_DIR / f"windows-{variant}.ico"
-        )
         artwork.save(
-            windows_ico,
+            WINDOWS_ICON_DIR / f"{variant}.ico",
             format="ICO",
             sizes=[(size, size) for size in ICO_SIZES],
         )
 
     classic = cropped["classic"]
     for size, path in (
-        (32, ICON_DIR / "32x32.png"),
-        (128, ICON_DIR / "128x128.png"),
-        (256, ICON_DIR / "128x128@2x.png"),
-        (512, ICON_DIR / "icon.png"),
+        (32, LINUX_ICON_DIR / "32x32.png"),
+        (128, LINUX_ICON_DIR / "128x128.png"),
+        (256, LINUX_ICON_DIR / "128x128@2x.png"),
+        (512, LINUX_ICON_DIR / "icon.png"),
     ):
         save_png(resized(classic, size), path)
 

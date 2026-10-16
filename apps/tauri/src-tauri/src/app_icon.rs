@@ -66,18 +66,18 @@ pub(crate) fn set_window_icon(window: &tauri::WebviewWindow, variant: &str) -> R
 #[cfg(target_os = "linux")]
 fn tray_icon_bytes(variant: &str) -> &'static [u8] {
     match variant {
-        "material" => include_bytes!("../icons/app-tray/tray-linux-material-32.png"),
-        "clean" => include_bytes!("../icons/app-tray/tray-linux-clean-32.png"),
-        _ => include_bytes!("../icons/app-tray/tray-linux-classic-32.png"),
+        "material" => include_bytes!("../icons/tray/linux/material-32.png"),
+        "clean" => include_bytes!("../icons/tray/linux/clean-32.png"),
+        _ => include_bytes!("../icons/tray/linux/classic-32.png"),
     }
 }
 
 #[cfg(target_os = "windows")]
 fn tray_icon_bytes(variant: &str) -> &'static [u8] {
     match variant {
-        "material" => include_bytes!("../icons/app-tray/tray-windows-material-32.png"),
-        "clean" => include_bytes!("../icons/app-tray/tray-windows-clean-32.png"),
-        _ => include_bytes!("../icons/app-tray/tray-windows-classic-32.png"),
+        "material" => include_bytes!("../icons/tray/windows/material-32.png"),
+        "clean" => include_bytes!("../icons/tray/windows/clean-32.png"),
+        _ => include_bytes!("../icons/tray/windows/classic-32.png"),
     }
 }
 
@@ -141,10 +141,10 @@ mod tests {
     #[test]
     fn linux_static_icons_include_the_classic_silver_rim() {
         for bytes in [
-            &include_bytes!("../icons/32x32.png")[..],
-            &include_bytes!("../icons/128x128.png")[..],
-            &include_bytes!("../icons/128x128@2x.png")[..],
-            &include_bytes!("../icons/icon.png")[..],
+            &include_bytes!("../icons/app/linux/32x32.png")[..],
+            &include_bytes!("../icons/app/linux/128x128.png")[..],
+            &include_bytes!("../icons/app/linux/128x128@2x.png")[..],
+            &include_bytes!("../icons/app/linux/icon.png")[..],
         ] {
             let icon = tauri::image::Image::from_bytes(bytes).unwrap();
             assert_icon_fills_canvas(bytes, icon.width());
@@ -161,7 +161,8 @@ mod tests {
     #[test]
     fn windows_packaged_icon_matches_classic_runtime_icon() {
         let packaged =
-            tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico")).unwrap();
+            tauri::image::Image::from_bytes(include_bytes!("../icons/app/windows/classic.ico"))
+                .unwrap();
         let classic = tauri::image::Image::from_bytes(platform_icon_bytes("classic", 256)).unwrap();
         assert_eq!(packaged.width(), classic.width());
         assert_eq!(packaged.height(), classic.height());
@@ -185,27 +186,24 @@ mod tests {
     fn platform_tray_icon_assets_keep_native_sizes_and_rgba_format() {
         for (icon, size) in [
             (
-                &include_bytes!("../icons/app-tray/tray-linux-classic-32.png")[..],
+                &include_bytes!("../icons/tray/linux/classic-32.png")[..],
                 32,
             ),
             (
-                &include_bytes!("../icons/app-tray/tray-linux-material-32.png")[..],
+                &include_bytes!("../icons/tray/linux/material-32.png")[..],
+                32,
+            ),
+            (&include_bytes!("../icons/tray/linux/clean-32.png")[..], 32),
+            (
+                &include_bytes!("../icons/tray/windows/classic-32.png")[..],
                 32,
             ),
             (
-                &include_bytes!("../icons/app-tray/tray-linux-clean-32.png")[..],
+                &include_bytes!("../icons/tray/windows/material-32.png")[..],
                 32,
             ),
             (
-                &include_bytes!("../icons/app-tray/tray-windows-classic-32.png")[..],
-                32,
-            ),
-            (
-                &include_bytes!("../icons/app-tray/tray-windows-material-32.png")[..],
-                32,
-            ),
-            (
-                &include_bytes!("../icons/app-tray/tray-windows-clean-32.png")[..],
+                &include_bytes!("../icons/tray/windows/clean-32.png")[..],
                 32,
             ),
         ] {
