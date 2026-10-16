@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
-import type { VerticalScrollController } from '../features/common/vertical-scrollbar'
+import { createTerminalScrollController } from './terminal-scroll-controller'
 import { TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { t } from '../i18n'
 import { getConfiguredMonoFontFamily } from '../app/font-metrics'
@@ -163,66 +163,10 @@ export function useTerminalView({
   const isMac = window.fileterm?.platform === 'darwin'
   const isWindowsPty = sessionType === 'local' && window.fileterm?.platform === 'win32'
 
-  const terminalScrollController = useMemo<VerticalScrollController | null>(() => {
-    if (!terminalScrollableElement) {
-      return null
-    }
-
-    return {
-      getElement: () => terminalScrollableElement,
-      getMetrics: () => {
-        const terminal = terminalRef.current
-        if (!terminal) {
-          return null
-        }
-
-        const rows = Math.max(1, terminal.rows)
-        const clientHeight = terminalScrollableElement.clientHeight
-        if (clientHeight <= 0) {
-          return null
-        }
-
-        const buffer = terminal.buffer.active
-        const scrollHeight = Math.max(clientHeight, (clientHeight * Math.max(rows, buffer.length)) / rows)
-        const maxScrollTop = Math.max(0, scrollHeight - clientHeight)
-        const scrollTop = Math.max(0, Math.min(maxScrollTop, (clientHeight * Math.max(0, buffer.viewportY)) / rows))
-        return { clientHeight, scrollHeight, scrollTop }
-      },
-      scrollTo: (scrollTop) => {
-        const terminal = terminalRef.current
-        const clientHeight = terminalScrollableElement.clientHeight
-        if (!terminal || clientHeight <= 0) {
-          return
-        }
-
-        terminal.scrollToLine(Math.round((scrollTop / clientHeight) * Math.max(1, terminal.rows)))
-      },
-      scrollBy: (scrollTop) => {
-        const terminal = terminalRef.current
-        const clientHeight = terminalScrollableElement.clientHeight
-        if (!terminal || clientHeight <= 0) {
-          return
-        }
-
-        terminal.scrollLines(Math.round((scrollTop / clientHeight) * Math.max(1, terminal.rows)))
-      },
-      subscribe: (listener) => {
-        const terminal = terminalRef.current
-        if (!terminal) {
-          return () => undefined
-        }
-
-        const disposables = [
-          terminal.onScroll(listener),
-          terminal.onResize(listener),
-          terminal.onRender(listener),
-          terminal.onWriteParsed(listener),
-          terminal.buffer.onBufferChange(listener)
-        ]
-        return () => disposables.forEach((disposable) => disposable.dispose())
-      }
-    }
-  }, [terminalScrollableElement])
+  const terminalScrollController = useMemo(
+    () => (terminalScrollableElement ? createTerminalScrollController(terminalRef, terminalScrollableElement) : null),
+    [terminalScrollableElement]
+  )
 
   terminalZoomLockedRef.current = terminalZoomLocked
 

@@ -6,6 +6,8 @@ mod format;
 mod layer;
 mod level;
 mod panic;
+#[cfg(target_os = "windows")]
+mod windows_performance;
 mod writer;
 
 pub use category::LogCategory;
@@ -55,6 +57,8 @@ pub fn init(app: &AppHandle) {
             }
             Err(_) => {}
         }
+        #[cfg(target_os = "windows")]
+        windows_performance::start(app.package_info().version.to_string());
     }
 }
 

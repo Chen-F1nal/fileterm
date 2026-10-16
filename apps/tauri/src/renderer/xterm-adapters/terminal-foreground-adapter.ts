@@ -18,7 +18,11 @@ const COLOR_MODE_MASK = 0x03000000
  * Raw output/transcripts and xterm's parser attributes are never rewritten.
  */
 export function registerTerminalForegroundAdapter(terminal: Terminal): IDisposable {
+  let pending = false
+  let disposed = false
   const adaptViewport = () => {
+    pending = false
+    if (disposed) return
     const buffer = terminal.buffer.active
     let changed = false
     for (let row = buffer.viewportY; row < Math.min(buffer.length, buffer.viewportY + terminal.rows); row++) {
@@ -39,13 +43,28 @@ export function registerTerminalForegroundAdapter(terminal: Terminal): IDisposab
     if (changed) terminal.refresh(0, Math.max(0, terminal.rows - 1))
   }
 
+  const scheduleAdaptViewport = () => {
+    if (pending || disposed) return
+    pending = true
+    queueMicrotask(() => {
+      if (pending) adaptViewport()
+    })
+  }
+
   // Only inspect the viewport. Scrollback is adapted as it becomes visible,
   // so a busy terminal does not repeatedly scan thousands of history rows.
   const subscriptions = [
     terminal.onWriteParsed(adaptViewport),
-    terminal.onScroll(adaptViewport),
-    terminal.onResize(adaptViewport),
-    terminal.buffer.onBufferChange(adaptViewport)
+    // Parsing can scroll hundreds of times before a single frame is drawn.
+    terminal.onScroll(scheduleAdaptViewport),
+    terminal.onResize(scheduleAdaptViewport),
+    terminal.buffer.onBufferChange(scheduleAdaptViewport)
   ]
-  return { dispose: () => subscriptions.forEach((subscription) => subscription.dispose()) }
+  return {
+    dispose: () => {
+      disposed = true
+      pending = false
+      subscriptions.forEach((subscription) => subscription.dispose())
+    }
+  }
 }

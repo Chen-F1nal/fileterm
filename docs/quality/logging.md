@@ -82,6 +82,31 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 
 这些性能记录不包含终端文本、终端输入或传输文件内容。普通 `app.log` 还包含各功能主动写入的运行与错误事件；启用的终端会话 transcript 单独保存在 `session-logs/`，其内容策略见“范围”。
 
+## Windows 系统与大小核对照
+
+Windows 构建在日志初始化后启动一个独立原生采样线程，立即采样一次，随后每 60 秒采样，
+写入 `app.log`，scope 为 `app:windows-performance`，事件为 `windows-native-health`，级别 INFO。
+不依赖 renderer 的事件循环、IPC 或动画帧；页面卡住时原生采样仍可继续。进程暂停、系统睡眠、
+采样线程调度延迟及日志队列丢弃仍可能造成记录间隔或缺失；日志缺失本身不证明应用冻结。
+
+- 每条记录带应用版本、主进程 PID、采样器运行时间、`sampleIntervalMs`、`sampleDurationMs` 和
+  `appForeground`（本应用是否拥有前台窗口，读取失败为 `null`）。首次间隔为 `null`。
+- `host` 缓存并重复记录 Windows build、display version、edition、进程架构、CPU 型号，以及
+  Windows CPU Sets 报告的效率等级、各等级逻辑处理器数和物理核心数。失败记录 `errorCode`；
+  多效率等级仅说明系统报告了异构拓扑，不把等级直接标成 Intel P/E 核，也不代表实际线程调度。
+- `power` 记录电源连接和节电状态原始值；`acLineStatus` 的 0/1/255 对应离线/在线/未知。
+- `processes.samples` 只选本 FileTerm 和它的 WebView2 子进程树，记录 PID、角色、累计 CPU 时间、
+  `cpuPercentOneCore`、工作集字节、private committed bytes、优先级及 power throttling 原始 masks。
+  CPU 百分比按两次成功采样间隔计算，100 表示占满一个逻辑处理器；多线程可超过 100，
+  不是任务管理器按整机容量归一化的数值。首次采样或 PID 被复用时为 `null`。
+- 最多采样 32 个进程，`count` 保留实际匹配数量，超出时 `truncated=true`。退出、权限不足或 API
+  不支持会记录对应 `*ErrorCode`，不作为 0 CPU/0 内存；退出进程的采样状态会清理，句柄及时关闭。
+
+对照同一时间的 `renderer-health`、`event-loop-gap`、`terminal-output-parse`：若页面心跳中断而
+原生日志继续，可进一步看 WebView2 的 CPU、内存与策略变化；策略 masks 不能证明线程被调度到
+小核，确认实际核心驻留和调度等待仍需 Windows 线程/ETW 采样。这里不改变绑核、优先级或节能策略，
+不采集用户名、命令行、窗口标题、终端内容或凭据，也不写独立的无限增长日志文件。
+
 ## 前端异常
 
 `renderer-error-log.ts` 通过同一 IPC 将异常写入 `app.log`，级别为 ERROR、scope 为 `renderer:error`（category 为 workspace）。覆盖 React ErrorBoundary、window error、未处理的 Promise 拒绝和 bridge 就绪后的初始化失败。
