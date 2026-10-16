@@ -48,6 +48,8 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - 文件编辑器的左侧文件树与右侧 Monaco 编辑区
 - 工作区焦点模式，可同时收起侧栏和底部文件面板
 - macOS 菜单栏 template 托盘图标资源
+- Windows 应用安装图标使用经典银边 `icon.ico`；运行时偏好通过 `app_icon/windows.rs` 在主线程同步设置 `ICON_SMALL` 与 `ICON_BIG`，覆盖主窗口、子窗口、任务栏与 Alt+Tab，托盘继续使用独立的 256px RGBA 变体。
+- Linux 的 deb、rpm、pacman 静态 PNG 使用经典银边；运行时由 `app_icon/linux.rs` 同步用户级 `FileTerm.desktop` 和匹配 Wayland app ID 的 `com.fileterm.desktop.desktop`，使用带内容指纹的变体路径刷新缓存。开发版不写正式版启动器，deb/Arch 保留 `/usr/bin/fileterm` 包装入口，用户管理的 desktop 文件不被覆盖。deb/rpm 显式使用同一桌面模板，CI 对实际解包后的图标内容与入口字段验收。
 - 单一连接导入入口同时支持 `~/.ssh/config`、SSH 配置文本和外部 JSON；导入统一采用 main-process preview plan，renderer 不接收导入 secret。
 - Telnet（RFC 854 基础协商）和 Serial（Rust device handle）终端会话；Serial 设备枚举通过 `app_list_serial_ports` 和 `serial:ports-changed` 经 Tauri bridge 暴露，连接表单同时保留手动设备路径。Serial 的换行、Text/Hex 收发、本地回显、调制解调器控制、X/Y/ZMODEM、Kermit 文件传输和断线策略随 profile/会话边界处理；两者不进入 SFTP、CWD、sudo 或系统指标链路。
 - Serial 普通发送等待期间继续接收，复用同一流式解码、日志和终端输出路径；文件传输仍独占协议流。设备打开在 blocking worker 中执行，连接和测试连接共用 15 秒打开等待上限，取消或超时后的迟到句柄负责线路清理。连接列表和首页显示设备、波特率及帧格式摘要。

@@ -19,6 +19,9 @@ repo_root="$(cd -- "$script_dir/../../.." && pwd)"
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/fileterm-arch-packages.XXXXXX")"
 trap 'rm -rf "$work_dir"' EXIT
 mkdir -p "$output_dir"
+cp "$script_dir/verify-linux-icon-files.py" "$work_dir/verify-linux-icon-files.py"
+mkdir -p "$work_dir/src-tauri/icons"
+cp "$repo_root"/apps/tauri/src-tauri/icons/{32x32,128x128,128x128@2x}.png "$work_dir/src-tauri/icons/"
 
 for entry in "x86_64:x86_64" "arm64:aarch64"; do
   asset_arch="${entry%%:*}"
@@ -73,6 +76,7 @@ EOF
     exit 1
   fi
   cp "$repo_root/apps/tauri/packaging/arch/PKGBUILD" "$build_dir/PKGBUILD"
+  python3 "$script_dir/verify-linux-icon-files.py" "$build_dir/stage"
 done
 
 docker run --rm \
@@ -81,7 +85,7 @@ docker run --rm \
   --env "FILETERM_VERSION=$version" \
   archlinux:base-devel \
   bash -euc '
-    pacman -Syu --noconfirm --needed base-devel
+    pacman -Syu --noconfirm --needed base-devel python
     builder_uid="$(stat -c "%u" /work)"
     useradd --uid "$builder_uid" --user-group --create-home builder
 
@@ -99,6 +103,9 @@ docker run --rm \
           --noextract --nodeps --noconfirm --force
       package_file="$(find . -maxdepth 1 -type f -name "file-term-*.pkg.tar.zst" -print -quit)"
       test -n "$package_file"
+      mkdir verified-package
+      tar --zstd -xf "$package_file" -C verified-package
+      python3 /work/verify-linux-icon-files.py verified-package --icons-dir /work/src-tauri/icons
       cp "$package_file" "/work/FileTerm-${FILETERM_VERSION}-linux-${asset_arch}.pkg.tar.zst"
 
       pkginfo="$(tar --zstd -xOf "$package_file" .PKGINFO)"
