@@ -42,7 +42,7 @@ try {
       ['terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
       ['terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer']
     ])
-      await loadTypeScript(page, fileURLToPath(new URL(`components/${file}.ts`, source)), symbol)
+      await loadTypeScript(page, fileURLToPath(new URL(`xterm-adapters/${file}.ts`, source)), symbol)
 
     for (const family of ['JetBrains', 'Cascadia']) {
       for (const fontSize of [12, 13, 14, 24]) {

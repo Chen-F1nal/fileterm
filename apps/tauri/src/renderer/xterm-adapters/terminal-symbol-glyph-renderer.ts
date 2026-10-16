@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { isBoxDrawingGlyph } from './terminal-graphic-glyphs/box-drawing'
+import { isBoxDrawingGlyph } from './box-drawing'
 
 const SOURCE_CLASS = 'xterm-fitted-symbol-source'
 type SourceStyle = { width: string; spacing: string; text: string }
@@ -65,7 +65,14 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
         // Retina displays. Only tolerate floating-point measurement noise.
         return ink.left < -0.01 || ink.left + ink.width > cellWidth * cell.width + 0.01 ? ink : undefined
       })
-      if (!fits.some(Boolean)) continue
+      const hasSymbol = cells.some(
+        (cell) =>
+          /[\u0080-\u{10ffff}]/u.test(cell.text) &&
+          /[\p{Symbol}\p{Punctuation}]/u.test(cell.text) &&
+          !(cell.text.length === 1 && isBoxDrawingGlyph(cell.text.codePointAt(0)!))
+      )
+      // Fallback font advances can differ from xterm's repeated-glyph measurement even when ink fits.
+      if (!fits.some(Boolean) && !hasSymbol) continue
       updates.push(() => {
         sources.set(source, { width: source.style.width, spacing: source.style.letterSpacing, text })
         source.classList.add(SOURCE_CLASS)
@@ -79,6 +86,11 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
           // wrappers. Preserve the source's actual font weight in both wrappers.
           slot.style.fontWeight = 'inherit'
           const ink = fits[index]
+          // A selection starting in a wide cell's continuation must not paint over its ink.
+          if (ink || cell.width > 1) {
+            slot.style.position = 'relative'
+            slot.style.zIndex = '2'
+          }
           if (ink) {
             const glyph = row.ownerDocument.createElement('span')
             const available = cellWidth * cell.width

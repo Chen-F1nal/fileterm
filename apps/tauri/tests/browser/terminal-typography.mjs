@@ -10,7 +10,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const root = new URL('../../../../', import.meta.url)
 const source = new URL('../../src/renderer/', import.meta.url)
 const font = readFileSync(new URL('assets/fonts/text/jetbrains-mono/JetBrainsMono-400.ttf', source)).toString('base64')
-const css = readFileSync(new URL('components/terminal-view.css', source), 'utf8')
+const css = readFileSync(new URL('xterm-adapters/xterm-compat.css', source), 'utf8')
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 let reproduced = false
 try {

@@ -64,9 +64,6 @@ export function useTerminalLifecycle(options: TerminalLifecycleOptions) {
       runtime.lastSyncedSizeRef.current = null
       runtime.lastObservedHostRectRef.current = null
       runtime.isHorizontalResizeActiveRef.current = false
-      runtime.lastTerminalOutputAtRef.current = 0
-      runtime.awaitingCommandCompletionRef.current = false
-      runtime.pendingPromptResizeRef.current = false
       runtime.disposeCore()
     }
   }, [isMac, isWindowsPty])

@@ -15,7 +15,27 @@ const browser = await engine.launch({
   channel: process.env.PLAYWRIGHT_CHANNEL,
   executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH
 })
-const glyphs = ['⚠️', '⚠', '⚠︎', '•', '✅', '❌', '▢', '※', '⚠️•']
+const glyphs = [
+  '⚠️',
+  '⚠',
+  '⚠︎',
+  '•',
+  '✅',
+  '❌',
+  '▢',
+  '※',
+  '⚠️•',
+  '✔️',
+  '✖️',
+  '1️⃣',
+  '1⃣',
+  '🇨🇳',
+  '🇨🇳🇺🇸',
+  '👍🏽',
+  '👩🏽‍🚀',
+  '👨‍👩‍👧‍👦'
+]
+const cellWidths = [2, 1, 1, 1, 2, 2, 1, 1, 3, 2, 2, 2, 2, 2, 4, 2, 2, 2]
 const inkBounds = (image, row) => {
   const cell = image.info.width / 32
   const height = image.info.height / glyphs.length
@@ -66,8 +86,13 @@ try {
     }
     await loadTypeScript(
       page,
-      fileURLToPath(new URL('components/terminal-symbol-glyph-renderer.ts', source)),
+      fileURLToPath(new URL('xterm-adapters/terminal-symbol-glyph-renderer.ts', source)),
       'registerTerminalSymbolGlyphRenderer'
+    )
+    await loadTypeScript(
+      page,
+      fileURLToPath(new URL('xterm-adapters/terminal-emoji-widths.ts', source)),
+      'registerTerminalEmojiWidths'
     )
     for (const fontFamily of ['"Test Mono", "Test CJK", monospace', '"Test CJK", monospace']) {
       for (const fontSize of [14, 24]) {
@@ -86,6 +111,7 @@ try {
               })
               terminal.loadAddon(new window.Unicode11Addon.Unicode11Addon())
               terminal.unicode.activeVersion = '11'
+              window.emojiWidths = window.registerTerminalEmojiWidths(terminal)
               terminal.open(document.getElementById('host'))
               window.terminal = terminal
               window.paint = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -138,6 +164,7 @@ try {
                 copied,
                 transforms,
                 nativeFits: nativeFits[index],
+                labelColumn,
                 labelError: Math.abs(
                   label.getBoundingClientRect().left - row.getBoundingClientRect().left - labelColumn * cellWidth
                 )
@@ -149,6 +176,7 @@ try {
             .raw()
             .toBuffer({ resolveWithObject: true })
           layout.forEach((row, index) => {
+            assert.equal(row.labelColumn, cellWidths[index] + 9, `${glyphs[index]} must occupy its Unicode cell width`)
             assert.equal(row.copied, glyphs[index], 'glyph fitting must retain exact variation selectors and copy text')
             assert.ok(row.labelError < 0.5, 'following text must stay on its buffer columns')
             for (const transform of row.transforms) {
@@ -159,7 +187,8 @@ try {
               )
               assert.ok(transform.x <= 1, 'fitting must never enlarge glyphs')
             }
-            if (index === glyphs.length - 1) return // adjacent symbols are checked separately above
+            // Each cell is fitted independently; a multi-cell string has no single scale factor.
+            if ([...new Intl.Segmenter().segment(glyphs[index])].length !== 1) return
             const natural = inkBounds(before, index)
             const fitted = inkBounds(after, index)
             // Allow two device pixels for rasterization of a rescaled outline.
@@ -179,7 +208,10 @@ try {
           console.log(
             JSON.stringify({ scale, fontFamily, fontSize, bold, naturalProportions: true, columnsAndCopy: true })
           )
-          await page.evaluate(() => window.terminal.dispose())
+          await page.evaluate(() => {
+            window.emojiWidths.dispose()
+            window.terminal.dispose()
+          })
         }
       }
     }

@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url)
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const sharp = require(process.env.SHARP_MODULE_PATH || 'sharp')
 const root = new URL('../../../../', import.meta.url)
-const source = new URL('../../src/renderer/components/', import.meta.url)
+const source = new URL('../../src/renderer/xterm-adapters/', import.meta.url)
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
 const browser = await engine.launch({
   headless: true,
@@ -22,7 +22,7 @@ try {
     const page = await browser.newPage({ deviceScaleFactor: scale })
     await page.setContent('<div class="terminal-host" id="host"></div>')
     await page.addStyleTag({ path: fileURLToPath(new URL('node_modules/@xterm/xterm/css/xterm.css', root)) })
-    await page.addStyleTag({ content: readFileSync(new URL('terminal-view.css', source), 'utf8') })
+    await page.addStyleTag({ content: readFileSync(new URL('xterm-compat.css', source), 'utf8') })
     const font = readFileSync(
       process.env.TERMINAL_TEST_FONT_PATH ||
         new URL('../assets/fonts/text/jetbrains-mono/JetBrainsMono-400.ttf', source)

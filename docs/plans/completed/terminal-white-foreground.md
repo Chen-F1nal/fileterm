@@ -15,7 +15,7 @@
 ## 实现边界
 
 - `packages/core`：修正内置亮色 ANSI white/brightWhite 为 `#374151` / `#111827`，经现有主题变量链传给 xterm。不修改暗色默认值、导入主题或自定义 ANSI 配置。
-- `renderer/app/terminal-foreground-adapter.ts`：xterm 解析后，只将默认背景、非反色 cell 上的 RGB 纯白前景改为默认前景模式。保留字符、宽度、粗体等样式；不动其他 RGB 色、显式背景配对、反色模式、远端输出、原始 transcript、日志或 parser 的当前 SGR 属性。
+- `renderer/xterm-adapters/terminal-foreground-adapter.ts`：xterm 解析后，只将默认背景、非反色 cell 上的 RGB 纯白前景改为默认前景模式。保留字符、宽度、粗体等样式；不动其他 RGB 色、显式背景配对、反色模式、远端输出、原始 transcript、日志或 parser 的当前 SGR 属性。
 - `terminal-lifecycle-core.ts`：注册/释放适配器。适配正常/备用屏幕、写入、滚动、resize 与切换 buffer；只扫描可见行，历史行在滚入视口时适配。切换主题后现有文字由 xterm 默认前景自动更新。
 - 不改变 Rust command/event、bridge、PTY、终端输入或 React state；行为适用于所有平台。
 

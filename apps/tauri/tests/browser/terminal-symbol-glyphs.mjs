@@ -23,7 +23,7 @@ try {
       const page = await browser.newPage({ deviceScaleFactor: scale })
       await page.setContent('<div class="terminal-host" id="host"></div>')
       await page.addStyleTag({ path: fileURLToPath(new URL('node_modules/@xterm/xterm/css/xterm.css', root)) })
-      await page.addStyleTag({ path: fileURLToPath(new URL('components/terminal-view.css', source)) })
+      await page.addStyleTag({ path: fileURLToPath(new URL('xterm-adapters/xterm-compat.css', source)) })
       for (const [family, path, weight] of [
         [
           'Test Mono',
@@ -56,7 +56,7 @@ try {
         ['terminal-symbol-glyph-renderer.ts', 'registerTerminalSymbolGlyphRenderer'],
         ['terminal-selection-renderer.ts', 'registerTerminalSelectionRenderer']
       ]) {
-        await loadTypeScript(page, fileURLToPath(new URL(`components/${file}`, source)), symbol)
+        await loadTypeScript(page, fileURLToPath(new URL(`xterm-adapters/${file}`, source)), symbol)
       }
       for (const fixed of [false, true]) {
         await page.evaluate(

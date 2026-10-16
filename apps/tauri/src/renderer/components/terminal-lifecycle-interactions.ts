@@ -1,12 +1,12 @@
+import { forwardRetargetedTerminalWheel, type PinchGestureEvent } from '../xterm-adapters/terminal-wheel-compat'
+import { getVimVisualSelection } from '../xterm-adapters/terminal-vim-selection'
 import { APP_EVENT, onAppEvent } from '../lib/app-events'
 import {
   describeTerminalInput,
-  getVimVisualSelection,
   isTerminalClipboardShortcut,
   logTerminalClipboard,
   logTerminalRender,
   logTerminalZoom,
-  PinchGestureEvent,
   TERMINAL_GESTURE_ZOOM_THRESHOLD,
   TERMINAL_WHEEL_ZOOM_THRESHOLD
 } from './terminal-view-utils'
@@ -233,35 +233,13 @@ export function registerTerminalInteractionHandlers(
     })
     return true
   }
-  const forwardRetargetedTerminalWheel = (event: WheelEvent) => {
+  const forwardTerminalWheelIfNeeded = (event: WheelEvent) => {
     if (!isActiveRef.current || isEventInsideTerminal(event)) {
       return false
     }
-    // WebView2/WebKitGTK can retarget a compositor wheel to the document
-    // root. Re-dispatch it on xterm so xterm keeps the protocol decision:
-    // normal-buffer scrollback, alternate-screen cursor-key fallback, or
-    // application mouse reporting.
-    const element = terminal.element
-    if (!element) {
+    if (!forwardRetargetedTerminalWheel(terminal, event)) {
       return false
     }
-    const forwardedEvent = new WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      clientX: event.clientX,
-      clientY: event.clientY,
-      ctrlKey: event.ctrlKey,
-      deltaMode: event.deltaMode,
-      deltaX: event.deltaX,
-      deltaY: event.deltaY,
-      deltaZ: event.deltaZ,
-      altKey: event.altKey,
-      metaKey: event.metaKey,
-      screenX: event.screenX,
-      screenY: event.screenY,
-      shiftKey: event.shiftKey
-    })
-    element.dispatchEvent(forwardedEvent)
     logTerminalRender(terminal, 'retargeted-wheel-forwarded', {
       bufferType: terminal.buffer.active.type,
       mouseTrackingMode: terminal.modes.mouseTrackingMode,
@@ -274,7 +252,7 @@ export function registerTerminalInteractionHandlers(
     if (!matchesTerminal) {
       return
     }
-    if (!consumeTerminalWheelZoom(event, 'window') && !forwardRetargetedTerminalWheel(event)) {
+    if (!consumeTerminalWheelZoom(event, 'window') && !forwardTerminalWheelIfNeeded(event)) {
       return
     }
     event.preventDefault()

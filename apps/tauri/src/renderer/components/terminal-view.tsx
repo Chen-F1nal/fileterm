@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import '@xterm/xterm/css/xterm.css'
-import './terminal-view.css'
+import '../xterm-adapters/xterm-compat.css'
 import { VerticalScrollbar } from '../features/common/vertical-scrollbar'
 import { SerialToolbar } from '../features/serial/serial-toolbar'
 import { TerminalContextMenu } from './terminal-context-menu'

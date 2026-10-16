@@ -83,12 +83,14 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
   - DOM 渲染的颜色对比缓存每组最多 8,192 个颜色对，字符宽度缓存最多 16,384 项；仅淘汰可重新计算的结果，保留字体校准、ASCII 快表和历史内容。适配器按终端创建/销毁，私有缓存结构受 xterm 版本回归约束。
   - 同一 WebView 文档内，字体、字号、字重/斜体、字体特性、语言、字距和 DPI 等测量环境一致的终端，复用实际测得的字符宽度。共享测量结果总计最多 32,768 项，超过 64 个 UTF-16 单元的字符组合不进入共享缓存；字体加载/失败和校准失效时清空结果，最后一个终端销毁时移除字体监听器并释放共享状态。
   - 相同主题与日志颜色不重复失效缓存或扫描历史；文件面板的吸附观察仅覆盖 shell 与侧栏，不订阅终端子树重绘。
-  - 符号防遮挡只依据字体实际笔画边界，忽略 advance 与两侧留白；越界时先平移，笔画本身超宽才等比缩小，保持形状、缓冲区列宽与原始复制文本。
+  - 符号显示槽严格采用 buffer 列宽，避免 fallback 字体实际 advance 与重复字形测量不同而推偏表格；不把 `✻`、`※` 等单列字符扩大为双列。笔画越界时先平移，确实超宽才等比缩小；双列 emoji 的笔画位于选区背景上方，避免从延续格开始选择时被遮住。保留 buffer 列宽与原始复制文本。
   - `terminal-block-glyph-renderer.ts` 将块字符和连续横线 `─`、`━`、`═` 按字符格几何绘入逐行设备像素位图，复用实时 palette 与选区前景，避免字体边缘和 ANSI span 接缝造成断线或粗细变化。
   - 图形适配器先筛选需要处理的行，再读取布局；普通文本不触发符号/块字符几何测量。行数缩小时移除越界位图，图形变为普通文字时仍清理旧画布。
-- `apps/tauri/src/renderer/app/terminal-log-colorizer.ts`
+- `apps/tauri/src/renderer/xterm-adapters/`
+  - 归集 xterm 的私有 API、DOM 渲染、Unicode/emoji、输入法、回包过滤、Vim 选区、字体缓存和 WebView 兼容实现；目录 README 说明模块职责与注册时机。组件层负责生命周期、应用快捷键、会话守卫和 PTY resize 编排。共享字体观察器保留在 `app/font-metrics.ts`，xterm 专用的字体栈脉冲在适配目录内完成。
+- `apps/tauri/src/renderer/xterm-adapters/terminal-log-colorizer.ts`
   - 在 xterm 完成解析后对普通缓冲区的时间戳、服务名和常见日志级别着色；不向远端输出注入 ANSI，不处理 `top`、`vim`、`less` 等备用屏幕程序，并随终端主题重新套用颜色。
-- `apps/tauri/src/renderer/app/terminal-foreground-adapter.ts`
+- `apps/tauri/src/renderer/xterm-adapters/terminal-foreground-adapter.ts`
   - 让正常/备用屏幕默认背景上的 RGB 纯白文字使用主题默认前景，保留样式与显式背景/反色配对；只适配可见 xterm cell，不改写协议数据或原始 transcript。
 - `apps/tauri/src/renderer/app/action-text-color.ts`
   - 主题 runtime 根据主按钮/危险按钮背景（透明色先合成 panel surface）选择更易读的白色或深色文字，经参考值和语义变量传入组件。
