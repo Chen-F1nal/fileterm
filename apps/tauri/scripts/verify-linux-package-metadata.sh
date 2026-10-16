@@ -109,9 +109,23 @@ trap 'rm -rf "$appimage_verify_root"' EXIT
 dpkg-deb --extract "$deb_file" "$appimage_verify_root/deb"
 mkdir -p "$appimage_verify_root/rpm"
 rpm_file="$(cd "$(dirname "$rpm_file")" && pwd)/$(basename "$rpm_file")"
+rpm_cpio="$appimage_verify_root/package.rpm.cpio"
+rpm2cpio_status=0
+rpm2cpio "$rpm_file" > "$rpm_cpio" || rpm2cpio_status=$?
+if [[ ! -s "$rpm_cpio" ]]; then
+  echo "RPM payload extraction produced no CPIO data (rpm2cpio exit $rpm2cpio_status)." >&2
+  exit 1
+fi
+if ! cpio -it --quiet < "$rpm_cpio" >/dev/null; then
+  echo "RPM payload is not a complete, readable CPIO archive (rpm2cpio exit $rpm2cpio_status)." >&2
+  exit 1
+fi
+if [[ "$rpm2cpio_status" -ne 0 ]]; then
+  echo "rpm2cpio returned $rpm2cpio_status after producing a complete CPIO archive; validating extracted package files."
+fi
 (
   cd "$appimage_verify_root/rpm"
-  rpm2cpio "$rpm_file" | cpio -id --quiet
+  cpio -id --quiet < "$rpm_cpio"
 )
 python3 "$script_dir/verify-linux-icon-files.py" "$appimage_verify_root/deb"
 python3 "$script_dir/verify-linux-icon-files.py" "$appimage_verify_root/rpm"
