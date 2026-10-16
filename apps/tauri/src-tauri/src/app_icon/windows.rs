@@ -32,23 +32,30 @@ static SHORTCUT_ICON_REFRESH_REQUEST: AtomicU64 = AtomicU64::new(0);
 static SHORTCUT_ICON_REFRESH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 thread_local! {
-    // WM_SETICON borrows HICONs. Keep the three shared variants alive on the UI
-    // thread, including when windows close or switch away from a variant.
-    static ICONS: Result<[Owned<HICON>; 3], String> = load_icons();
+    // WM_SETICON borrows HICONs. Keep both native sizes for all variants alive
+    // on the UI thread, including when windows close or switch variants.
+    static ICONS: Result<[[Owned<HICON>; 2]; 3], String> = load_icons();
 }
 
-fn load_icons() -> Result<[Owned<HICON>; 3], String> {
-    fn load(variant: &str) -> Result<Owned<HICON>, String> {
-        let bytes = super::tray_icon_bytes(variant);
-        // These 256px RGBA PNGs are also valid Windows icon resource payloads.
-        // Use Windows-sized assets instead of a 1024px Dock bitmap.
+fn load_icons() -> Result<[[Owned<HICON>; 2]; 3], String> {
+    fn load(bytes: &[u8], size: i32) -> Result<Owned<HICON>, String> {
         let icon = unsafe {
-            CreateIconFromResourceEx(bytes, true, 0x0003_0000, 256, 256, LR_DEFAULTCOLOR)
+            CreateIconFromResourceEx(bytes, true, 0x0003_0000, size, size, LR_DEFAULTCOLOR)
         }
         .map_err(|error| error.to_string())?;
         Ok(unsafe { Owned::new(icon) })
     }
-    Ok([load("classic")?, load("material")?, load("clean")?])
+    fn load_variant(variant: &str) -> Result<[Owned<HICON>; 2], String> {
+        Ok([
+            load(super::tray_icon_bytes(variant), 32)?,
+            load(super::platform_icon_bytes(variant, 256), 256)?,
+        ])
+    }
+    Ok([
+        load_variant("classic")?,
+        load_variant("material")?,
+        load_variant("clean")?,
+    ])
 }
 
 fn apply_window_icon(hwnd: HWND, variant: &str) -> Result<(), String> {
@@ -59,14 +66,15 @@ fn apply_window_icon(hwnd: HWND, variant: &str) -> Result<(), String> {
     };
     ICONS.with(|icons| {
         let icons = icons.as_ref().map_err(Clone::clone)?;
+        let [small_icon, big_icon] = &icons[index];
         // The taskbar may use the window-class icon when its button was
-        // created from a pinned shortcut. Update both class defaults as well
-        // as the per-window handles so all Shell entry points see the choice.
+        // created from a pinned shortcut. Keep each native size available to
+        // Shell entry points instead of scaling one bitmap for every surface.
         unsafe {
-            SetClassLongPtrW(hwnd, GCLP_HICON, icons[index].0 as isize);
-            SetClassLongPtrW(hwnd, GCLP_HICONSM, icons[index].0 as isize);
+            SetClassLongPtrW(hwnd, GCLP_HICON, big_icon.0 as isize);
+            SetClassLongPtrW(hwnd, GCLP_HICONSM, small_icon.0 as isize);
         }
-        for kind in [ICON_SMALL, ICON_BIG] {
+        for (kind, icon) in [(ICON_SMALL, small_icon), (ICON_BIG, big_icon)] {
             // Tauri's set_icon currently sends only ICON_SMALL on Windows.
             // Explicitly update ICON_BIG for the taskbar and Alt+Tab as well.
             unsafe {
@@ -74,7 +82,7 @@ fn apply_window_icon(hwnd: HWND, variant: &str) -> Result<(), String> {
                     hwnd,
                     WM_SETICON,
                     Some(WPARAM(kind as usize)),
-                    Some(LPARAM(icons[index].0 as isize)),
+                    Some(LPARAM(icon.0 as isize)),
                 );
             }
         }
@@ -155,25 +163,11 @@ fn refresh_shortcut_icons_now(app: &AppHandle, variant: &str) -> Result<(), Stri
 }
 
 fn shell_icon_bytes(variant: &str) -> Vec<u8> {
-    if variant != "material" && variant != "clean" {
-        return include_bytes!("../../icons/icon.ico").to_vec();
+    match variant {
+        "material" => include_bytes!("../../icons/app-platform/windows-material.ico").to_vec(),
+        "clean" => include_bytes!("../../icons/app-platform/windows-clean.ico").to_vec(),
+        _ => include_bytes!("../../icons/icon.ico").to_vec(),
     }
-
-    // Windows accepts PNG-compressed images inside an ICO file. The existing
-    // 256px RGBA assets keep the full artwork while avoiding an image encoder
-    // in the startup path.
-    let png = super::tray_icon_bytes(variant);
-    let mut ico = Vec::with_capacity(22 + png.len());
-    ico.extend_from_slice(&0u16.to_le_bytes());
-    ico.extend_from_slice(&1u16.to_le_bytes());
-    ico.extend_from_slice(&1u16.to_le_bytes());
-    ico.extend_from_slice(&[0, 0, 0, 0]); // 256 x 256, true color
-    ico.extend_from_slice(&1u16.to_le_bytes());
-    ico.extend_from_slice(&32u16.to_le_bytes());
-    ico.extend_from_slice(&(png.len() as u32).to_le_bytes());
-    ico.extend_from_slice(&22u32.to_le_bytes());
-    ico.extend_from_slice(png);
-    ico
 }
 
 fn shortcut_directories(app: &AppHandle) -> Vec<PathBuf> {
@@ -405,14 +399,16 @@ mod tests {
                 SendMessageW(hwnd, WM_GETICON, Some(WPARAM(kind as usize)), None).0
             };
             let big = get(ICON_BIG);
+            let small = get(ICON_SMALL);
             assert_ne!(big, 0);
-            assert_eq!(get(ICON_SMALL), big);
+            assert_ne!(small, 0);
+            assert_ne!(small, big);
             assert_eq!(unsafe { GetClassLongPtrW(hwnd, GCLP_HICON) }, big as usize);
             assert_eq!(
                 unsafe { GetClassLongPtrW(hwnd, GCLP_HICONSM) },
-                big as usize
+                small as usize
             );
-            handles.push(big);
+            handles.push((small, big));
         }
         assert_ne!(handles[0], handles[1]);
         assert_ne!(handles[1], handles[2]);
@@ -539,7 +535,31 @@ mod tests {
         ] {
             assert_eq!(&icon[0..2], &[0, 0]);
             assert_eq!(&icon[2..4], &[1, 0]);
-            assert_ne!(u16::from_le_bytes([icon[4], icon[5]]), 0);
+            let frame_count = u16::from_le_bytes([icon[4], icon[5]]);
+            assert_eq!(frame_count, 9);
+            let frame_sizes = (0..frame_count)
+                .map(|index| {
+                    let offset = 6 + usize::from(index) * 16;
+                    let width = if icon[offset] == 0 {
+                        256
+                    } else {
+                        u32::from(icon[offset])
+                    };
+                    let height = if icon[offset + 1] == 0 {
+                        256
+                    } else {
+                        u32::from(icon[offset + 1])
+                    };
+                    (width, height)
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                frame_sizes,
+                [16, 20, 24, 32, 40, 48, 64, 128, 256]
+                    .into_iter()
+                    .map(|size| (size, size))
+                    .collect::<Vec<_>>()
+            );
             let icon_path = temp_dir.join(format!("{variant}.ico"));
             fs::write(&icon_path, icon).unwrap();
             let icon_name = HSTRING::from(icon_path.to_string_lossy().as_ref());
@@ -555,8 +575,6 @@ mod tests {
         assert_ne!(classic, material);
         assert_ne!(material, clean);
         assert_ne!(classic, clean);
-        assert_eq!(&material[22..], super::super::tray_icon_bytes("material"));
-        assert_eq!(&clean[22..], super::super::tray_icon_bytes("clean"));
         fs::remove_dir_all(&temp_dir).unwrap();
     }
 }

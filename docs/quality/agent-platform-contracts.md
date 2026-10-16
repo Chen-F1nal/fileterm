@@ -4,7 +4,7 @@
 
 ### 平台兼容边界
 
-- **macOS 应用图标**：Finder、Launchpad 和 DMG 使用 `fileterm-macos-1024.png` 生成的经典银边 `icon.icns`，1024×1024 画布保留约 100px 透明安全边距。运行中的 Dock 图标由已保存的选择更新；退出后由 `NSDockTilePlugIn` 继续显示同一选择，插件使用独立的 FileTerm 偏好域监听变化。`setDockTile:` 必须直接赋值 backing ivar，不能通过同名 property setter 递归调用自身。Windows/Linux/WebView 继续使用各自资源。macOS 菜单栏托盘仍使用独立的黑色单色透明 Template 图标，不能用 `icon.icns` 代替。
+- **平台应用图标**：macOS Dock、Finder、Launchpad 和 DMG 使用经典银边 `icon.icns` 及 `dock-*.png`，保留约 9.8% 的透明安全边距。Windows/Linux 的窗口、快捷方式、桌面启动器与图标设置预览必须使用裁掉该边距的满版平台资源，不能复用缩小后的 Dock 图。Windows 快捷方式使用包含 16–256px 图层的多尺寸 ICO，窗口分别设置 32px 小图标与 256px 大图标，通知区使用专用 32px RGBA PNG。Linux 窗口/启动器使用 512px PNG，包内 `32x32.png`、`128x128.png`、`128x128@2x.png` 与 Linux tray 使用满版 8-bit RGBA 图。修改这些资源时运行 `apps/tauri/scripts/generate-platform-app-icons.py`，macOS `icon.icns` 与 Dock 图不得被该脚本修改。macOS 菜单栏托盘仍使用独立的黑色单色透明 Template 图标，不能用 `icon.icns` 代替。
 - **macOS 菜单栏图标可见性**：设置中的显隐偏好持久化在 UI preferences，默认显示；隐藏仅移除菜单栏图标，Dock Reopen 仍须恢复主窗口。
 - **Linux tray 图标像素格式**：Linux tray 只能使用本地 8-bit RGBA 位图；`tauri.release.linux.conf.json` / `tauri.linux.conf.json` 引用的 `32x32.png`、`128x128.png`、`128x128@2x.png` 必须保持 8-bit RGBA。严禁把 Tauri 根据 bundle 首张 PNG 生成的 `default_window_icon()` 直接传给 Linux tray，避免 16-bit PNG 的原始缓冲触发 `wrong data size` 启动失败。
 - **CWD 目录跟随**：终端工作目录 (CWD) 变化通过底层会话流安全捕获，经 runtime 广播同步给文件管理器，严禁 UI 层轮询或直接探测平台路径。

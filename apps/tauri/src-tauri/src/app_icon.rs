@@ -9,8 +9,33 @@ mod linux;
 #[cfg(target_os = "windows")]
 mod windows;
 
-#[cfg(any(target_os = "linux", target_os = "macos", test))]
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn icon_bytes(variant: &str) -> &'static [u8] {
+    platform_icon_bytes(variant, 512)
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux", test))]
+pub(crate) fn platform_icon_bytes(variant: &str, size: u16) -> &'static [u8] {
+    match variant {
+        "material" if size == 256 => {
+            include_bytes!("../../src/renderer/assets/app-icons/platform/material-256.png")
+        }
+        "clean" if size == 256 => {
+            include_bytes!("../../src/renderer/assets/app-icons/platform/clean-256.png")
+        }
+        "material" => {
+            include_bytes!("../../src/renderer/assets/app-icons/platform/material-512.png")
+        }
+        "clean" => include_bytes!("../../src/renderer/assets/app-icons/platform/clean-512.png"),
+        _ if size == 256 => {
+            include_bytes!("../../src/renderer/assets/app-icons/platform/classic-256.png")
+        }
+        _ => include_bytes!("../../src/renderer/assets/app-icons/platform/classic-512.png"),
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn macos_icon_bytes(variant: &str) -> &'static [u8] {
     match variant {
         "material" => include_bytes!("../../src/renderer/assets/app-icons/dock-material.png"),
         "clean" => include_bytes!("../../src/renderer/assets/app-icons/dock-clean.png"),
@@ -50,9 +75,9 @@ fn tray_icon_bytes(variant: &str) -> &'static [u8] {
 #[cfg(target_os = "windows")]
 fn tray_icon_bytes(variant: &str) -> &'static [u8] {
     match variant {
-        "material" => include_bytes!("../icons/app-tray/tray-windows-material-256.png"),
-        "clean" => include_bytes!("../icons/app-tray/tray-windows-clean-256.png"),
-        _ => include_bytes!("../icons/app-tray/tray-windows-classic-256.png"),
+        "material" => include_bytes!("../icons/app-tray/tray-windows-material-32.png"),
+        "clean" => include_bytes!("../icons/app-tray/tray-windows-clean-32.png"),
+        _ => include_bytes!("../icons/app-tray/tray-windows-classic-32.png"),
     }
 }
 
@@ -88,7 +113,30 @@ pub fn set_app_icon(app: &AppHandle, variant: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::icon_bytes;
+    use super::platform_icon_bytes;
+
+    fn assert_icon_fills_canvas(bytes: &[u8], size: u32) {
+        let icon = tauri::image::Image::from_bytes(bytes).unwrap();
+        assert_eq!(icon.width(), size);
+        assert_eq!(icon.height(), size);
+
+        let mut bounds = [size, size, 0, 0];
+        for y in 0..size {
+            for x in 0..size {
+                let alpha = icon.rgba()[((y * size + x) * 4 + 3) as usize];
+                if alpha > 0 {
+                    bounds[0] = bounds[0].min(x);
+                    bounds[1] = bounds[1].min(y);
+                    bounds[2] = bounds[2].max(x);
+                    bounds[3] = bounds[3].max(y);
+                }
+            }
+        }
+        assert!(
+            bounds[0] <= 1 && bounds[1] <= 1 && bounds[2] >= size - 2 && bounds[3] >= size - 2,
+            "icon artwork should fill its platform canvas, got alpha bounds {bounds:?} for {size}px"
+        );
+    }
 
     #[test]
     fn linux_static_icons_include_the_classic_silver_rim() {
@@ -99,7 +147,8 @@ mod tests {
             &include_bytes!("../icons/icon.png")[..],
         ] {
             let icon = tauri::image::Image::from_bytes(bytes).unwrap();
-            let offset = ((icon.height() / 9 * icon.width() + icon.width() / 2) * 4) as usize;
+            assert_icon_fills_canvas(bytes, icon.width());
+            let offset = ((icon.height() / 64 * icon.width() + icon.width() / 2) * 4) as usize;
             let rim = &icon.rgba()[offset..offset + 4];
             assert!(
                 rim[0] > 100 && rim[1] > 100 && rim[2] > 100 && rim[3] > 200,
@@ -113,7 +162,7 @@ mod tests {
     fn windows_packaged_icon_matches_classic_runtime_icon() {
         let packaged =
             tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico")).unwrap();
-        let classic = super::tray_icon_image("classic").unwrap();
+        let classic = tauri::image::Image::from_bytes(platform_icon_bytes("classic", 256)).unwrap();
         assert_eq!(packaged.width(), classic.width());
         assert_eq!(packaged.height(), classic.height());
         assert_eq!(packaged.rgba(), classic.rgba());
@@ -122,11 +171,13 @@ mod tests {
     #[test]
     fn each_app_icon_variant_is_an_rgba_png() {
         for variant in ["classic", "material", "clean"] {
-            let bytes = icon_bytes(variant);
+            let bytes = platform_icon_bytes(variant, 512);
             assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
             assert_eq!(&bytes[12..16], b"IHDR");
             assert_eq!(bytes[24], 8);
             assert_eq!(bytes[25], 6);
+            assert_icon_fills_canvas(bytes, 512);
+            assert_icon_fills_canvas(platform_icon_bytes(variant, 256), 256);
         }
     }
 
@@ -146,16 +197,16 @@ mod tests {
                 32,
             ),
             (
-                &include_bytes!("../icons/app-tray/tray-windows-classic-256.png")[..],
-                256,
+                &include_bytes!("../icons/app-tray/tray-windows-classic-32.png")[..],
+                32,
             ),
             (
-                &include_bytes!("../icons/app-tray/tray-windows-material-256.png")[..],
-                256,
+                &include_bytes!("../icons/app-tray/tray-windows-material-32.png")[..],
+                32,
             ),
             (
-                &include_bytes!("../icons/app-tray/tray-windows-clean-256.png")[..],
-                256,
+                &include_bytes!("../icons/app-tray/tray-windows-clean-32.png")[..],
+                32,
             ),
         ] {
             assert_eq!(&icon[..8], b"\x89PNG\r\n\x1a\n");
@@ -164,6 +215,7 @@ mod tests {
             assert_eq!(u32::from_be_bytes(icon[20..24].try_into().unwrap()), size);
             assert_eq!(icon[24], 8, "tray PNGs must use 8-bit channels");
             assert_eq!(icon[25], 6, "tray PNGs must use RGBA pixels");
+            assert_icon_fills_canvas(icon, size);
         }
     }
 }
