@@ -6,9 +6,9 @@ mod format;
 mod layer;
 mod level;
 mod panic;
-mod writer;
 #[cfg(target_os = "windows")]
 mod windows_performance;
+mod writer;
 
 pub use category::LogCategory;
 pub use level::LogLevel;
