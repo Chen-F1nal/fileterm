@@ -189,8 +189,8 @@ async fn upload_inner(app: &AppHandle, mode: webdav::UploadMode) -> Result<Value
     config.content_hash = Some(content_hash);
     write_config(app, &config)?;
     let message = match mode {
-        webdav::UploadMode::OverwriteCloud => "已用本地连接配置覆盖 S3 云端备份。",
-        webdav::UploadMode::MergeCloud => "已将本地连接配置合并到 S3 云端备份。",
+        webdav::UploadMode::OverwriteCloud => "已用本地连接配置和 SSH 密钥库覆盖 S3 云端备份。",
+        webdav::UploadMode::MergeCloud => "已将本地连接配置和 SSH 密钥库合并到 S3 云端备份。",
     };
     Ok(serde_json::json!({
         "action": "upload",
@@ -246,12 +246,14 @@ async fn download_inner(app: &AppHandle, mode: webdav::DownloadMode) -> Result<V
     write_config(app, &config)?;
     let action = match mode {
         webdav::DownloadMode::OverwriteLocal => format!(
-            "已用 S3 云端备份覆盖本地连接：导入 {} 个，替换 {} 个，跳过 {} 个无效项。",
-            summary.imported, summary.replaced, summary.skipped
+            "已用 S3 云端备份覆盖本地连接：导入 {} 个，替换 {} 个，跳过 {} 个无效项。SSH 密钥新增 {} 个，更新 {} 个。",
+            summary.imported, summary.replaced, summary.skipped,
+            summary.ssh_keys_imported, summary.ssh_keys_updated
         ),
         webdav::DownloadMode::MergeLocal => format!(
-            "已将 S3 云端备份合并到本地：新增 {} 个，更新 {} 个，跳过 {} 个无效项。",
-            summary.imported, summary.updated, summary.skipped
+            "已将 S3 云端备份合并到本地：新增 {} 个，更新 {} 个，跳过 {} 个无效项。SSH 密钥新增 {} 个，更新 {} 个。",
+            summary.imported, summary.updated, summary.skipped,
+            summary.ssh_keys_imported, summary.ssh_keys_updated
         ),
     };
     let message = if summary.legacy_plaintext {
@@ -270,6 +272,8 @@ async fn download_inner(app: &AppHandle, mode: webdav::DownloadMode) -> Result<V
         "updated": summary.updated,
         "replaced": summary.replaced,
         "skipped": summary.skipped,
+        "sshKeysImported": summary.ssh_keys_imported,
+        "sshKeysUpdated": summary.ssh_keys_updated,
         "legacyPlaintext": summary.legacy_plaintext,
     }))
 }
@@ -293,6 +297,11 @@ async fn download_payload(
         return Err(response_error("下载", response.status()));
     }
     let remote_etag = etag(response.headers());
-    let bytes = crate::services::webdav::read_bounded_bundle(response, MAX_BUNDLE_BYTES, "S3").await?;
+    let bytes = crate::services::webdav::read_bounded_bundle(
+        response,
+        webdav::MAX_BUNDLE_BYTES,
+        "S3",
+    )
+    .await?;
     Ok((bytes, remote_etag))
 }

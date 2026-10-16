@@ -94,7 +94,17 @@ struct EncryptedBundle {
 #[derive(Debug)]
 pub(crate) struct DecodedBundle {
     pub profiles: Vec<Value>,
+    pub ssh_keys: Option<Vec<Value>>,
     pub legacy_plaintext: bool,
+}
+
+impl Drop for DecodedBundle {
+    fn drop(&mut self) {
+        zeroize_values(&mut self.profiles);
+        if let Some(ssh_keys) = &mut self.ssh_keys {
+            zeroize_values(ssh_keys);
+        }
+    }
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -245,21 +255,62 @@ fn derive_key(
     }
 }
 
-fn extract_profiles(value: Value) -> Result<Vec<Value>, BackupCryptoError> {
+fn extract_bundle(value: Value) -> Result<(Vec<Value>, Option<Vec<Value>>), BackupCryptoError> {
     match value {
-        Value::Array(items) => Ok(items),
-        Value::Object(object) => object
-            .get("profiles")
-            .and_then(Value::as_array)
-            .cloned()
-            .ok_or(BackupCryptoError::InvalidBundle),
-        _ => Err(BackupCryptoError::InvalidBundle),
+        Value::Array(profiles) => Ok((profiles, None)),
+        Value::Object(mut object) => {
+            let mut profiles = match object.remove("profiles") {
+                Some(Value::Array(profiles)) => profiles,
+                Some(mut invalid) => {
+                    zeroize_json(&mut invalid);
+                    for value in object.values_mut() {
+                        zeroize_json(value);
+                    }
+                    return Err(BackupCryptoError::InvalidBundle);
+                }
+                None => {
+                    for value in object.values_mut() {
+                        zeroize_json(value);
+                    }
+                    return Err(BackupCryptoError::InvalidBundle);
+                }
+            };
+            let ssh_keys = match object.remove("sshKeys") {
+                Some(Value::Array(ssh_keys)) => Some(ssh_keys),
+                None => None,
+                Some(mut invalid) => {
+                    zeroize_json(&mut invalid);
+                    zeroize_values(&mut profiles);
+                    for value in object.values_mut() {
+                        zeroize_json(value);
+                    }
+                    return Err(BackupCryptoError::InvalidBundle);
+                }
+            };
+            for value in object.values_mut() {
+                zeroize_json(value);
+            }
+            Ok((profiles, ssh_keys))
+        }
+        mut value => {
+            zeroize_json(&mut value);
+            Err(BackupCryptoError::InvalidBundle)
+        }
     }
 }
 
-fn decode_legacy(value: Value) -> Result<DecodedBundle, BackupCryptoError> {
-    let profiles = extract_profiles(value.clone())?;
-    if let Some(expected_hash) = value.get("contentHash").and_then(Value::as_str) {
+fn decode_legacy(mut value: Value) -> Result<DecodedBundle, BackupCryptoError> {
+    // Private keys are only accepted from password-encrypted bundles.
+    if value.get("sshKeys").is_some() {
+        zeroize_json(&mut value);
+        return Err(BackupCryptoError::InvalidBundle);
+    }
+    let expected_hash = value
+        .get("contentHash")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let (profiles, _) = extract_bundle(value)?;
+    if let Some(expected_hash) = expected_hash {
         let canonical =
             serde_json::to_vec(&profiles).map_err(|_| BackupCryptoError::InvalidBundle)?;
         if sha256_hex(&canonical) != expected_hash {
@@ -268,6 +319,7 @@ fn decode_legacy(value: Value) -> Result<DecodedBundle, BackupCryptoError> {
     }
     Ok(DecodedBundle {
         profiles,
+        ssh_keys: None,
         legacy_plaintext: true,
     })
 }
@@ -311,63 +363,100 @@ fn decrypt_v3(
     let plaintext = Zeroizing::new(plaintext);
     let value: Value = serde_json::from_slice(&plaintext)
         .map_err(|_| BackupCryptoError::InvalidPasswordOrBundle)?;
-    let profiles = extract_profiles(value)?;
+    let (profiles, ssh_keys) = extract_bundle(value)?;
     Ok(DecodedBundle {
         profiles,
+        ssh_keys,
         legacy_plaintext: false,
     })
 }
 
-pub(crate) fn encrypt_profiles(
-    profiles: &[Value],
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupPayload<'a> {
+    profiles: &'a [Value],
+    ssh_keys: &'a [Value],
+}
+
+pub(crate) fn encrypt_bundle(
+    mut profiles: Vec<Value>,
+    mut ssh_keys: Vec<Value>,
     password: &str,
     generated_at: &str,
 ) -> Result<(Vec<u8>, String), BackupCryptoError> {
-    validate_password(password)?;
-    let salt = random_bytes::<SALT_BYTES>();
-    let nonce = random_bytes::<NONCE_BYTES>();
-    let metadata = EncryptionMetadata {
-        algorithm: "AES-256-GCM".to_string(),
-        kdf: "Argon2id".to_string(),
-        version: Some("0x13".to_string()),
-        memory_kib: Some(ARGON2_MEMORY_KIB),
-        iterations: ARGON2_ITERATIONS,
-        parallelism: Some(ARGON2_PARALLELISM),
-        salt: URL_SAFE_NO_PAD.encode(salt),
-        nonce: URL_SAFE_NO_PAD.encode(nonce),
-    };
-    let mut key = derive_argon2_key(password, &metadata, &salt)?;
-    let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|_| BackupCryptoError::EncryptionFailed)?;
-    key.zeroize();
-    let plaintext =
-        serde_json::to_vec(profiles).map_err(|_| BackupCryptoError::EncryptionFailed)?;
-    let metadata_aad = aad(&metadata, generated_at);
-    let nonce = Nonce::<U12>::try_from(nonce.as_slice())
-        .map_err(|_| BackupCryptoError::EncryptionFailed)?;
-    let plaintext = Zeroizing::new(plaintext);
-    let ciphertext = cipher
-        .encrypt(
-            &nonce,
-            Payload {
-                msg: &plaintext,
-                aad: &metadata_aad,
-            },
-        )
-        .map_err(|_| BackupCryptoError::EncryptionFailed)?;
-    let content_hash = sha256_hex(&ciphertext);
-    let envelope = serde_json::json!({
-        "schemaVersion": SCHEMA_VERSION,
-        "containsSecrets": true,
-        "generatedAt": generated_at,
-        "encryption": metadata,
-        "ciphertext": URL_SAFE_NO_PAD.encode(&ciphertext),
-        "contentHash": content_hash,
-    });
-    let bytes =
-        serde_json::to_vec_pretty(&envelope).map_err(|_| BackupCryptoError::EncryptionFailed)?;
-    let bundle_hash = sha256_hex(&bytes);
-    Ok((bytes, bundle_hash))
+    let result = (|| {
+        validate_password(password)?;
+        let salt = random_bytes::<SALT_BYTES>();
+        let nonce = random_bytes::<NONCE_BYTES>();
+        let metadata = EncryptionMetadata {
+            algorithm: "AES-256-GCM".to_string(),
+            kdf: "Argon2id".to_string(),
+            version: Some("0x13".to_string()),
+            memory_kib: Some(ARGON2_MEMORY_KIB),
+            iterations: ARGON2_ITERATIONS,
+            parallelism: Some(ARGON2_PARALLELISM),
+            salt: URL_SAFE_NO_PAD.encode(salt),
+            nonce: URL_SAFE_NO_PAD.encode(nonce),
+        };
+        let mut key = derive_argon2_key(password, &metadata, &salt)?;
+        let cipher =
+            Aes256Gcm::new_from_slice(&key).map_err(|_| BackupCryptoError::EncryptionFailed)?;
+        key.zeroize();
+        let payload = BackupPayload {
+            profiles: &profiles,
+            ssh_keys: &ssh_keys,
+        };
+        let plaintext =
+            serde_json::to_vec(&payload).map_err(|_| BackupCryptoError::EncryptionFailed)?;
+        let plaintext = Zeroizing::new(plaintext);
+        let metadata_aad = aad(&metadata, generated_at);
+        let nonce = Nonce::<U12>::try_from(nonce.as_slice())
+            .map_err(|_| BackupCryptoError::EncryptionFailed)?;
+        let ciphertext = cipher
+            .encrypt(
+                &nonce,
+                Payload {
+                    msg: &plaintext,
+                    aad: &metadata_aad,
+                },
+            )
+            .map_err(|_| BackupCryptoError::EncryptionFailed)?;
+        let content_hash = sha256_hex(&ciphertext);
+        let envelope = serde_json::json!({
+            "schemaVersion": SCHEMA_VERSION,
+            "containsSecrets": true,
+            "generatedAt": generated_at,
+            "encryption": metadata,
+            "ciphertext": URL_SAFE_NO_PAD.encode(&ciphertext),
+            "contentHash": content_hash,
+        });
+        let bytes = serde_json::to_vec_pretty(&envelope)
+            .map_err(|_| BackupCryptoError::EncryptionFailed)?;
+        let bundle_hash = sha256_hex(&bytes);
+        Ok((bytes, bundle_hash))
+    })();
+    zeroize_values(&mut profiles);
+    zeroize_values(&mut ssh_keys);
+    result
+}
+
+pub(crate) fn zeroize_values(values: &mut [Value]) {
+    for value in values {
+        zeroize_json(value);
+    }
+}
+
+fn zeroize_json(value: &mut Value) {
+    match value {
+        Value::String(value) => value.zeroize(),
+        Value::Array(values) => zeroize_values(values),
+        Value::Object(values) => {
+            for value in values.values_mut() {
+                zeroize_json(value);
+            }
+        }
+        _ => {}
+    }
 }
 
 pub(crate) fn decode_bundle(
@@ -400,7 +489,7 @@ pub(crate) fn requires_password(bytes: &[u8]) -> Result<bool, BackupCryptoError>
 #[cfg(test)]
 mod tests {
     use super::{
-        aad, decode_bundle, derive_pbkdf2_key, encrypt_profiles, EncryptionMetadata,
+        aad, decode_bundle, derive_pbkdf2_key, encrypt_bundle, EncryptionMetadata,
         PBKDF2_DEFAULT_ITERATIONS, PBKDF2_MIN_ITERATIONS,
     };
     use aes_gcm::{aead::Aead, aead::KeyInit, aead::Payload, Aes256Gcm, Nonce};
@@ -408,7 +497,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn v3_round_trip_does_not_expose_profile_secrets() {
+    fn v3_round_trip_encrypts_profiles_and_ssh_keys() {
         let profiles = vec![json!({
             "name": "prod",
             "type": "ssh",
@@ -416,14 +505,27 @@ mod tests {
             "port": 22,
             "password": "super-secret-password"
         })];
-        let (bytes, _) = encrypt_profiles(&profiles, "Backup password 8", "now")
-            .expect("v3 encryption should succeed");
+        let ssh_keys = vec![json!({
+            "id": "key-1",
+            "privateKey": "private-key-content",
+            "passphrase": "ssh-key-passphrase"
+        })];
+        let (bytes, _) = encrypt_bundle(
+            profiles.clone(),
+            ssh_keys.clone(),
+            "Backup password 8",
+            "now",
+        )
+        .expect("v3 encryption should succeed");
         let raw = String::from_utf8(bytes.clone()).expect("envelope is json");
         assert!(raw.contains("\"schemaVersion\": 3"));
         assert!(!raw.contains("super-secret-password"));
+        assert!(!raw.contains("private-key-content"));
+        assert!(!raw.contains("ssh-key-passphrase"));
         let decoded = decode_bundle(&bytes, Some("Backup password 8")).expect("v3 should decrypt");
         assert!(!decoded.legacy_plaintext);
         assert_eq!(decoded.profiles, profiles);
+        assert_eq!(decoded.ssh_keys, Some(ssh_keys));
         let wrong_password = "Wrong password 8";
         assert!(decode_bundle(&bytes, Some(wrong_password)).is_err());
     }
@@ -447,6 +549,19 @@ mod tests {
         let decoded = decode_bundle(&bytes, None).expect("v2 should remain readable");
         assert!(decoded.legacy_plaintext);
         assert_eq!(decoded.profiles.len(), 1);
+        assert!(decoded.ssh_keys.is_none());
+    }
+
+    #[test]
+    fn rejects_unencrypted_bundles_that_contain_ssh_keys() {
+        let bytes = serde_json::to_vec(&json!({
+            "schemaVersion": 2,
+            "profiles": [],
+            "sshKeys": [{"privateKey": "private-key-content"}]
+        }))
+        .unwrap();
+
+        assert!(decode_bundle(&bytes, None).is_err());
     }
 
     #[test]
@@ -494,6 +609,7 @@ mod tests {
         let bytes = serde_json::to_vec(&envelope).unwrap();
         let decoded = decode_bundle(&bytes, Some(password)).unwrap();
         assert_eq!(decoded.profiles, profiles);
+        assert!(decoded.ssh_keys.is_none());
         assert!(!decoded.legacy_plaintext);
     }
 }

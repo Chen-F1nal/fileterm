@@ -34,15 +34,57 @@ pub(crate) fn export_bundle(
     password: &str,
 ) -> Result<(Vec<u8>, String), AppError> {
     let (profiles, _) = profile_ops::read_and_heal_profiles(app)?;
-    build_export_bundle(&profiles, password)
+    let ssh_keys = ssh_keys::export_for_backup(app)?;
+    build_export_bundle(profiles, ssh_keys, password)
 }
 
 pub(crate) fn build_export_bundle(
-    profiles: &[Value],
+    mut profiles: Vec<Value>,
+    mut ssh_keys: Vec<Value>,
     password: &str,
 ) -> Result<(Vec<u8>, String), AppError> {
-    backup_crypto::encrypt_profiles(profiles, password, &export_timestamp())
-        .map_err(|error| command_error(error.to_string()))
+    if let Err(error) = validate_profile_key_references(&profiles, &ssh_keys) {
+        backup_crypto::zeroize_values(&mut profiles);
+        backup_crypto::zeroize_values(&mut ssh_keys);
+        return Err(error);
+    }
+    let (bytes, hash) = backup_crypto::encrypt_bundle(
+        profiles,
+        ssh_keys,
+        password,
+        &export_timestamp(),
+    )
+    .map_err(|error| command_error(error.to_string()))?;
+    if bytes.len() > MAX_BUNDLE_BYTES {
+        return Err(command_error("加密备份包超过 16 MB 限制，已取消上传。"));
+    }
+    Ok((bytes, hash))
+}
+
+fn validate_profile_key_references(profiles: &[Value], ssh_keys: &[Value]) -> Result<(), AppError> {
+    let key_ids = ssh_keys
+        .iter()
+        .filter_map(|key| key.get("id").and_then(Value::as_str))
+        .collect::<std::collections::HashSet<_>>();
+    for profile in profiles {
+        let Some(key_id) = profile
+            .get("privateKeyId")
+            .and_then(Value::as_str)
+            .filter(|key_id| !key_id.is_empty())
+        else {
+            continue;
+        };
+        if !key_ids.contains(key_id) {
+            return Err(command_error(format!(
+                "连接“{}”引用的 SSH 私钥未包含在本机密钥库中，已取消备份。",
+                profile
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("未命名")
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn profile_fingerprint(profile: &Value) -> Option<(String, String, String, u64, String)> {
@@ -152,8 +194,8 @@ pub(crate) fn merge_bundle_with_local(
     let mut merged = Vec::new();
     let mut positions = std::collections::HashMap::new();
 
-    for profile in decoded.profiles {
-        let Ok(sanitized) = sanitize_import_profile(&profile) else {
+    for profile in &decoded.profiles {
+        let Ok(sanitized) = sanitize_import_profile(profile) else {
             continue;
         };
         let Some(fingerprint) = profile_fingerprint(&sanitized) else {
@@ -180,7 +222,9 @@ pub(crate) fn merge_bundle_with_local(
         }
     }
 
-    build_export_bundle(&merged, password)
+    let local_ssh_keys = ssh_keys::export_for_backup(app)?;
+    let merged_ssh_keys = ssh_keys::merge_for_upload(decoded.ssh_keys.as_deref(), local_ssh_keys)?;
+    build_export_bundle(merged, merged_ssh_keys, password)
 }
 
 fn parse_bundle(
@@ -216,6 +260,8 @@ pub(crate) struct ProfileImportSummary {
     pub updated: u64,
     pub replaced: u64,
     pub skipped: u64,
+    pub ssh_keys_imported: u64,
+    pub ssh_keys_updated: u64,
     pub legacy_plaintext: bool,
 }
 
@@ -230,7 +276,14 @@ pub(crate) fn import_bundle(
 ) -> Result<ProfileImportSummary, AppError> {
     let decoded = parse_bundle(bytes, password)?;
     let (existing, _) = profile_ops::read_and_heal_profiles(app)?;
-    let (profiles, mut skipped) = prepare_import_profiles(decoded.profiles, mode)?;
+    let (profiles, mut skipped) =
+        prepare_import_profiles(decoded.profiles.to_vec(), mode)?;
+    let key_summary = if let Some(ssh_keys) = decoded.ssh_keys.as_deref() {
+        validate_profile_key_references(&profiles, ssh_keys)?;
+        ssh_keys::restore_for_backup(app, ssh_keys)?
+    } else {
+        ssh_keys::SshKeyRestoreSummary::default()
+    };
 
     if mode == DownloadMode::OverwriteLocal {
         let replaced = existing.len() as u64;
@@ -260,6 +313,8 @@ pub(crate) fn import_bundle(
             updated: 0,
             replaced,
             skipped,
+            ssh_keys_imported: key_summary.imported,
+            ssh_keys_updated: key_summary.updated,
             legacy_plaintext: decoded.legacy_plaintext,
         });
     }
@@ -307,6 +362,8 @@ pub(crate) fn import_bundle(
         updated,
         replaced: 0,
         skipped,
+        ssh_keys_imported: key_summary.imported,
+        ssh_keys_updated: key_summary.updated,
         legacy_plaintext: decoded.legacy_plaintext,
     })
 }

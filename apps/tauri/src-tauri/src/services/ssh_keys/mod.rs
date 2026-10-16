@@ -6,12 +6,18 @@ use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::AppError;
 
+mod backup;
+pub(crate) use backup::{
+    export_for_backup, merge_for_upload, restore_for_backup, SshKeyRestoreSummary,
+};
+
 const MAX_PRIVATE_KEY_BYTES: u64 = 1024 * 1024;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoredSshKey {
     pub id: String,
@@ -40,6 +46,14 @@ struct StoredSshKeyIndex {
 struct StoredSshKeySecrets {
     version: u32,
     passphrases: HashMap<String, String>,
+}
+
+impl Drop for StoredSshKeySecrets {
+    fn drop(&mut self) {
+        for passphrase in self.passphrases.values_mut() {
+            passphrase.zeroize();
+        }
+    }
 }
 
 struct KeyPaths {
@@ -101,7 +115,7 @@ pub async fn select_file(app: &AppHandle) -> Result<Option<serde_json::Value>, A
     let usage = key_usage_counts(app)?;
     Ok(Some(serde_json::json!({
         "sourcePath": source_path.to_string_lossy(),
-        "fileName": inspected.name,
+        "fileName": inspected.name.clone(),
         "existingKey": existing.map(|key| metadata_value(key, *usage.get(&key.id).unwrap_or(&0))),
     })))
 }
@@ -142,10 +156,10 @@ pub fn import(
 
     let key = StoredSshKey {
         id: uuid::Uuid::new_v4().to_string(),
-        name: inspected.name,
+        name: inspected.name.clone(),
         note: Some(note),
-        algorithm: inspected.algorithm,
-        fingerprint: inspected.fingerprint,
+        algorithm: inspected.algorithm.clone(),
+        fingerprint: inspected.fingerprint.clone(),
         encrypted: inspected.encrypted,
         imported_at: now_millis(),
     };
@@ -217,7 +231,9 @@ pub fn delete(app: &AppHandle, key_id: &str) -> Result<(), AppError> {
     }
     write_index(&paths, &index)?;
     let mut secrets = read_secrets(&paths)?;
-    secrets.passphrases.remove(key_id);
+    if let Some(mut passphrase) = secrets.passphrases.remove(key_id) {
+        passphrase.zeroize();
+    }
     write_secrets(&paths, &secrets)
 }
 
@@ -250,6 +266,9 @@ pub fn set_passphrase(
         return Err(AppError::Command("SSH 密钥不存在。".to_string()));
     }
     let mut secrets = read_secrets(&paths)?;
+    if let Some(mut previous) = secrets.passphrases.remove(key_id) {
+        previous.zeroize();
+    }
     match passphrase.filter(|value| !value.is_empty()) {
         Some(value) => {
             secrets.passphrases.insert(key_id.to_string(), value);
@@ -320,6 +339,7 @@ fn read_secrets(paths: &KeyPaths) -> Result<StoredSshKeySecrets, AppError> {
             &format!("ssh-key/{key_id}/passphrase"),
             passphrase,
         )?;
+        passphrase.zeroize();
         *passphrase = value;
         migrated |= should_migrate;
     }
@@ -332,11 +352,13 @@ fn read_secrets(paths: &KeyPaths) -> Result<StoredSshKeySecrets, AppError> {
 fn write_secrets(paths: &KeyPaths, secrets: &StoredSshKeySecrets) -> Result<(), AppError> {
     let mut encrypted = secrets.clone();
     for (key_id, passphrase) in &mut encrypted.passphrases {
-        *passphrase = crate::services::secret_crypto::encrypt(
+        let ciphertext = crate::services::secret_crypto::encrypt(
             &paths.storage_root,
             &format!("ssh-key/{key_id}/passphrase"),
             passphrase,
         )?;
+        passphrase.zeroize();
+        *passphrase = ciphertext;
     }
     write_json_atomic(&paths.secrets_path, &encrypted)?;
     lock_down_file(&paths.secrets_path)
@@ -404,6 +426,12 @@ struct InspectedPrivateKey {
     encrypted: bool,
 }
 
+impl Drop for InspectedPrivateKey {
+    fn drop(&mut self) {
+        self.bytes.zeroize();
+    }
+}
+
 fn inspect_private_key(path: &Path) -> Result<InspectedPrivateKey, AppError> {
     let metadata = fs::metadata(path)
         .map_err(|error| AppError::Storage(format!("无法读取私钥文件: {error}")))?;
@@ -435,16 +463,20 @@ fn inspect_private_key_bytes(
     name: String,
     source_label: &str,
 ) -> Result<InspectedPrivateKey, AppError> {
+    let mut bytes = Zeroizing::new(bytes);
     if bytes.is_empty() || bytes.len() as u64 > MAX_PRIVATE_KEY_BYTES {
         return Err(AppError::Command(format!(
             "{source_label}为空、无效或超过 1 MB 限制。"
         )));
     }
-    let content = String::from_utf8(bytes.clone()).map_err(|_| {
-        AppError::Command(format!(
-            "无法识别该{source_label}，请输入文本格式的 SSH 私钥。"
-        ))
-    })?;
+    let content = String::from_utf8(bytes.to_vec())
+        .map(Zeroizing::new)
+        .map_err(|error| {
+            error.into_bytes().zeroize();
+            AppError::Command(format!(
+                "无法识别该{source_label}，请输入文本格式的 SSH 私钥。"
+            ))
+        })?;
     if !content.contains("PRIVATE KEY") {
         return Err(AppError::Command(format!(
             "输入的{source_label}不是 SSH 私钥。"
@@ -474,7 +506,7 @@ fn inspect_private_key_bytes(
         }
     };
     Ok(InspectedPrivateKey {
-        bytes,
+        bytes: std::mem::take(&mut *bytes),
         name,
         algorithm,
         fingerprint,
