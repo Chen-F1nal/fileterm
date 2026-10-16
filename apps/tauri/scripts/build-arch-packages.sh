@@ -103,9 +103,9 @@ docker run --rm \
           --noextract --nodeps --noconfirm --force
       package_file="$(find . -maxdepth 1 -type f -name "file-term-*.pkg.tar.zst" -print -quit)"
       test -n "$package_file"
-      mkdir verified-package
-      tar --zstd -xf "$package_file" -C verified-package
-      python3 /work/verify-linux-icon-files.py verified-package --icons-dir /work/src-tauri/icons
+      runuser -u builder -- mkdir verified-package
+      runuser -u builder -- tar --zstd -xf "$package_file" -C verified-package
+      runuser -u builder -- python3 /work/verify-linux-icon-files.py verified-package --icons-dir /work/src-tauri/icons
       cp "$package_file" "/work/FileTerm-${FILETERM_VERSION}-linux-${asset_arch}.pkg.tar.zst"
 
       pkginfo="$(tar --zstd -xOf "$package_file" .PKGINFO)"
