@@ -12,7 +12,7 @@ ICON_FILES = {
     "usr/share/pixmaps/com.fileterm.desktop.png": ("app/linux/128x128.png", 128),
     "usr/share/icons/hicolor/32x32/apps/fileterm.png": ("app/linux/32x32.png", 32),
     "usr/share/icons/hicolor/128x128/apps/fileterm.png": ("app/linux/128x128.png", 128),
-    "usr/share/icons/hicolor/256x256@2/apps/fileterm.png": ("app/linux/128x128@2x.png", 256),
+    "usr/share/icons/hicolor/256x256@2/apps/fileterm.png": ("app/shared/classic-256.png", 256),
 }
 
 

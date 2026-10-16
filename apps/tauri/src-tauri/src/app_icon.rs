@@ -18,19 +18,19 @@ pub(crate) fn icon_bytes(variant: &str) -> &'static [u8] {
 pub(crate) fn platform_icon_bytes(variant: &str, size: u16) -> &'static [u8] {
     match variant {
         "material" if size == 256 => {
-            include_bytes!("../../src/renderer/assets/app-icons/platform/material-256.png")
+            include_bytes!("../icons/app/shared/material-256.png")
         }
         "clean" if size == 256 => {
-            include_bytes!("../../src/renderer/assets/app-icons/platform/clean-256.png")
+            include_bytes!("../icons/app/shared/clean-256.png")
         }
         "material" => {
-            include_bytes!("../../src/renderer/assets/app-icons/platform/material-512.png")
+            include_bytes!("../icons/app/shared/material-512.png")
         }
-        "clean" => include_bytes!("../../src/renderer/assets/app-icons/platform/clean-512.png"),
+        "clean" => include_bytes!("../icons/app/shared/clean-512.png"),
         _ if size == 256 => {
-            include_bytes!("../../src/renderer/assets/app-icons/platform/classic-256.png")
+            include_bytes!("../icons/app/shared/classic-256.png")
         }
-        _ => include_bytes!("../../src/renderer/assets/app-icons/platform/classic-512.png"),
+        _ => include_bytes!("../icons/app/shared/classic-512.png"),
     }
 }
 
@@ -143,8 +143,8 @@ mod tests {
         for bytes in [
             &include_bytes!("../icons/app/linux/32x32.png")[..],
             &include_bytes!("../icons/app/linux/128x128.png")[..],
-            &include_bytes!("../icons/app/linux/128x128@2x.png")[..],
-            &include_bytes!("../icons/app/linux/icon.png")[..],
+            &include_bytes!("../icons/app/shared/classic-256.png")[..],
+            &include_bytes!("../icons/app/shared/classic-512.png")[..],
         ] {
             let icon = tauri::image::Image::from_bytes(bytes).unwrap();
             assert_icon_fills_canvas(bytes, icon.width());

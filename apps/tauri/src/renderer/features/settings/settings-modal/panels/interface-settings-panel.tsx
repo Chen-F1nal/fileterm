@@ -33,9 +33,9 @@ import {
 import dockClassic from '../../../../assets/app-icons/dock-classic.png'
 import dockMaterial from '../../../../assets/app-icons/dock-material.png'
 import dockClean from '../../../../assets/app-icons/dock-clean.png'
-import platformClassic from '../../../../assets/app-icons/platform/classic-512.png'
-import platformMaterial from '../../../../assets/app-icons/platform/material-512.png'
-import platformClean from '../../../../assets/app-icons/platform/clean-512.png'
+import platformClassic from '../../../../../../src-tauri/icons/app/shared/classic-512.png'
+import platformMaterial from '../../../../../../src-tauri/icons/app/shared/material-512.png'
+import platformClean from '../../../../../../src-tauri/icons/app/shared/clean-512.png'
 
 type InterfaceSettingsPanelContext = {
   t: LocaleMessages

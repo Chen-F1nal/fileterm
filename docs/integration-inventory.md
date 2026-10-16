@@ -125,7 +125,7 @@ FileTerm 当前采用“拖拽期间冻结列数，稳定后同步真实宽度�
 
 ### 桌面壳资源和布局约定
 
-- 图标变体来自 `apps/tauri/src/renderer/assets/app-icons/`；Linux 静态 PNG 从其中的 `dock-classic.png` 缩放为 32、128、256、512px，保存在 `src-tauri/icons/app/linux/`；Windows `src-tauri/icons/app/windows/classic.ico` 使用经典银边多尺寸资源。macOS Finder、Launchpad 与安装包静态图标使用 `fileterm-macos-1024.png` 生成 `src-tauri/icons/app/macos/icon.icns`；Dock 退出后由内置插件读取独立偏好域继续显示所选变体。旧版 `apps/tauri/assets/icons/fileterm-1024.png` 与 WebView 的 `apps/tauri/public/icon.png` 不作为当前 Windows/Linux 安装图标生成源。
+- 图标源图来自 `apps/tauri/src/renderer/assets/app-icons/dock-*.png`；裁去 macOS 留白后的 Windows/Linux 变体 PNG 统一保存在 `src-tauri/icons/app/shared/`，同时供设置预览、窗口与 Linux 桌面启动器运行时切换使用。Linux 安装包所需的经典 32px、128px 图在 `src-tauri/icons/app/linux/`，256px 复用 `app/shared/classic-256.png`；Windows ICO 在 `src-tauri/icons/app/windows/`。macOS Finder、Launchpad 与安装包静态图标使用 `fileterm-macos-1024.png` 生成 `src-tauri/icons/app/macos/icon.icns`；Dock 退出后由内置插件读取独立偏好域继续显示所选变体。旧版 `apps/tauri/assets/icons/fileterm-1024.png` 与 WebView 的 `apps/tauri/public/icon.png` 不作为当前 Windows/Linux 安装图标生成源。
 - macOS 菜单栏托盘图标由 Tauri 维护：使用 `apps/tauri/src-tauri/icons/tray/macos/template*.png` 与 Rust tray API；可编辑源文件位于 `apps/tauri/assets/icons/trayTemplate.svg`。Windows/Linux 的变体 tray 图标分别放在 `icons/tray/windows/` 和 `icons/tray/linux/`。
 - Windows app ICO 与三个平台的 tray 输入按用途和平台分目录保存；不要把 Windows app icon 缩放后当作 macOS menu bar template。
 - 顶部标签栏、工作区焦点模式、侧栏收起状态和文件面板抽屉都是 renderer UI 状态；不要把这些布局状态扩散到 main service。

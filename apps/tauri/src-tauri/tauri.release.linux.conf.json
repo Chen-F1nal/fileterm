@@ -25,7 +25,7 @@
     "copyright": "Copyright © 2026 St0ff3l",
     "license": "MIT",
     "publisher": "St0ff3l",
-    "icon": ["icons/app/linux/32x32.png", "icons/app/linux/128x128.png", "icons/app/linux/128x128@2x.png"],
+    "icon": ["icons/app/linux/32x32.png", "icons/app/linux/128x128.png", "icons/app/shared/classic-256.png"],
     "linux": {
       "appimage": {
         "files": {

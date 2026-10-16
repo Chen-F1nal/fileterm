@@ -34,7 +34,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/app/macos/icon.icns", "icons/app/windows/classic.ico", "icons/app/linux/icon.png"],
+    "icon": ["icons/app/macos/icon.icns", "icons/app/windows/classic.ico", "icons/app/shared/classic-512.png"],
     "macOS": {
       "minimumSystemVersion": "10.13",
       "files": {
