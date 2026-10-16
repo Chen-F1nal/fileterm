@@ -8,7 +8,7 @@ const exports = {}
 const sharedWidths = {}
 vm.runInNewContext(
   ts.transpileModule(
-    readFileSync(new URL('../src/renderer/app/terminal-shared-glyph-widths.ts', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/renderer/xterm-adapters/terminal-shared-glyph-widths.ts', import.meta.url), 'utf8'),
     {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }
@@ -16,9 +16,12 @@ vm.runInNewContext(
   { exports: sharedWidths, Map, WeakMap }
 )
 vm.runInNewContext(
-  ts.transpileModule(readFileSync(new URL('../src/renderer/app/terminal-render-cache.ts', import.meta.url), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-  }).outputText,
+  ts.transpileModule(
+    readFileSync(new URL('../src/renderer/xterm-adapters/terminal-render-cache.ts', import.meta.url), 'utf8'),
+    {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+    }
+  ).outputText,
   { exports, Map, Set, require: () => sharedWidths }
 )
 const { registerTerminalRenderCacheLimits } = exports

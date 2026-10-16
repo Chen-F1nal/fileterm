@@ -366,6 +366,25 @@ CJK 主字体、常规/粗体、14/24px 和 100%/125%/200% DPI，检查 `⚠️`
 真实鼠标拖选。Chromium/WebKit 的比例矩阵共 48 组通过；防遮挡矩阵通过。
 这些检查未替代 Windows 11 原生 WebView2 字体回退验证。
 
+### 特殊符号列宽、选区与尺寸刷新（2026-10-16）
+
+显示槽改为严格等于 buffer 列宽：fallback 字体的实际 advance 与 xterm 重复字形测量
+不同，原先会把同一行后续的表格线整体推偏，缩小字号后更明显。`✻`、`※` 等普通符号
+继续占单列，不因为字体笔画宽而改成双列。双列 emoji 的笔画绘制在选区背景之上，修掉
+从延续格开始选择时右半边被盖住的情况。
+
+`terminal-symbol-proportions.mjs` 的断言行数从 9 扩到 18，逐行断言实际占用列宽等于
+Unicode 列宽；行级“整体墨迹等比”断言只对单一字素成立，多字素行（如 `⚠️•`、
+`🇨🇳🇺🇸`）中每个字形在各自槽位内独立缩放，整行没有统一缩放因子。
+
+尺寸变化改为像素级刷新，覆盖拖动终端区域宽度、拖动窗口和缩放窗口；稳定后同步 PTY，
+不再等待输出安静或 shell 提示符，避免持续输出的 TUI 收不到新尺寸。
+
+新增 `terminal-symbol-tables.mjs`（预排版表格的 buffer 列、屏幕坐标与复制文本三层断言）
+和 `terminal-resize-repaint.mjs`。Chromium 与 WebKit 的 8 个脚本共 16 次运行全部通过；
+Windows 11 WebView2 的原生复核仍待完成，细节和未验证项见
+[终端符号表格、选区与尺寸刷新回归](terminal-symbol-tables.md)。
+
 ## 性能与长期运行
 
 - `tests/browser/terminal-redraw-load.mjs`：持续 60 秒 ANSI/CJK/符号重绘及普通/备用缓冲区切换；

@@ -1,3 +1,4 @@
+import { getTerminalCompatibilityOptions } from '../xterm-adapters/terminal-options'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
@@ -5,11 +6,12 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import type { TerminalZoomOperation } from '@fileterm/core'
 import { isClinkAutosuggestHelpUrl } from '../app/terminal-transcript'
+import { registerTerminalEmojiWidths } from '../xterm-adapters/terminal-emoji-widths'
 import { t } from '../i18n'
 import { getConfiguredMonoFontFamily } from '../app/font-metrics'
-import { getTerminalLogColorPalette, TerminalLogColorizer } from '../app/terminal-log-colorizer'
-import { registerTerminalForegroundAdapter } from '../app/terminal-foreground-adapter'
-import { registerTerminalRenderCacheLimits } from '../app/terminal-render-cache'
+import { getTerminalLogColorPalette, TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
+import { registerTerminalForegroundAdapter } from '../xterm-adapters/terminal-foreground-adapter'
+import { registerTerminalRenderCacheLimits } from '../xterm-adapters/terminal-render-cache'
 import { scaleTerminalFontSizeForUiZoom } from '../app/ui-zoom'
 import {
   getTerminalFontSize,
@@ -19,9 +21,9 @@ import {
   TERMINAL_MAX_FONT_SIZE
 } from '../app/terminal-font-size-store'
 import { logTerminalZoom } from './terminal-view-utils'
-import { registerTerminalBlockGlyphRenderer } from './terminal-block-glyph-renderer'
-import { registerTerminalSelectionRenderer } from './terminal-selection-renderer'
-import { registerTerminalSymbolGlyphRenderer } from './terminal-symbol-glyph-renderer'
+import { registerTerminalBlockGlyphRenderer } from '../xterm-adapters/terminal-block-glyph-renderer'
+import { registerTerminalSelectionRenderer } from '../xterm-adapters/terminal-selection-renderer'
+import { registerTerminalSymbolGlyphRenderer } from '../xterm-adapters/terminal-symbol-glyph-renderer'
 import { createTerminalInputWriteQueue } from './terminal-input-write-queue'
 import type { TerminalLifecycleOptions, TerminalLifecycleRuntime } from './terminal-lifecycle-types'
 
@@ -45,35 +47,16 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
 
   const { isMac, isWindowsPty } = options
   const terminal = new Terminal({
+    ...getTerminalCompatibilityOptions(isWindowsPty),
     fontFamily: getConfiguredMonoFontFamily(),
     fontSize: scaleTerminalFontSizeForUiZoom(getTerminalFontSize(options.profileIdRef.current)),
-    // Keep terminal cells flush: TUIs use adjacent block glyphs for pixel art
-    // (for example, Claude Code's mascot), and extra spacing breaks the image.
-    letterSpacing: 0,
     lineHeight: 1.05,
     cursorBlink: true,
     cursorStyle: 'bar',
     cursorWidth: 2,
     allowProposedApi: true,
     allowTransparency: true,
-    // Protect ANSI, 256-color and RGB text against the resolved cell background,
-    // including inverse, selection and search decorations. xterm preserves dim
-    // styling and deliberately exempts glyphs used as graphical backgrounds.
-    minimumContrastRatio: 4.5,
-    // Vim enables mouse reporting, which disables xterm's normal selection
-    // service. On macOS, Option+drag is the standard xterm escape hatch for
-    // making a local selection without sending that drag to Vim.
-    macOptionClickForcesSelection: true,
-    reflowCursorLine: false,
     scrollback: 6000,
-    // FileTerm's local Windows sessions use ConPTY. xterm.js needs this
-    // hint to preserve the screen rows that ConPTY reprints during a
-    // resize, especially when a kept-alive tab becomes visible again.
-    windowsPty: isWindowsPty ? { backend: 'conpty' } : {},
-    // Keep ED2 from moving an interactive TUI's cleared screen into the
-    // scrollback. This is the behavior expected by modern TUIs and keeps the
-    // viewport stable when a TUI repaints after tab/size changes.
-    scrollOnEraseInDisplay: false,
     overviewRuler: { width: 0 },
     linkHandler: {
       activate: (_event, uri) => {
@@ -98,6 +81,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
   terminal.unicode.activeVersion = '11'
+  const emojiWidths = registerTerminalEmojiWidths(terminal)
   terminal.open(host)
   const renderCacheLimits = registerTerminalRenderCacheLimits(terminal)
   const selectionRenderer = registerTerminalSelectionRenderer(terminal)
@@ -111,30 +95,6 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   const xtermScrollableElement = host.querySelector('.xterm-scrollable-element') as HTMLElement | null
   options.setTerminalScrollableElement(xtermScrollableElement ?? terminal.element ?? null)
   const terminalTextarea = terminal.textarea
-
-  const onCompositionStart = () => {
-    options.imeCompositionActiveRef.current = true
-    options.imeCompositionTextRef.current = ''
-    options.imeCompositionEndedAtRef.current = 0
-    options.imeCompositionDataForwardedRef.current = false
-  }
-  const onCompositionUpdate = (event: CompositionEvent) => {
-    options.imeCompositionTextRef.current = event.data
-  }
-  const onCompositionEnd = (event: CompositionEvent) => {
-    options.imeCompositionActiveRef.current = false
-    // xterm also avoids relying on CompositionEvent.data because browsers
-    // may report only the last candidate fragment there. The latest update
-    // is the better signal; event.data is only a fallback for IMEs that do
-    // not emit compositionupdate.
-    const compositionText = options.imeCompositionTextRef.current || event.data
-    options.imeCompositionTextRef.current = compositionText
-    options.imeCompositionEndedAtRef.current = compositionText ? Date.now() : 0
-    options.imeCompositionDataForwardedRef.current = false
-  }
-  terminalTextarea?.addEventListener('compositionstart', onCompositionStart)
-  terminalTextarea?.addEventListener('compositionupdate', onCompositionUpdate)
-  terminalTextarea?.addEventListener('compositionend', onCompositionEnd)
 
   const adjustTerminalFontSize = (change: number) => {
     if (options.terminalZoomLockedRef.current) {
@@ -314,11 +274,9 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     disposeCore: () => {
       terminalInputWriteQueue.dispose()
       terminalTextarea?.removeEventListener('focus', markTerminalFocused)
-      terminalTextarea?.removeEventListener('compositionstart', onCompositionStart)
-      terminalTextarea?.removeEventListener('compositionupdate', onCompositionUpdate)
-      terminalTextarea?.removeEventListener('compositionend', onCompositionEnd)
       terminalLogColorizer.dispose()
       renderCacheLimits.dispose()
+      emojiWidths.dispose()
       foregroundAdapter.dispose()
       blockGlyphRenderer.dispose()
       selectionRenderer.dispose()

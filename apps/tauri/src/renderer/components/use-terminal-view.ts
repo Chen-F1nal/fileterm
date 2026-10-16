@@ -1,9 +1,13 @@
+import {
+  refreshTerminalRender,
+  TERMINAL_ACTIVATION_RECOVERY_ATTEMPTS
+} from '../xterm-adapters/terminal-render-recovery'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { createTerminalScrollController } from './terminal-scroll-controller'
-import { TerminalLogColorizer } from '../app/terminal-log-colorizer'
+import { TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { t } from '../i18n'
 import { getConfiguredMonoFontFamily } from '../app/font-metrics'
 import {
@@ -33,12 +37,6 @@ export type TerminalViewProps = {
   closedMessage?: string
   reconnectHint?: string
 }
-
-// WKWebView and WebKitGTK may keep a newly-visible keep-alive surface at zero
-// size for several compositor frames while the workspace transition settles.
-// Keep the retry bounded so a genuinely unavailable surface cannot create a
-// permanent animation-frame loop.
-const TERMINAL_ACTIVATION_RECOVERY_ATTEMPTS = 16
 
 export function useTerminalView({
   profileId,
@@ -109,9 +107,6 @@ export function useTerminalView({
     height: number
   } | null>(null)
   const isHorizontalResizeActiveRef = useRef(false)
-  const lastTerminalOutputAtRef = useRef(0)
-  const awaitingCommandCompletionRef = useRef(false)
-  const pendingPromptResizeRef = useRef(false)
   const profileIdRef = useRef(profileId)
   const tabIdRef = useRef(tabId)
   const onStatusRef = useRef(onStatus)
@@ -315,9 +310,6 @@ export function useTerminalView({
     lastSyncedSizeRef,
     lastObservedHostRectRef,
     isHorizontalResizeActiveRef,
-    lastTerminalOutputAtRef,
-    awaitingCommandCompletionRef,
-    pendingPromptResizeRef,
     profileIdRef,
     tabIdRef,
     onStatusRef,
@@ -422,8 +414,6 @@ export function useTerminalView({
     }
 
     preserveVisibleBufferRef.current = false
-    awaitingCommandCompletionRef.current = false
-    pendingPromptResizeRef.current = false
     replaceTerminalWithTranscript(terminal, hydratedBootText)
     lastSyncedSizeRef.current = null
 
@@ -476,8 +466,7 @@ export function useTerminalView({
       const configuredFontFamily = getConfiguredMonoFontFamily()
       if (terminal && terminal.options.fontFamily !== configuredFontFamily) {
         terminal.options.fontFamily = configuredFontFamily
-        terminal.clearTextureAtlas()
-        terminal.refresh(0, Math.max(terminal.rows - 1, 0))
+        refreshTerminalRender(terminal)
       }
       if (terminal) {
         applyTerminalFontSize(getTerminalFontSize(profileIdRef.current))

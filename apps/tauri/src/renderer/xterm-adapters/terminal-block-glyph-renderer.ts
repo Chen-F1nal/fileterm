@@ -1,5 +1,5 @@
 import type { IBufferCell, Terminal } from '@xterm/xterm'
-import { drawBoxDrawingGlyph, isBoxDrawingGlyph } from './terminal-graphic-glyphs/box-drawing'
+import { drawBoxDrawingGlyph, isBoxDrawingGlyph } from './box-drawing'
 
 const BLOCK_ELEMENT_START = 0x2580
 const BLOCK_ELEMENT_END = 0x259f

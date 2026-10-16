@@ -39,7 +39,7 @@ try {
         ['terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
         ['terminal-selection-renderer', 'registerTerminalSelectionRenderer']
       ]) {
-        await loadTypeScript(page, fileURLToPath(new URL(`components/${file}.ts`, source)), symbol)
+        await loadTypeScript(page, fileURLToPath(new URL(`xterm-adapters/${file}.ts`, source)), symbol)
       }
       for (const glyph of ['─', '━', '═']) {
         const results = []

@@ -23,7 +23,7 @@ try {
         : null
     await page.setContent('<div id="panes" style="display:grid;grid-template-columns:repeat(2,1fr)"></div>')
     await page.addStyleTag({ path: root + '/node_modules/@xterm/xterm/css/xterm.css' })
-    await page.addStyleTag({ path: root + '/apps/tauri/src/renderer/components/terminal-view.css' })
+    await page.addStyleTag({ path: root + '/apps/tauri/src/renderer/xterm-adapters/xterm-compat.css' })
     for (const [name, path, weight] of [
       ['Bench Mono', 'jetbrains-mono/JetBrainsMono-400.ttf', '400'],
       ['Bench Mono', 'jetbrains-mono/JetBrainsMono-700.ttf', '700'],
@@ -41,11 +41,11 @@ try {
     })
     await page.addScriptTag({ path: root + '/node_modules/@xterm/xterm/lib/xterm.js' })
     for (const [file, name] of [
-      ['components/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
-      ['components/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
-      ['components/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
-      ['app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
-      ['app/terminal-render-cache', 'registerTerminalRenderCacheLimits']
+      ['xterm-adapters/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
+      ['xterm-adapters/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
+      ['xterm-adapters/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
+      ['xterm-adapters/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
+      ['xterm-adapters/terminal-render-cache', 'registerTerminalRenderCacheLimits']
     ])
       await loadTypeScript(page, root + '/apps/tauri/src/renderer/' + file + '.ts', name)
     await profiler?.send('Profiler.enable')

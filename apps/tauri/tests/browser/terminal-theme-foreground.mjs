@@ -18,8 +18,8 @@ await build({
 import { Terminal } from '@xterm/xterm'
 import { createDefaultThemeConfig, createCodexThemeConfig } from '@fileterm/core'
 import { applyThemeVariables, getThemeConfigFromTokenPreset } from './apps/tauri/src/renderer/app/theme-config'
-import { registerTerminalForegroundAdapter } from './apps/tauri/src/renderer/app/terminal-foreground-adapter'
-import { TerminalLogColorizer, getTerminalLogColorPalette } from './apps/tauri/src/renderer/app/terminal-log-colorizer'
+import { registerTerminalForegroundAdapter } from './apps/tauri/src/renderer/xterm-adapters/terminal-foreground-adapter'
+import { TerminalLogColorizer, getTerminalLogColorPalette } from './apps/tauri/src/renderer/xterm-adapters/terminal-log-colorizer'
 import './apps/tauri/src/renderer/styles/index.css'
 import '@xterm/xterm/css/xterm.css'
 window.Terminal = Terminal

@@ -46,12 +46,7 @@ export function observeCanvasTextMetrics(onMetricsChanged: (fontFamily: string) 
         return
       }
       const configuredFontFamily = getConfiguredMonoFontFamily()
-      // xterm ignores an unchanged fontFamily, and its DOM renderer has no
-      // texture atlas to clear. Pulse an equivalent stack to invalidate both
-      // glyph widths and cell metrics, then restore the configured value.
-      // Repeat the whole list: splitting on commas would break quoted names.
-      onMetricsChanged(`${configuredFontFamily}, ${configuredFontFamily}`)
-      if (!disposed) onMetricsChanged(configuredFontFamily)
+      onMetricsChanged(configuredFontFamily)
     })
   }
 

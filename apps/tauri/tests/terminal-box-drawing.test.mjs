@@ -6,12 +6,9 @@ import ts from 'typescript'
 
 const exports = {}
 vm.runInNewContext(
-  ts.transpileModule(
-    readFileSync(new URL('../src/renderer/components/terminal-graphic-glyphs/box-drawing.ts', import.meta.url), 'utf8'),
-    {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-    }
-  ).outputText,
+  ts.transpileModule(readFileSync(new URL('../src/renderer/xterm-adapters/box-drawing.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText,
   { exports }
 )
 const { getBoxDrawingRects, drawBoxDrawingGlyph, isBoxDrawingGlyph } = exports

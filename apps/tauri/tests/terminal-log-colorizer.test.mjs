@@ -6,9 +6,12 @@ import ts from 'typescript'
 
 const exports = {}
 vm.runInNewContext(
-  ts.transpileModule(readFileSync(new URL('../src/renderer/app/terminal-log-colorizer.ts', import.meta.url), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-  }).outputText,
+  ts.transpileModule(
+    readFileSync(new URL('../src/renderer/xterm-adapters/terminal-log-colorizer.ts', import.meta.url), 'utf8'),
+    {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+    }
+  ).outputText,
   { exports, Uint32Array, Uint8Array }
 )
 

@@ -1,20 +1,21 @@
+import { trimTranscript } from '../xterm-adapters/terminal-transcript-replay'
+import { recoverTerminalRenderSurface } from '../xterm-adapters/terminal-render-recovery'
+import { getVimVisualSelection } from '../xterm-adapters/terminal-vim-selection'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { type ITheme, type Terminal } from '@xterm/xterm'
 import { type FitAddon } from '@xterm/addon-fit'
 import { type SearchAddon } from '@xterm/addon-search'
 import { MAX_UI_ZOOM_PERCENT, MIN_UI_ZOOM_PERCENT } from '@fileterm/core'
 import { readClipboardText, writeClipboardText } from '../app/app-utils'
-import { getTerminalLogColorPalette, TerminalLogColorizer } from '../app/terminal-log-colorizer'
+import { getTerminalLogColorPalette, TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { scaleTerminalFontSizeForUiZoom } from '../app/ui-zoom'
 import { TERMINAL_MAX_FONT_SIZE, TERMINAL_MIN_FONT_SIZE } from '../app/terminal-font-size-store'
 import { t } from '../i18n'
 import {
-  getVimVisualSelection,
   logTerminalClipboard,
   logTerminalRender,
   splitPaneShortcutsForPlatform,
   toDisplayTerminalText,
-  trimTranscript,
   TERMINAL_FIT_GUARD_ROWS,
   TERMINAL_REMOTE_GUARD_COLS,
   TERMINAL_RESIZE_PIXEL_EPSILON,
@@ -541,7 +542,6 @@ export function useTerminalViewActions({
       const cols = freezeCols && previousSize ? previousSize.cols : liveCols
       if (terminal.cols !== cols || terminal.rows !== rows) {
         terminal.resize(cols, rows)
-        terminal.refresh(0, Math.max(terminal.rows - 1, 0))
       }
 
       const nextSize = {
@@ -563,6 +563,8 @@ export function useTerminalViewActions({
         return
       }
       lastSyncedSizeRef.current = nextSize
+      // Pixel-only host changes also need fresh rows while drag resizing freezes columns.
+      terminal.refresh(0, Math.max(terminal.rows - 1, 0))
       if (!remoteGridChanged) {
         return
       }
@@ -594,26 +596,13 @@ export function useTerminalViewActions({
         return true
       }
 
-      const { width, height } = host.getBoundingClientRect()
-      if (width <= 0 || height <= 0) {
-        logTerminalRender(terminal, 'recovery-skipped-zero-host', {
-          tabId: tabIdRef.current,
-          reason,
-          hostWidth: Math.round(width),
-          hostHeight: Math.round(height)
-        })
-        return true
-      }
-
-      terminal.clearTextureAtlas()
-      syncTerminalSize(fitAddon, terminal, { force: true })
-      if (!isActiveRef.current) {
-        return false
-      }
-      terminal.refresh(0, Math.max(terminal.rows - 1, 0))
-      terminal.focus()
-      logTerminalRender(terminal, 'recovery-complete', { tabId: tabIdRef.current, reason })
-      return false
+      return recoverTerminalRenderSurface(
+        terminal,
+        host,
+        () => isActiveRef.current,
+        () => syncTerminalSize(fitAddon, terminal, { force: true }),
+        (stage, details) => logTerminalRender(terminal, stage, { tabId: tabIdRef.current, reason, ...details })
+      )
     },
     [syncTerminalSize]
   )

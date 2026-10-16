@@ -136,7 +136,7 @@ try {
       for (let update = 0; update < 5; update++) {
         await page.evaluate((value) => window.updateFixture(value), capability)
       }
-      await menu.getByRole('menuitem', { name: paste, exact: false }).click()
+      await menu.getByRole('menuitem', { name: `${paste} ⌘V`, exact: true }).click()
       await menu.waitFor({ state: 'detached' })
       await page.waitForFunction((count) => window.clipboardReads === count, cycle + (capability ? 0 : 20) + 1)
       await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'))

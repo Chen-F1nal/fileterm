@@ -7,7 +7,7 @@ import ts from 'typescript'
 const exports = {}
 vm.runInNewContext(
   ts.transpileModule(
-    readFileSync(new URL('../src/renderer/app/terminal-foreground-adapter.ts', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/renderer/xterm-adapters/terminal-foreground-adapter.ts', import.meta.url), 'utf8'),
     {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }

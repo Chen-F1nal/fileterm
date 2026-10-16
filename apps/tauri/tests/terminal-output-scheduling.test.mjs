@@ -6,6 +6,7 @@ import ts from 'typescript'
 
 const exports = {}
 const chunkSize = 16 * 1024
+const terminalResizes = []
 vm.runInNewContext(
   ts.transpileModule(
     readFileSync(new URL('../src/renderer/components/terminal-view-actions.ts', import.meta.url), 'utf8').replaceAll(
@@ -20,18 +21,22 @@ vm.runInNewContext(
     document: { documentElement: {} },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     window: {
+      fileterm: { resizeTerminal: (...args) => terminalResizes.push(args) },
       requestAnimationFrame: () => {
         throw new Error('Output must drain even when animation frames are suspended')
       }
     },
     require: (name) => {
       if (name === 'react') return { useCallback: (callback) => callback }
-      if (name === '../app/terminal-log-colorizer') return { getTerminalLogColorPalette: (theme) => theme }
+      if (name === '../xterm-adapters/terminal-log-colorizer') return { getTerminalLogColorPalette: (theme) => theme }
+      if (name === '../xterm-adapters/terminal-transcript-replay') return { trimTranscript: (value) => value }
       if (name === './terminal-view-utils')
         return {
           TERMINAL_WRITE_CHUNK_SIZE: chunkSize,
+          TERMINAL_FIT_GUARD_ROWS: 0,
+          TERMINAL_REMOTE_GUARD_COLS: 0,
+          TERMINAL_RESIZE_PIXEL_EPSILON: 2,
           splitPaneShortcutsForPlatform: () => ({}),
-          trimTranscript: (value) => value,
           toDisplayTerminalText: (value) => value,
           logTerminalRender: () => {}
         }
@@ -39,7 +44,9 @@ vm.runInNewContext(
         [
           '@fileterm/core',
           '../app/app-utils',
-          '../app/terminal-log-colorizer',
+          '../xterm-adapters/terminal-log-colorizer',
+          '../xterm-adapters/terminal-vim-selection',
+          '../xterm-adapters/terminal-render-recovery',
           '../app/ui-zoom',
           '../app/terminal-font-size-store',
           '../i18n'
@@ -169,4 +176,26 @@ test('unchanged terminal themes do not invalidate contrast caches or repaint his
   applyTerminalTheme()
   assert.equal(themes, 2)
   assert.equal(recolors, 2)
+})
+
+test('pixel-only resizing repaints frozen columns without sending a mismatched PTY size', () => {
+  const f = fixture()
+  let refreshes = 0
+  Object.assign(f.terminalRef.current, { cols: 80, rows: 24, refresh: () => refreshes++ })
+  f.hostRef = { current: { getBoundingClientRect: () => ({ width: 810, height: 400 }) } }
+  f.lastSyncedSizeRef = { current: { cols: 80, rows: 24, width: 800, height: 400 } }
+  const fit = { proposeDimensions: () => ({ cols: 81, rows: 24 }) }
+  const { syncTerminalSize } = exports.useTerminalViewActions(f)
+  terminalResizes.length = 0
+  syncTerminalSize(fit, f.terminalRef.current, { freezeCols: true })
+  assert.equal(refreshes, 1, 'a new host width needs fresh rows even before columns settle')
+  assert.equal(f.terminalRef.current.cols, 80)
+  assert.equal(terminalResizes.length, 0)
+  syncTerminalSize(fit, f.terminalRef.current, { freezeCols: true })
+  assert.equal(refreshes, 1, 'an unchanged host does not cause an idle repaint loop')
+  f.terminalRef.current.resize = (cols, rows) => Object.assign(f.terminalRef.current, { cols, rows })
+  syncTerminalSize(fit, f.terminalRef.current, { force: true })
+  assert.equal(refreshes, 2)
+  assert.equal(f.terminalRef.current.cols, 81)
+  assert.deepEqual(terminalResizes, [['tab', 81, 24, 810, 400]])
 })

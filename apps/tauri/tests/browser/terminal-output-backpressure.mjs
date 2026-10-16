@@ -22,12 +22,12 @@ try {
   await page.addScriptTag({ path: root + '/node_modules/@xterm/xterm/lib/xterm.js' })
   for (const [file, symbol] of [
     ['bridge/events/terminal-output', 'createTerminalOutputDelivery'],
-    ['renderer/components/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
-    ['renderer/components/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
-    ['renderer/components/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
-    ['renderer/app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
-    ['renderer/app/terminal-render-cache', 'registerTerminalRenderCacheLimits'],
-    ['renderer/app/terminal-log-colorizer', 'TerminalLogColorizer']
+    ['renderer/xterm-adapters/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
+    ['renderer/xterm-adapters/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
+    ['renderer/xterm-adapters/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
+    ['renderer/xterm-adapters/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
+    ['renderer/xterm-adapters/terminal-render-cache', 'registerTerminalRenderCacheLimits'],
+    ['renderer/xterm-adapters/terminal-log-colorizer', 'TerminalLogColorizer']
   ])
     await loadTypeScript(page, root + '/apps/tauri/src/' + file + '.ts', symbol)
   const actions = ts.transpileModule(

@@ -7,7 +7,7 @@ Chromium 默认压缩连续全角标点；xterm `WidthCache` 使用同一字符�
 `letter-spacing` 补偿。上游分析：
 https://github.com/xtermjs/xterm.js/issues/6058 。
 
-`components/terminal-view.css` 在 `.terminal-host .xterm` 设置
+`xterm-adapters/xterm-compat.css` 在 `.terminal-host .xterm` 设置
 `text-spacing-trim: space-all`，让显示行与隐藏测量容器继承一致的排版规则；
 同时用 `text-autospace: no-autospace` 禁用混排自动间距。保留原来的字体、
 Unicode 11 字宽、字号、行距及字体加载/DPI 度量同步。

@@ -19,11 +19,11 @@ try {
     await page.addStyleTag({ path: root + '/node_modules/@xterm/xterm/css/xterm.css' })
     await page.addScriptTag({ path: root + '/node_modules/@xterm/xterm/lib/xterm.js' })
     for (const [file, name] of [
-      ['components/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
-      ['components/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
-      ['components/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
-      ['app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
-      ['app/terminal-render-cache', 'registerTerminalRenderCacheLimits']
+      ['xterm-adapters/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
+      ['xterm-adapters/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
+      ['xterm-adapters/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
+      ['xterm-adapters/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
+      ['xterm-adapters/terminal-render-cache', 'registerTerminalRenderCacheLimits']
     ])
       await loadTypeScript(page, root + '/apps/tauri/src/renderer/' + file + '.ts', name)
     const report = await page.evaluate(async (adapted) => {

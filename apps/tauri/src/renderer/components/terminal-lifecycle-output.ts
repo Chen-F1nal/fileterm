@@ -1,18 +1,18 @@
+import {
+  observeTerminalFontMetrics,
+  registerTerminalBufferRenderRecovery
+} from '../xterm-adapters/terminal-render-recovery'
+import { getVimVisualSelection } from '../xterm-adapters/terminal-vim-selection'
 import { readClipboardText, writeClipboardText } from '../app/app-utils'
-import { observeCanvasTextMetrics } from '../app/font-metrics'
 import { trimHydratedTerminalChunk } from '../app/terminal-transcript'
 import {
   decodeBase64Utf8,
   encodeBase64Utf8,
-  getLastVisibleTerminalLine,
-  getVimVisualSelection,
   isOsc52TargetSupported,
   localizeTerminalText,
   logTerminalClipboard,
   logTerminalRender,
-  looksLikeShellPrompt,
   splitOscPayload,
-  TERMINAL_RESIZE_OUTPUT_QUIET_MS,
   TERMINAL_RESIZE_PIXEL_EPSILON,
   TERMINAL_RESIZE_SETTLE_MS
 } from './terminal-view-utils'
@@ -32,9 +32,6 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     lastSyncedSizeRef,
     lastObservedHostRectRef,
     isHorizontalResizeActiveRef,
-    lastTerminalOutputAtRef,
-    awaitingCommandCompletionRef,
-    pendingPromptResizeRef,
     pendingResizeForceRef,
     pendingResizeFreezeColsRef,
     resizeTimerRef,
@@ -67,28 +64,16 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
   } = runtime
   const host = hostRef.current!
 
-  // Ghostty invalidates its render state whenever the terminal switches
-  // between the normal and alternate screen. OpenCode, Claude Code, Vim,
-  // and similar TUIs rely on that screen heavily; keeping a stale WebView
-  // canvas/atlas after a tab activation can otherwise leave the terminal
-  // looking black until another external repaint occurs.
-  let renderedBufferType = terminal.buffer.active.type
-  const screenBufferRenderDisposable = terminal.onWriteParsed(() => {
-    const nextBufferType = terminal.buffer.active.type
-    if (nextBufferType === renderedBufferType) {
-      return
+  const screenBufferRenderDisposable = registerTerminalBufferRenderRecovery(
+    terminal,
+    (previousBufferType, nextBufferType) => {
+      logTerminalRender(terminal, 'screen-buffer-switched', {
+        tabId: tabIdRef.current,
+        previousBufferType,
+        nextBufferType
+      })
     }
-
-    const previousBufferType = renderedBufferType
-    renderedBufferType = nextBufferType
-    terminal.clearTextureAtlas()
-    terminal.refresh(0, Math.max(terminal.rows - 1, 0))
-    logTerminalRender(terminal, 'screen-buffer-switched', {
-      tabId: tabIdRef.current,
-      previousBufferType,
-      nextBufferType
-    })
-  })
+  )
 
   const searchResultsDisposable = searchAddon.onDidChangeResults(({ resultIndex, resultCount }) => {
     setFindMatchCount(resultCount)
@@ -154,15 +139,7 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     })
   }
 
-  // Font loading and a monitor-DPI transition occur outside ResizeObserver's
-  // CSS-box model. Refresh xterm's cached glyph/canvas metrics explicitly so
-  // packaged WebView2/WebKit builds cannot keep a fallback-font grid.
-  const disposeCanvasTextMetrics = observeCanvasTextMetrics((fontFamily) => {
-    terminal.options.fontFamily = fontFamily
-    terminal.clearTextureAtlas()
-    terminal.refresh(0, Math.max(terminal.rows - 1, 0))
-    scheduleResize(true)
-  })
+  const disposeCanvasTextMetrics = observeTerminalFontMetrics(terminal, () => scheduleResize(true))
 
   const scheduleSettledHorizontalResize = () => {
     if (resizeSettleTimerRef.current !== null) {
@@ -170,26 +147,8 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     }
 
     resizeSettleTimerRef.current = window.setTimeout(() => {
-      const quietFor = Date.now() - lastTerminalOutputAtRef.current
-      if (quietFor < TERMINAL_RESIZE_OUTPUT_QUIET_MS) {
-        scheduleSettledHorizontalResize()
-        return
-      }
-
-      if (awaitingCommandCompletionRef.current) {
-        const promptLine = getLastVisibleTerminalLine(terminal)
-        if (!looksLikeShellPrompt(promptLine)) {
-          resizeSettleTimerRef.current = null
-          isHorizontalResizeActiveRef.current = false
-          pendingPromptResizeRef.current = true
-          return
-        }
-        awaitingCommandCompletionRef.current = false
-      }
-
       resizeSettleTimerRef.current = null
       isHorizontalResizeActiveRef.current = false
-      pendingPromptResizeRef.current = false
       window.requestAnimationFrame(() => scheduleResize(true, false, true))
     }, TERMINAL_RESIZE_SETTLE_MS)
   }
@@ -263,7 +222,6 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       if (nextTabId !== tabIdRef.current) {
         return
       }
-      lastTerminalOutputAtRef.current = Date.now()
       const shouldTrimHydratedBacklog = Date.now() < suppressHydratedChunksUntilRef.current
       if (shouldTrimHydratedBacklog) {
         // IPC ordering can leave one queued batch behind an authoritative
@@ -280,9 +238,6 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       appendRenderedTranscript(visibleChunk)
       clearSearchDecorations()
       const parsed = scheduleTerminalWrite(formatTerminalChunk(terminal, visibleChunk))
-      if (pendingPromptResizeRef.current) {
-        scheduleSettledHorizontalResize()
-      }
       return parsed
     })
 
@@ -304,8 +259,6 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
         if (!wasConnectedRef.current && connected) {
           lastSyncedSizeRef.current = null
           preserveVisibleBufferRef.current = false
-          awaitingCommandCompletionRef.current = false
-          pendingPromptResizeRef.current = false
           window.requestAnimationFrame(() => scheduleResize(true))
         }
         if (isDisconnecting) {

@@ -14,9 +14,9 @@ try {
   await page.addStyleTag({ path: root + 'node_modules/@xterm/xterm/css/xterm.css' })
   await page.addScriptTag({ path: root + 'node_modules/@xterm/xterm/lib/xterm.js' })
   for (const [file, symbol] of [
-    ['components/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
+    ['xterm-adapters/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
     ['components/terminal-scroll-controller', 'createTerminalScrollController'],
-    ['app/terminal-foreground-adapter', 'registerTerminalForegroundAdapter']
+    ['xterm-adapters/terminal-foreground-adapter', 'registerTerminalForegroundAdapter']
   ])
     await loadTypeScript(page, root + 'apps/tauri/src/renderer/' + file + '.ts', symbol)
   const report = await page.evaluate(async () => {

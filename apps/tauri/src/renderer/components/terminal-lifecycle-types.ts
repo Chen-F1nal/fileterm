@@ -3,7 +3,7 @@ import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Terminal, ITheme } from '@xterm/xterm'
 import type { TerminalZoomOperation } from '@fileterm/core'
-import type { TerminalLogColorizer } from '../app/terminal-log-colorizer'
+import type { TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 
 export type MutableRef<T> = { current: T }
 export type TerminalSize = { cols: number; rows: number; width: number; height: number }
@@ -59,9 +59,6 @@ export type TerminalLifecycleOptions = {
   lastSyncedSizeRef: MutableRef<TerminalSize | null>
   lastObservedHostRectRef: MutableRef<TerminalHostRect | null>
   isHorizontalResizeActiveRef: MutableRef<boolean>
-  lastTerminalOutputAtRef: MutableRef<number>
-  awaitingCommandCompletionRef: MutableRef<boolean>
-  pendingPromptResizeRef: MutableRef<boolean>
   profileIdRef: MutableRef<string>
   tabIdRef: MutableRef<string>
   onStatusRef: MutableRef<((message: string | null) => void) | undefined>
