@@ -68,3 +68,19 @@ Linux 主机，用实际 Claude Code 输出复核：
 
 同一清单需要在 macOS WKWebView 与 Linux WebKitGTK 上重复一次。当前自动化只
 覆盖本机 Chrome 与 Playwright WebKit。
+
+## 与开源终端的处理方式对照
+
+[Ghostty 的字素宽度说明](https://ghostty.org/docs/config/reference#grapheme-width-method)
+区分 Unicode 字素宽度与 legacy 兼容算法，并明确提示：程序使用的宽度算法与终端
+不一致时仍可能导致光标错位。[kitty 的文本尺寸协议](https://sw.kovidgoyal.net/kitty/text-sizing-protocol/)
+允许程序显式指定列数，以消除双方计算规则不一致；这需要输出程序配合，不能靠终端
+单方面猜出制表者意图。
+
+FileTerm 当前保留普通歧义符号的单列约定，将支持的 ZWJ、肤色、旗帜与键帽序列
+合并到一个双列 buffer 单元格；显示槽固定为 buffer 宽度，缩字号只改变像素大小。
+字体是否能把整个组合画成一个图案仍受系统 emoji 字体影响，列宽一致不代表字体支持完整。
+
+补充八列混排表格回归：同一行重复经过不同符号后，九条表格线必须与 ASCII 对照行
+保持对齐；在三个字号、三个 DPI、全选和跨格部分选中时检查 buffer 字符与列宽，
+全选复制保持原文。原有单符号表格继续检查选中前后的彩色笔画像素。

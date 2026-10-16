@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTypeScript } from './helpers/load-typescript.mjs'
-import { terminalSymbolCases, terminalSymbolTable } from '../fixtures/terminal-symbol-table.mjs'
+import {
+  terminalSymbolCases,
+  terminalSymbolTable,
+  terminalSymbolGridRows,
+  terminalSymbolGrid
+} from '../fixtures/terminal-symbol-table.mjs'
 
 const require = createRequire(import.meta.url)
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
@@ -203,6 +208,70 @@ try {
         console.log(JSON.stringify({ scale, fontSize, fontFamily, tableColumns: true, selectionShape: true }))
       }
     }
+    await page.evaluate(
+      async ({ grid, gridRows }) => {
+        window.terminal.reset()
+        window.terminal.resize(81, gridRows.length)
+        await new Promise((resolve) => window.terminal.write('\x1b[?25l' + grid, resolve))
+        window.gridRows = gridRows
+        await window.paint()
+      },
+      { grid: terminalSymbolGrid, gridRows: terminalSymbolGridRows }
+    )
+    for (const size of [24, 14, 20]) {
+      for (const selection of ['none', 'all', 'partial']) {
+        const report = await page.evaluate(
+          async ({ size, selection }) => {
+            const terminal = window.terminal
+            terminal.options.fontSize = size
+            if (selection === 'all') terminal.selectAll()
+            else if (selection === 'partial') terminal.select(2, 1, 81 * 4)
+            else terminal.clearSelection()
+            await window.paint()
+            const rows = [...terminal.element.querySelector('.xterm-rows').children]
+            const walls = rows.map((row) => {
+              const result = []
+              const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
+              for (let node; (node = walker.nextNode());) {
+                for (let offset = 0; offset < node.length; offset++) {
+                  if (node.data[offset] !== '│') continue
+                  const range = document.createRange()
+                  range.setStart(node, offset)
+                  range.setEnd(node, offset + 1)
+                  result.push(range.getBoundingClientRect().left - row.getBoundingClientRect().left)
+                }
+              }
+              return result
+            })
+            const cells = window.gridRows.map((cells, row) =>
+              Array.from({ length: cells.length }, (_, column) => {
+                const line = terminal.buffer.active.getLine(row)
+                const cell = line.getCell(column * 10 + 2)
+                return {
+                  chars: cell.getChars(),
+                  width: cell.getWidth(),
+                  wall: line.getCell(column * 10 + 10).getChars()
+                }
+              })
+            )
+            return { walls, cells, copied: terminal.getSelection() }
+          },
+          { size, selection }
+        )
+        for (const [row, cells] of terminalSymbolGridRows.entries()) {
+          assert.equal(report.walls[row].length, 9, 'mixed grid keeps all nine walls')
+          report.walls[row].forEach((x, column) =>
+            assert.ok(Math.abs(x - report.walls[0][column]) <= 1, `mixed grid drift at ${row}:${column}`)
+          )
+          cells.forEach(([glyph, width], column) =>
+            assert.deepEqual(report.cells[row][column], { chars: glyph, width, wall: '│' })
+          )
+        }
+        if (selection === 'all')
+          assert.equal(report.copied.replaceAll('\r', '').trimEnd(), terminalSymbolGrid.replaceAll('\r', ''))
+      }
+    }
+    console.log(JSON.stringify({ scale, mixedGrid: true }))
     await page.close()
   }
 } finally {
