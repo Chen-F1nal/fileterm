@@ -143,8 +143,7 @@ mod tests {
         for bytes in [
             &include_bytes!("../icons/app/linux/32x32.png")[..],
             &include_bytes!("../icons/app/linux/128x128.png")[..],
-            &include_bytes!("../icons/app/shared/classic-256.png")[..],
-            &include_bytes!("../icons/app/shared/classic-512.png")[..],
+            &include_bytes!("../icons/app/linux/128x128@2x.png")[..],
         ] {
             let icon = tauri::image::Image::from_bytes(bytes).unwrap();
             assert_icon_fills_canvas(bytes, icon.width());

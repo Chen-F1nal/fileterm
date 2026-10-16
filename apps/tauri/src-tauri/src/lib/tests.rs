@@ -93,7 +93,7 @@ mod tests {
         for icon in [
             &include_bytes!("../../icons/app/linux/32x32.png")[..],
             &include_bytes!("../../icons/app/linux/128x128.png")[..],
-            &include_bytes!("../../icons/app/shared/classic-256.png")[..],
+            &include_bytes!("../../icons/app/linux/128x128@2x.png")[..],
         ] {
             assert_eq!(&icon[..8], b"\x89PNG\r\n\x1a\n");
             assert_eq!(&icon[12..16], b"IHDR");

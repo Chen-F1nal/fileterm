@@ -50,7 +50,6 @@ def main() -> None:
         ICON_DIR / "32x32.png",
         ICON_DIR / "128x128.png",
         ICON_DIR / "128x128@2x.png",
-        LINUX_ICON_DIR / "128x128@2x.png",
         LINUX_ICON_DIR / "icon.png",
         ICON_DIR / "app-platform" / "windows-classic.ico",
         ICON_DIR / "app-platform" / "windows-clean.ico",
@@ -105,6 +104,7 @@ def main() -> None:
     for size, path in (
         (32, LINUX_ICON_DIR / "32x32.png"),
         (128, LINUX_ICON_DIR / "128x128.png"),
+        (256, LINUX_ICON_DIR / "128x128@2x.png"),
     ):
         save_png(resized(classic, size), path)
 

@@ -28,7 +28,7 @@ test('Linux package verification checks installed artwork, both desktop IDs, and
       ['usr/share/pixmaps/com.fileterm.desktop.png', 'app/linux/128x128.png'],
       ['usr/share/icons/hicolor/32x32/apps/fileterm.png', 'app/linux/32x32.png'],
       ['usr/share/icons/hicolor/128x128/apps/fileterm.png', 'app/linux/128x128.png'],
-      ['usr/share/icons/hicolor/256x256@2/apps/fileterm.png', 'app/shared/classic-256.png']
+      ['usr/share/icons/hicolor/256x256@2/apps/fileterm.png', 'app/linux/128x128@2x.png']
     ]) {
       put(destination, readFileSync(join(root, 'src-tauri/icons', source)))
     }
