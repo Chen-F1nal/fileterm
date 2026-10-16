@@ -1571,7 +1571,7 @@ const zhCN = {
   appIconHintMac:
     '仅切换 Dock 图标，退出应用后仍会保留所选样式。Finder 和 Launchpad 固定使用经典银边图标，不会随此设置切换。',
   appIconHintWindows: '切换窗口、任务栏、托盘以及当前用户的桌面、开始菜单和任务栏快捷方式图标。',
-  appIconHintLinux: '切换窗口、托盘和当前用户 FileTerm 启动器图标；桌面环境可能延迟刷新。',
+  appIconHintLinux: '切换窗口、托盘、应用菜单和桌面上的 FileTerm 图标；桌面环境可能延迟刷新。',
   appIconClassic: '经典银边',
   appIconClassicHint: '单层终端符号与银色外圈。',
   appIconMaterial: '双材质',
@@ -3671,7 +3671,7 @@ const enUS: typeof zhCN = {
   appIconHintWindows:
     'Changes window, taskbar, tray, and current-user Desktop, Start menu, and pinned taskbar shortcut icons.',
   appIconHintLinux:
-    'Changes window and tray icons and the current user’s FileTerm launcher; the desktop may refresh it later.',
+    'Changes the window, tray, app menu, and desktop shortcut icons; the desktop environment may refresh them later.',
   appIconClassic: 'Classic silver rim',
   appIconClassicHint: 'Single-layer terminal mark with a silver rim.',
   appIconMaterial: 'Two-tone',

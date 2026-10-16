@@ -9,9 +9,11 @@ impl Fixture {
         Self(root)
     }
     fn update(&self, variant: &str) -> Result<(), String> {
+        let desktop_dir = self.0.join("desktop");
         update_launcher_icons(
             &self.0.join("applications"),
             &self.0.join("icons"),
+            Some(&desktop_dir),
             Path::new("/usr/bin/fileterm"),
             variant,
         )
@@ -58,6 +60,87 @@ fn both_desktop_ids_follow_variants_and_restore_classic() {
     assert_ne!(paths[0], paths[1]);
     assert_ne!(paths[1], paths[2]);
     assert_eq!(paths[0], paths[3]);
+}
+
+#[cfg(unix)]
+#[test]
+fn updates_matching_desktop_shortcut_and_keeps_its_mode_and_other_fields() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = Fixture::new();
+    let desktop_dir = fixture.0.join("desktop");
+    fs::create_dir_all(&desktop_dir).unwrap();
+    let shortcut = desktop_dir.join("FileTerm.desktop");
+    fs::write(
+        &shortcut,
+        "[Desktop Entry]\nName=My FileTerm\nExec=/usr/bin/fileterm %U\nIcon=fileterm\nTerminal=false\n",
+    )
+    .unwrap();
+    fs::set_permissions(&shortcut, fs::Permissions::from_mode(0o755)).unwrap();
+
+    fixture.update("material").unwrap();
+
+    let contents = fs::read_to_string(&shortcut).unwrap();
+    let icon = contents
+        .lines()
+        .find(|line| line.starts_with("Icon="))
+        .unwrap()
+        .strip_prefix("Icon=")
+        .unwrap();
+    assert!(icon.contains("launcher-material-"));
+    assert_eq!(
+        fs::read(icon).unwrap(),
+        super::super::icon_bytes("material")
+    );
+    assert!(contents.contains("Name=My FileTerm\nExec=/usr/bin/fileterm %U\n"));
+    assert!(contents.contains("Terminal=false\n"));
+    assert_eq!(
+        fs::metadata(shortcut).unwrap().permissions().mode() & 0o777,
+        0o755
+    );
+}
+
+#[test]
+fn leaves_unrelated_or_customized_desktop_shortcuts_untouched() {
+    let fixture = Fixture::new();
+    let desktop_dir = fixture.0.join("desktop");
+    fs::create_dir_all(&desktop_dir).unwrap();
+    let unrelated = desktop_dir.join("Other.desktop");
+    let customized = desktop_dir.join("FileTerm customized.desktop");
+    fs::write(
+        &unrelated,
+        "[Desktop Entry]\nName=Other\nExec=/usr/bin/other %U\nIcon=fileterm\n",
+    )
+    .unwrap();
+    fs::write(
+        &customized,
+        "[Desktop Entry]\nName=FileTerm\nExec=/usr/bin/fileterm %U\nIcon=my-custom-icon\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    let linked_target = fixture.0.join("linked.desktop");
+    #[cfg(unix)]
+    let linked_shortcut = desktop_dir.join("Linked.desktop");
+    #[cfg(unix)]
+    {
+        fs::write(
+            &linked_target,
+            "[Desktop Entry]\nName=FileTerm\nExec=/usr/bin/fileterm %U\nIcon=fileterm\n",
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(&linked_target, &linked_shortcut).unwrap();
+    }
+    let unrelated_before = fs::read(&unrelated).unwrap();
+    let customized_before = fs::read(&customized).unwrap();
+    #[cfg(unix)]
+    let linked_target_before = fs::read(&linked_target).unwrap();
+
+    fixture.update("clean").unwrap();
+
+    assert_eq!(fs::read(unrelated).unwrap(), unrelated_before);
+    assert_eq!(fs::read(customized).unwrap(), customized_before);
+    #[cfg(unix)]
+    assert_eq!(fs::read(linked_target).unwrap(), linked_target_before);
 }
 
 #[test]
@@ -138,6 +221,7 @@ fn generated_entries_round_trip_through_native_gio_with_special_path_characters(
     update_launcher_icons(
         &fixture.0.join("applications"),
         &fixture.0.join("icons"),
+        None,
         &executable,
         "material",
     )
