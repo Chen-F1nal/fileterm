@@ -26,7 +26,6 @@ use crate::AppError;
 type HmacSha256 = Hmac<Sha256>;
 
 const DEFAULT_REMOTE_PATH: &str = "fileterm/connections.json";
-const MAX_BUNDLE_BYTES: usize = 5 * 1024 * 1024;
 const PROVIDER_CUSTOM: &str = "custom";
 const PROVIDER_CLOUDFLARE_R2: &str = "cloudflare-r2";
 const PROVIDER_BITIFUL_S4: &str = "bitiful-s4";

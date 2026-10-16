@@ -1173,6 +1173,8 @@ export interface WebDavSyncResult {
   updated?: number
   replaced?: number
   skipped?: number
+  sshKeysImported?: number
+  sshKeysUpdated?: number
   legacyPlaintext?: boolean
 }
 
@@ -1206,6 +1208,8 @@ export interface S3BackupResult {
   updated?: number
   replaced?: number
   skipped?: number
+  sshKeysImported?: number
+  sshKeysUpdated?: number
   legacyPlaintext?: boolean
 }
 

@@ -16,11 +16,11 @@ use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 use url::Url;
 
-use crate::services::{backup_crypto, backup_prompt, profile_ops};
+use crate::services::{backup_crypto, backup_prompt, profile_ops, ssh_keys};
 use crate::storage::workspace_file;
 use crate::AppError;
 
-const MAX_BUNDLE_BYTES: usize = 5 * 1024 * 1024;
+pub(crate) const MAX_BUNDLE_BYTES: usize = 16 * 1024 * 1024;
 const DEFAULT_REMOTE_PATH: &str = "fileterm-connections.json";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -119,8 +119,8 @@ async fn upload_inner(app: &AppHandle, mode: UploadMode) -> Result<Value, AppErr
     config.content_hash = Some(content_hash);
     write_config(app, &config)?;
     let message = match mode {
-        UploadMode::OverwriteCloud => "已用本地连接配置覆盖 WebDAV 云端备份。",
-        UploadMode::MergeCloud => "已将本地连接配置合并到 WebDAV 云端备份。",
+        UploadMode::OverwriteCloud => "已用本地连接配置和 SSH 密钥库覆盖 WebDAV 云端备份。",
+        UploadMode::MergeCloud => "已将本地连接配置和 SSH 密钥库合并到 WebDAV 云端备份。",
     };
     Ok(serde_json::json!({
         "action": "upload",
@@ -202,9 +202,11 @@ pub async fn download(app: &AppHandle, mode: Option<&str>) -> Result<Value, AppE
             app,
             "webdav",
             format!(
-                "download completed imported={} updated={} skipped={}",
+                "download completed imported={} updated={} ssh_keys_imported={} ssh_keys_updated={} skipped={}",
                 value.get("imported").and_then(Value::as_u64).unwrap_or(0),
                 value.get("updated").and_then(Value::as_u64).unwrap_or(0),
+                value.get("sshKeysImported").and_then(Value::as_u64).unwrap_or(0),
+                value.get("sshKeysUpdated").and_then(Value::as_u64).unwrap_or(0),
                 value.get("skipped").and_then(Value::as_u64).unwrap_or(0)
             ),
         ),
@@ -238,12 +240,14 @@ async fn download_inner(app: &AppHandle, mode: DownloadMode) -> Result<Value, Ap
     write_config(app, &config)?;
     let action = match mode {
         DownloadMode::OverwriteLocal => format!(
-            "已用 WebDAV 云端备份覆盖本地连接：导入 {} 个，替换 {} 个，跳过 {} 个无效项。",
-            summary.imported, summary.replaced, summary.skipped
+            "已用 WebDAV 云端备份覆盖本地连接：导入 {} 个，替换 {} 个，跳过 {} 个无效项。SSH 密钥新增 {} 个，更新 {} 个。",
+            summary.imported, summary.replaced, summary.skipped,
+            summary.ssh_keys_imported, summary.ssh_keys_updated
         ),
         DownloadMode::MergeLocal => format!(
-            "已将 WebDAV 云端备份合并到本地：新增 {} 个，更新 {} 个，跳过 {} 个无效项。",
-            summary.imported, summary.updated, summary.skipped
+            "已将 WebDAV 云端备份合并到本地：新增 {} 个，更新 {} 个，跳过 {} 个无效项。SSH 密钥新增 {} 个，更新 {} 个。",
+            summary.imported, summary.updated, summary.skipped,
+            summary.ssh_keys_imported, summary.ssh_keys_updated
         ),
     };
     let message = if summary.legacy_plaintext {
@@ -262,6 +266,8 @@ async fn download_inner(app: &AppHandle, mode: DownloadMode) -> Result<Value, Ap
         "updated": summary.updated,
         "replaced": summary.replaced,
         "skipped": summary.skipped,
+        "sshKeysImported": summary.ssh_keys_imported,
+        "sshKeysUpdated": summary.ssh_keys_updated,
         "legacyPlaintext": summary.legacy_plaintext,
     }))
 }
@@ -281,6 +287,11 @@ async fn download_payload(
         return Err(response_error("下载", response.status()));
     }
     let remote_etag = etag(response.headers());
-    let bytes = crate::services::webdav::read_bounded_bundle(response, MAX_BUNDLE_BYTES, "WebDAV").await?;
+    let bytes = crate::services::webdav::read_bounded_bundle(
+        response,
+        MAX_BUNDLE_BYTES,
+        "WebDAV",
+    )
+    .await?;
     Ok((bytes, remote_etag))
 }

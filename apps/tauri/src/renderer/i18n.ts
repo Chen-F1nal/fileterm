@@ -1508,7 +1508,7 @@ const zhCN = {
   securitySwitchToLockedPreview: '切换为锁屏状态',
   securitySwitchToLoadingPreview: '切换为加载状态',
   securityBackupCardTitle: '远程备份密码',
-  securityBackupCardHint: 'WebDAV 与 S3 使用同一个密码加密远程备份包。',
+  securityBackupCardHint: 'WebDAV 与 S3 使用同一个密码加密远程备份包，其中包含 FileTerm SSH 密钥库。',
   securityBackupPasswordUsage: '上传和下载会自动使用这里保存的备份密码；未配置时会自动跳转回本页。',
   securityBackupPassword: '远程备份密码',
   securityCurrentBackupPassword: '当前远程备份密码',
@@ -1570,7 +1570,7 @@ const zhCN = {
   appIcon: '应用图标',
   appIconHintMac:
     '仅切换 Dock 图标，退出应用后仍会保留所选样式。Finder 和 Launchpad 固定使用经典银边图标，不会随此设置切换。',
-  appIconHintWindows: '切换运行中窗口、任务栏和托盘图标；安装包与已固定快捷方式仍用经典银边。',
+  appIconHintWindows: '切换窗口、任务栏、托盘以及当前用户的桌面、开始菜单和任务栏快捷方式图标。',
   appIconHintLinux: '切换窗口、托盘和当前用户 FileTerm 启动器图标；桌面环境可能延迟刷新。',
   appIconClassic: '经典银边',
   appIconClassicHint: '单层终端符号与银色外圈。',
@@ -1925,7 +1925,7 @@ const zhCN = {
   configSync: '配置同步',
   webdavConfigSync: 'WebDAV 配置同步',
   webdavConfigSyncDescription:
-    '手动上传和下载完整连接配置，包括密码、私钥口令和代理密码。远程备份统一使用“会话安全”中保存的远程备份密码自动加密，不需要每次单独输入。旧版明文备份仍可导入，但建议重新上传加密。',
+    '手动上传和下载完整连接配置；新备份会将 FileTerm 密钥库中的 SSH 私钥和已保存口令一起加密。远程备份统一使用“会话安全”中保存的密码。下载会新增或更新备份中的密钥，并保留本机独有的密钥。此前创建的备份仍可导入，但不含 SSH 私钥；重新上传后才会同步密钥。',
   webdavUrl: 'WebDAV 地址',
   webdavRemoteFile: '远端文件',
   webdavUsername: '用户名',
@@ -1936,7 +1936,7 @@ const zhCN = {
   webdavTestConnection: '测试连接',
   s3Backup: 'S3 配置备份',
   s3BackupDescription:
-    '手动备份和恢复完整连接配置（含密码、私钥口令和代理密码）。远程备份会用你每次输入的主密码加密；不会保存主密码。请使用仅授予目标 Bucket 读写权限的 Access Key。',
+    '手动备份和恢复完整连接配置；新备份会将 FileTerm 密钥库中的 SSH 私钥和已保存口令一起加密。远程备份使用“会话安全”中保存的密码。下载会新增或更新备份中的密钥，并保留本机独有的密钥。请使用仅授予目标 Bucket 读写权限的 Access Key。',
   s3Provider: '存储提供商',
   s3ProviderCloudflareR2: 'Cloudflare R2',
   s3ProviderBitifulS4: '缤纷云 Bitiful S4',
@@ -3594,7 +3594,8 @@ const enUS: typeof zhCN = {
   securitySwitchToLockedPreview: 'Switch to locked state',
   securitySwitchToLoadingPreview: 'Switch to loading state',
   securityBackupCardTitle: 'Remote backup password',
-  securityBackupCardHint: 'WebDAV and S3 use the same password to encrypt remote backup bundles.',
+  securityBackupCardHint:
+    'WebDAV and S3 use the same password to encrypt remote backups, including the FileTerm SSH key vault.',
   securityBackupPasswordUsage:
     'Uploads and downloads use this saved backup password automatically. If it is missing, FileTerm returns here.',
   securityBackupPassword: 'Remote backup password',
@@ -3668,7 +3669,7 @@ const enUS: typeof zhCN = {
   appIconHintMac:
     'Only changes the Dock icon, which keeps the selected style after FileTerm quits. Finder and Launchpad always use the classic silver rim icon and are not affected by this setting.',
   appIconHintWindows:
-    'Changes running window, taskbar, and tray icons; the installer and pinned shortcuts keep the classic silver rim.',
+    'Changes window, taskbar, tray, and current-user Desktop, Start menu, and pinned taskbar shortcut icons.',
   appIconHintLinux:
     'Changes window and tray icons and the current user’s FileTerm launcher; the desktop may refresh it later.',
   appIconClassic: 'Classic silver rim',
@@ -4044,7 +4045,7 @@ const enUS: typeof zhCN = {
   configSync: 'Config Sync',
   webdavConfigSync: 'WebDAV Config Sync',
   webdavConfigSyncDescription:
-    'Upload and download the complete connection configuration, including passwords, key passphrases, and proxy passwords. Remote backups use the saved password from Session Security automatically, so you do not enter it for every operation. Older plaintext backups remain importable, but re-upload them to encrypt them.',
+    'Upload and download the complete connection configuration. New backups also encrypt SSH private keys and saved passphrases from the FileTerm key vault with the saved Session Security password. Downloads add or update keys present in the backup while keeping keys that exist only on this device. Existing backups remain importable but do not contain SSH private keys; upload again to sync them.',
   webdavUrl: 'WebDAV URL',
   webdavRemoteFile: 'Remote File',
   webdavUsername: 'Username',
@@ -4055,7 +4056,7 @@ const enUS: typeof zhCN = {
   webdavTestConnection: 'Test connection',
   s3Backup: 'S3 Config Backup',
   s3BackupDescription:
-    'Back up and restore the complete connection configuration, including passwords, key passphrases, and proxy passwords. Remote backups are encrypted with a password you enter for each operation; the password is never saved. Use an Access Key limited to the target bucket.',
+    'Back up and restore the complete connection configuration. New backups also encrypt SSH private keys and saved passphrases from the FileTerm key vault with the password saved in Session Security. Downloads add or update keys present in the backup while keeping keys that exist only on this device. Use an Access Key limited to read and write access for the target bucket.',
   s3Provider: 'Storage provider',
   s3ProviderCloudflareR2: 'Cloudflare R2',
   s3ProviderBitifulS4: 'Bitiful S4',

@@ -75,6 +75,9 @@ pub fn set_app_icon(app: &AppHandle, variant: &str) -> Result<(), String> {
             tray.set_icon(Some(tray_icon_image(variant)?))
                 .map_err(|error| error.to_string())?;
         }
+
+        #[cfg(target_os = "windows")]
+        windows::refresh_shortcut_icons(app, variant);
     }
 
     #[cfg(target_os = "linux")]
