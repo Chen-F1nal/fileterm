@@ -14,7 +14,7 @@
 
 ### 本版本包含的主要 PR 和问题修复
 
-- Windows 与 Linux 应用图标刷新修复，以及 deb、rpm 和 pacman 安装包图标验证。
+- [PR #320](https://github.com/St0ff3l/fileterm/pull/320)：修复 Windows 与 Linux 应用图标刷新，并验证 deb、rpm 和 pacman 安装包图标。
 
 完整变更记录请查看 [v2.3.1-beta.2 与 v2.3.1-beta.3 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.2...v2.3.1-beta.3)。
 
@@ -41,7 +41,7 @@ This beta fixes Windows app icon changes not refreshing and checks the default i
 
 ### Main PRs and issues
 
-- Windows and Linux app icon refresh fixes, plus icon validation for deb, rpm, and pacman packages.
+- [PR #320](https://github.com/St0ff3l/fileterm/pull/320): Fix Windows and Linux app icon refresh and validate icons in deb, rpm, and pacman packages.
 
 See the [comparison between v2.3.1-beta.2 and v2.3.1-beta.3](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.2...v2.3.1-beta.3) for the complete change set.
 
