@@ -5,7 +5,7 @@ use std::path::Path;
 use tauri::AppHandle;
 
 pub fn set_app_icon(app: &AppHandle, variant: &str) -> Result<(), String> {
-    let icon_bytes = crate::app_icon::icon_bytes(variant);
+    let icon_bytes = crate::app_icon::macos_icon_bytes(variant);
     let variant = variant.to_owned();
     let logging_app = app.clone();
 

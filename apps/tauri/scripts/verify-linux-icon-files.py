@@ -8,23 +8,22 @@ import struct
 
 
 ICON_FILES = {
-    "usr/share/pixmaps/fileterm.png": "128x128.png",
-    "usr/share/pixmaps/com.fileterm.desktop.png": "128x128.png",
-    "usr/share/icons/hicolor/32x32/apps/fileterm.png": "32x32.png",
-    "usr/share/icons/hicolor/128x128/apps/fileterm.png": "128x128.png",
-    "usr/share/icons/hicolor/256x256@2/apps/fileterm.png": "128x128@2x.png",
+    "usr/share/pixmaps/fileterm.png": ("app/linux/128x128.png", 128),
+    "usr/share/pixmaps/com.fileterm.desktop.png": ("app/linux/128x128.png", 128),
+    "usr/share/icons/hicolor/32x32/apps/fileterm.png": ("app/linux/32x32.png", 32),
+    "usr/share/icons/hicolor/128x128/apps/fileterm.png": ("app/linux/128x128.png", 128),
+    "usr/share/icons/hicolor/256x256@2/apps/fileterm.png": ("app/linux/128x128@2x.png", 256),
 }
 
 
 def verify(root, icons_dir):
-    for relative, source in ICON_FILES.items():
+    for relative, (source, size) in ICON_FILES.items():
         payload = (root / relative).read_bytes()
         expected = (icons_dir / source).read_bytes()
         if payload != expected:
             raise ValueError(f"Stale or modified package icon: {relative}")
         if payload[:8] != b"\x89PNG\r\n\x1a\n" or payload[24:26] != bytes([8, 6]):
             raise ValueError(f"Expected an 8-bit RGBA PNG: {relative}")
-        size = {"32x32.png": 32, "128x128.png": 128, "128x128@2x.png": 256}[source]
         if struct.unpack(">II", payload[16:24]) != (size, size):
             raise ValueError(f"Incorrect icon dimensions: {relative}")
 

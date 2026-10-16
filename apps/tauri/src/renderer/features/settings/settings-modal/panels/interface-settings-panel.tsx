@@ -33,6 +33,9 @@ import {
 import dockClassic from '../../../../assets/app-icons/dock-classic.png'
 import dockMaterial from '../../../../assets/app-icons/dock-material.png'
 import dockClean from '../../../../assets/app-icons/dock-clean.png'
+import platformClassic from '../../../../../../src-tauri/icons/app/shared/classic-512.png'
+import platformMaterial from '../../../../../../src-tauri/icons/app/shared/material-512.png'
+import platformClean from '../../../../../../src-tauri/icons/app/shared/clean-512.png'
 
 type InterfaceSettingsPanelContext = {
   t: LocaleMessages
@@ -209,6 +212,10 @@ export function InterfaceSettingsPanel() {
       : desktopApi?.platform === 'linux'
         ? t.appIconHintLinux
         : t.appIconHintMac
+  const appIconPreviews =
+    desktopApi?.platform === 'darwin'
+      ? { classic: dockClassic, material: dockMaterial, clean: dockClean }
+      : { classic: platformClassic, material: platformMaterial, clean: platformClean }
 
   return (
     <div className="settings-panel">
@@ -854,7 +861,7 @@ export function InterfaceSettingsPanel() {
                 value: 'classic',
                 label: (
                   <>
-                    <img alt="" src={dockClassic} />
+                    <img alt="" src={appIconPreviews.classic} />
                     <span>{t.appIconClassic}</span>
                   </>
                 ),
@@ -864,7 +871,7 @@ export function InterfaceSettingsPanel() {
                 value: 'material',
                 label: (
                   <>
-                    <img alt="" src={dockMaterial} />
+                    <img alt="" src={appIconPreviews.material} />
                     <span>{t.appIconMaterial}</span>
                   </>
                 ),
@@ -874,7 +881,7 @@ export function InterfaceSettingsPanel() {
                 value: 'clean',
                 label: (
                   <>
-                    <img alt="" src={dockClean} />
+                    <img alt="" src={appIconPreviews.clean} />
                     <span>{t.appIconClean}</span>
                   </>
                 ),

@@ -10,7 +10,7 @@
 
 - Windows 原生适配放在 `src/app_icon/windows.rs`；在主线程同时设置大小图标，启动恢复、设置切换与新建子窗口复用此入口。
 - 使用现有 Windows 256px RGBA 变体资源。三个原生图标句柄由主线程缓存持有，避免切换后句柄提前销毁或每次切换泄漏资源。
-- 从 `icons/app-tray/tray-windows-classic-256.png` 生成 `icons/icon.ico`，包含 16、20、24、32、40、48、64、128、256px 图层。
+- 从经典银边源图生成 `icons/app/windows/classic.ico`，包含 16、20、24、32、40、48、64、128、256px 图层；当前经典、Material、Clean 三种 ICO 都按平台归档在 `icons/app/windows/`。
 - 静态安装图标保持经典银边；设置切换作用于运行时窗口和托盘。
 
 ## 验证结果
