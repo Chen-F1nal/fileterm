@@ -5,6 +5,7 @@ bundle_root="${1:?usage: verify-linux-package-metadata.sh BUNDLE_ROOT DEB_ARCH R
 expected_deb_arch="${2:?expected DEB architecture is required}"
 expected_rpm_arch="${3:?expected RPM architecture is required}"
 temp_root="${4:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 deb_file="$(find "$bundle_root/deb" -maxdepth 1 -type f -name '*.deb' -print -quit)"
 rpm_file="$(find "$bundle_root/rpm" -maxdepth 1 -type f -name '*.rpm' -print -quit)"
@@ -105,6 +106,29 @@ done
 
 appimage_verify_root="$(mktemp -d "$temp_root/fileterm-appimage-check.XXXXXX")"
 trap 'rm -rf "$appimage_verify_root"' EXIT
+dpkg-deb --extract "$deb_file" "$appimage_verify_root/deb"
+mkdir -p "$appimage_verify_root/rpm"
+rpm_file="$(cd "$(dirname "$rpm_file")" && pwd)/$(basename "$rpm_file")"
+rpm_cpio="$appimage_verify_root/package.rpm.cpio"
+rpm2cpio_status=0
+rpm2cpio "$rpm_file" > "$rpm_cpio" || rpm2cpio_status=$?
+if [[ ! -s "$rpm_cpio" ]]; then
+  echo "RPM payload extraction produced no CPIO data (rpm2cpio exit $rpm2cpio_status)." >&2
+  exit 1
+fi
+if ! cpio -it --quiet < "$rpm_cpio" >/dev/null; then
+  echo "RPM payload is not a complete, readable CPIO archive (rpm2cpio exit $rpm2cpio_status)." >&2
+  exit 1
+fi
+if [[ "$rpm2cpio_status" -ne 0 ]]; then
+  echo "rpm2cpio returned $rpm2cpio_status after producing a complete CPIO archive; validating extracted package files."
+fi
+(
+  cd "$appimage_verify_root/rpm"
+  cpio -id --quiet < "$rpm_cpio"
+)
+python3 "$script_dir/verify-linux-icon-files.py" "$appimage_verify_root/deb"
+python3 "$script_dir/verify-linux-icon-files.py" "$appimage_verify_root/rpm"
 appimage_file="$(cd "$(dirname "$appimage_file")" && pwd)/$(basename "$appimage_file")"
 (
   cd "$appimage_verify_root"

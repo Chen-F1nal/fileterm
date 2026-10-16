@@ -103,9 +103,7 @@ pub fn open_child_window(app: &AppHandle, input: OpenWindowInput) -> Result<(), 
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         let variant = crate::commands::app_get_ui_preferences(app.clone())?.app_icon;
-        window
-            .set_icon(crate::app_icon::window_icon_image(&variant).map_err(AppError::Window)?)
-            .map_err(|error| AppError::Window(error.to_string()))?;
+        crate::app_icon::set_window_icon(&window, &variant).map_err(AppError::Window)?;
     }
     #[cfg(target_os = "windows")]
     prefer_windows_native_rounded_corners(&window);
