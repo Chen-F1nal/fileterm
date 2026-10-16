@@ -432,17 +432,12 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
   }
 
   const renderAllRows = () => renderRows(0, terminal.rows - 1)
-  const disposables = [
-    terminal.onRender(({ start, end }) => renderRows(start, end)),
-    terminal.onScroll(renderAllRows),
-    terminal.onResize(renderAllRows)
-  ]
+  // xterm batches scroll/resize into onRender; their immediate events still have stale DOM rows.
+  const disposable = terminal.onRender(({ start, end }) => renderRows(start, end))
   renderAllRows()
   return {
     dispose() {
-      for (const disposable of disposables) {
-        disposable.dispose()
-      }
+      disposable.dispose()
       terminal.element?.querySelectorAll(`.${BLOCK_GLYPH_CLASS}`).forEach((glyph) => glyph.remove())
       terminal.element?.querySelectorAll(`.${BLOCK_GLYPH_PLACEHOLDER_CLASS}`).forEach((glyph) => {
         glyph.replaceWith(glyph.ownerDocument.createTextNode(glyph.textContent ?? ''))
