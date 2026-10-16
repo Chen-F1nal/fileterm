@@ -26,6 +26,7 @@ pub(super) fn set_launcher_icon(app: &tauri::AppHandle, variant: &str) -> Result
     let executable = std::env::var_os("APPIMAGE")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| packaged_launcher(&current_exe));
+    let desktop_dir = app.path().desktop_dir().ok();
     update_launcher_icons(
         &app.path()
             .data_dir()
@@ -35,6 +36,7 @@ pub(super) fn set_launcher_icon(app: &tauri::AppHandle, variant: &str) -> Result
             .app_data_dir()
             .map_err(|error| error.to_string())?
             .join("app-icons"),
+        desktop_dir.as_deref(),
         &executable,
         variant,
     )
@@ -54,6 +56,7 @@ fn packaged_launcher(current_exe: &Path) -> std::path::PathBuf {
 fn update_launcher_icons(
     applications_dir: &Path,
     icon_dir: &Path,
+    desktop_dir: Option<&Path>,
     executable: &Path,
     variant: &str,
 ) -> Result<(), String> {
@@ -116,15 +119,144 @@ fn update_launcher_icons(
         // generated entries and prevents falling back to stale installed art.
         write_if_changed(&applications_dir.join(name), contents.as_bytes())?;
     }
+    if let Some(desktop_dir) = desktop_dir {
+        refresh_desktop_shortcuts(desktop_dir, &exec, icon_dir, &icon)?;
+    }
     Ok(())
+}
+
+fn refresh_desktop_shortcuts(
+    desktop_dir: &Path,
+    executable: &str,
+    icon_dir: &Path,
+    icon: &str,
+) -> Result<(), String> {
+    let entries = match fs::read_dir(desktop_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.to_string()),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path
+            .extension()
+            .is_none_or(|extension| extension != "desktop")
+        {
+            continue;
+        }
+        if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            continue;
+        }
+        let Ok(contents) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(updated) = update_desktop_shortcut(&contents, executable, icon_dir, icon) else {
+            continue;
+        };
+        write_if_changed(&path, updated.as_bytes())?;
+    }
+    Ok(())
+}
+
+fn update_desktop_shortcut(
+    contents: &str,
+    executable: &str,
+    icon_dir: &Path,
+    icon: &str,
+) -> Option<String> {
+    let mut in_desktop_entry = false;
+    let mut matches_executable = false;
+    let mut icon_line = None;
+    let mut lines: Vec<_> = contents.split_inclusive('\n').collect();
+    let unquoted_executable = executable
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .filter(|value| !value.chars().any(char::is_whitespace));
+    for (index, raw_line) in lines.iter().enumerate() {
+        let line = raw_line.trim_end_matches(&['\r', '\n'][..]);
+        if line.starts_with('[') {
+            in_desktop_entry = line == "[Desktop Entry]";
+        } else if in_desktop_entry {
+            if let Some(value) = line.strip_prefix("Exec=") {
+                matches_executable = [Some(executable), unquoted_executable]
+                    .into_iter()
+                    .flatten()
+                    .any(|command| {
+                        ["", " %U", " %u", " %F", " %f"]
+                            .iter()
+                            .any(|suffix| value == format!("{command}{suffix}"))
+                    });
+            } else if let Some(value) = line.strip_prefix("Icon=") {
+                icon_line = Some((index, value));
+            }
+        }
+    }
+    let (index, current_icon) = icon_line?;
+    if !matches_executable || !is_fileterm_icon(current_icon, icon_dir) {
+        return None;
+    }
+
+    let line_ending = if lines[index].ends_with("\r\n") {
+        "\r\n"
+    } else if lines[index].ends_with('\n') {
+        "\n"
+    } else {
+        ""
+    };
+    lines[index] = "";
+    let mut updated = String::with_capacity(contents.len() + icon.len());
+    for (line_index, line) in lines.into_iter().enumerate() {
+        if line_index == index {
+            updated.push_str("Icon=");
+            updated.push_str(icon);
+            updated.push_str(line_ending);
+        } else {
+            updated.push_str(line);
+        }
+    }
+    Some(updated)
+}
+
+fn is_fileterm_icon(icon: &str, icon_dir: &Path) -> bool {
+    if matches!(
+        icon,
+        "fileterm"
+            | "fileterm.png"
+            | "com.fileterm.desktop"
+            | "/usr/share/pixmaps/fileterm.png"
+            | "/usr/share/pixmaps/com.fileterm.desktop.png"
+            | "/usr/share/icons/hicolor/32x32/apps/fileterm.png"
+            | "/usr/share/icons/hicolor/128x128/apps/fileterm.png"
+            | "/usr/share/icons/hicolor/256x256@2/apps/fileterm.png"
+    ) {
+        return true;
+    }
+    let path = Path::new(icon);
+    path.parent() == Some(icon_dir)
+        && path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("launcher-") && name.ends_with(".png"))
 }
 
 fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if fs::read(path).is_ok_and(|current| current == bytes) {
         return Ok(());
     }
+    let permissions = fs::metadata(path)
+        .ok()
+        .map(|metadata| metadata.permissions());
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
-    fs::write(&temporary, bytes).map_err(|error| error.to_string())?;
+    if let Err(error) = fs::write(&temporary, bytes) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.to_string());
+    }
+    if let Some(permissions) = permissions {
+        if let Err(error) = fs::set_permissions(&temporary, permissions) {
+            let _ = fs::remove_file(&temporary);
+            return Err(error.to_string());
+        }
+    }
     if let Err(error) = fs::rename(&temporary, path) {
         let _ = fs::remove_file(temporary);
         return Err(error.to_string());
