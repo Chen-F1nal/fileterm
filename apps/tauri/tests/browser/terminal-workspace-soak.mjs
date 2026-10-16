@@ -15,7 +15,7 @@ const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'play
 const duration = Number(process.env.FILETERM_SOAK_MS || 60000)
 assert.ok(Number.isFinite(duration) && duration >= 1000)
 const directory = realpathSync(mkdtempSync(join(tmpdir(), 'fileterm-workspace-soak-')))
-const root = fileURLToPath(new URL('../../../../', import.meta.url))
+const root = fileURLToPath(new URL('../../../../', import.meta.url)).replaceAll('\\', '/')
 const hookPath = root + 'apps/tauri/src/renderer/hooks/use-workspace-ipc-sync.ts'
 const baselineSource =
   process.env.FILETERM_PERF_BASELINE === '1'
