@@ -4,7 +4,7 @@
 
 推荐结构：中文正文、英文正文、GitHub 官方生成区。中文和英文都属于自定义正文，英文版本紧跟在中文版本后面；官方生成区必须由 GitHub 在最后追加。
 
-每份 Release 正文都要在版本简介之后、更新重点之前放置对应语言的安装指南入口。中文区域只使用 `**安装指南**` 标题和一个中文安装指南徽章；英文区域只使用 `**Installation guides**` 标题和一个英文安装指南徽章。每个语言区域仅一个按钮，禁止重复放置中英文两个按钮或使用双语拼接标题。GitHub Release 正文使用可点击的 Shields 徽章实现按钮式入口；徽章统一使用中性深灰标签和标准 GitHub 蓝 `#0969DA`，链接固定指向 `main` 上维护的对应语言安装指南：
+每份 Release 正文在一句话简介后放一个紧凑下载区，使用三列表格 `平台 | 类型 | 下载`：macOS、Windows、Linux 依次排列，每个平台/包类型各占一行，同一行的架构链接在“下载”列并排显示。文件名必须与 `.github/workflows/release.yml` 一致；`<version>` 使用不带 `v` 的版本号，tag 路径使用 `v<version>`。Windows 便携版注明需要 WebView2 Runtime，不写成内置 WebView2。Linux 的 DEB、RPM、AppImage、Arch 分行列出，每种只列实际发布的架构。随后、更新重点之前放对应语言的安装指南入口：中文区域只使用 `**安装指南**` 标题和一个中文安装指南徽章；英文区域只使用 `**Installation guides**` 标题和一个英文安装指南徽章。每个语言区域仅一个按钮，禁止重复放置中英文两个按钮或使用双语拼接标题。徽章统一使用中性深灰标签和标准 GitHub 蓝 `#0969DA`，链接固定指向 `main` 上维护的对应语言安装指南：
 
 ```md
 **安装指南**
@@ -34,6 +34,18 @@
 
 一句话版本简介。
 
+**下载地址**
+
+| 平台    | 类型     | 下载                                                                                                                                                                                                                                                                     |
+| ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS   | DMG      | [Apple 芯片](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-macos-arm64.dmg) · [Intel](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-macos-x64.dmg)                                           |
+| Windows | 安装版   | [x64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-x64-setup.exe) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-arm64-setup.exe)                                  |
+| Windows | 便携版   | [x64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-x64-portable.exe) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-arm64-portable.exe)（需安装 WebView2 Runtime） |
+| Linux   | DEB      | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.deb) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.deb)                                            |
+| Linux   | RPM      | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.rpm) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.rpm)                                            |
+| Linux   | AppImage | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.AppImage) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.AppImage)                                  |
+| Linux   | Arch     | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.pkg.tar.zst) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.pkg.tar.zst)                            |
+
 **安装指南**
 
 [![简体中文安装指南](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-%E5%AE%89%E8%A3%85%E6%8C%87%E5%8D%97-0969DA?style=for-the-badge&labelColor=555)](https://github.com/St0ff3l/fileterm/blob/main/docs/installation/zh-CN.md)
@@ -62,6 +74,18 @@
 
 One-sentence release summary in English.
 
+**Downloads**
+
+| Platform | Type      | Downloads                                                                                                                                                                                                                                                                 |
+| -------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | DMG       | [Apple silicon](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-macos-arm64.dmg) · [Intel](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-macos-x64.dmg)                                         |
+| Windows  | Installer | [x64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-x64-setup.exe) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-arm64-setup.exe)                                   |
+| Windows  | Portable  | [x64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-x64-portable.exe) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-windows-arm64-portable.exe) (requires WebView2 Runtime) |
+| Linux    | DEB       | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.deb) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.deb)                                             |
+| Linux    | RPM       | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.rpm) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.rpm)                                             |
+| Linux    | AppImage  | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.AppImage) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.AppImage)                                   |
+| Linux    | Arch      | [x86_64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-x86_64.pkg.tar.zst) · [ARM64](https://github.com/St0ff3l/fileterm/releases/download/v<version>/FileTerm-<version>-linux-arm64.pkg.tar.zst)                             |
+
 **Installation guides**
 
 [![English Installation Guide](https://img.shields.io/badge/English-Installation_Guide-0969DA?style=for-the-badge&labelColor=555)](https://github.com/St0ff3l/fileterm/blob/main/docs/installation/en-US.md)
@@ -87,6 +111,7 @@ See the [comparison between v<old> and v<version>](https://github.com/St0ff3l/fi
 
 链接要求：
 
+- 下载入口直链指向当前 tag 下的对应资产；`<version>` 在文件名中不带 `v`、在下载路径中带 `v`。发布验收时确认资产文件名与实际链接一致。
 - GitHub Issues 使用完整可点击链接：`[GitHub Issues](https://github.com/St0ff3l/fileterm/issues)`。
 - PR 使用 `/pull/<number>`，Issue 使用 `/issues/<number>`。
 - 版本对比使用 `/compare/v<old>...v<new>`，例如：
