@@ -36,7 +36,7 @@ Refs #333、#332。
 - 250%、300%、400% 和保存的 3000×1800 大窗口统一按工作区缩小，原生最小尺寸不阻止适配。
 - 从 4K 保存的大窗口在 1080p 175% 下重新启动仍可容纳，定位计算覆盖负坐标显示器和任务栏偏移。
 - 追加后 6 项窗口定向回归、775 项 Rust 单元测试、10 项 CLI、23 项 contract 和全目标 Clippy 通过。
-- 当前策略针对启动和新建独立窗口；运行中跨屏拖动不会主动重设窗口尺寸，不能把上述计算回归当作原生跨屏拖动验收。
+- 此阶段仅覆盖启动和新建窗口；后续 macOS 实测补充了运行中工作区变化适配，跨屏拖动仍未实测。
 
 ### 分辨率与系统缩放矩阵追加
 
@@ -44,3 +44,10 @@ Refs #333、#332。
 - 自动计算覆盖和三平台原生验收状态分别记录在 [显示矩阵](../../quality/window-display-matrix.md)，没有把参数组合通过表述为 Windows/macOS/Linux 原生实测通过。
 
 复现编辑器回归：使用本机已安装的 Playwright，运行 `node apps/tauri/tests/browser/file-editor.mjs`；可通过 `PLAYWRIGHT_MODULE_PATH` 指定依赖路径、`PLAYWRIGHT_CHANNEL=chrome` 使用已安装 Chrome。
+
+### macOS 原生追加验收
+
+- 内建 Retina 2× 实测五档系统显示模式及小窗口编辑器、连接表单，记录见 [macOS 原生验收](../../quality/macos-window-display-validation.md)。
+- 发现运行中缩小系统工作区时，旧原生最小尺寸会使窗口越出屏幕；主窗口和独立窗口现统一监听显示几何变化并重新适配。
+- 最新类型、Lint、Prettier、114 项 renderer、776 项 Rust 单元、10 项 CLI、23 项 contract 与全目标 Clippy 通过。
+- 系统显示恢复原始 1512×982，测试开发版已退出，应用偏好和窗口状态与测试前一致。

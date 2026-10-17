@@ -84,6 +84,79 @@ fn monitor_work_area(monitor: &tauri::Monitor) -> (PhysicalPosition<i32>, Physic
     }
 }
 
+fn watch_window_display_changes(window: &WebviewWindow<Wry>, minimum: LogicalSize<f64>) {
+    let display_geometry = |window: &WebviewWindow<Wry>| {
+        window.current_monitor().ok().flatten().map(|monitor| {
+            let (position, area) = monitor_work_area(&monitor);
+            (position, area, monitor.scale_factor())
+        })
+    };
+    let previous = std::sync::Mutex::new(display_geometry(window));
+    let tracked = window.clone();
+    window.on_window_event(move |event| {
+        if !matches!(
+            event,
+            WindowEvent::Resized(_)
+                | WindowEvent::Moved(_)
+                | WindowEvent::ScaleFactorChanged { .. }
+                | WindowEvent::Focused(true)
+        ) {
+            return;
+        }
+        let Some(display) = display_geometry(&tracked) else {
+            return;
+        };
+        {
+            let Ok(mut previous) = previous.lock() else {
+                return;
+            };
+            if *previous == Some(display) {
+                return;
+            }
+            // macOS scaled modes can change the work area while backingScaleFactor stays 2.
+            *previous = Some(display);
+        }
+        if let Err(error) = fit_existing_window_to_display(&tracked, minimum, display) {
+            crate::services::logging::warn(
+                tracked.app_handle(),
+                "window",
+                format!(
+                    "unable to adapt display change label={}: {error}",
+                    tracked.label()
+                ),
+            );
+        }
+    });
+}
+
+fn fit_existing_window_to_display(
+    window: &WebviewWindow<Wry>,
+    minimum: LogicalSize<f64>,
+    (position, area, scale): (PhysicalPosition<i32>, PhysicalSize<u32>, f64),
+) -> tauri::Result<()> {
+    let current = window.inner_size()?.to_logical(window.scale_factor()?);
+    let (size, minimum) = fit_window_size(current, minimum, area.to_logical(scale));
+    window.set_min_size(Some(minimum))?;
+    if window.is_maximized()? || window.is_fullscreen()? {
+        return Ok(());
+    }
+    if size != current {
+        window.set_size(size)?;
+    }
+    let outer_size = window.outer_size()?;
+    let current_position = window.outer_position()?;
+    let fitted_position = center_child_window_position(
+        current_position,
+        outer_size,
+        outer_size,
+        Some((position, area)),
+    );
+    if fitted_position != current_position {
+        window.set_position(fitted_position)?;
+    }
+    Ok(())
+}
+
 fn restore_main_window_geometry(
     app: &AppHandle<Wry>,
     window: &WebviewWindow<Wry>,

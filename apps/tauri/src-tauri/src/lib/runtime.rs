@@ -131,6 +131,10 @@ pub fn run() {
                 .map(|preferences| preferences.remember_window_size)
                 .unwrap_or(false);
             restore_main_window_geometry(app.handle(), &main_window, remember_window_size);
+            watch_window_display_changes(
+                &main_window,
+                LogicalSize::new(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT),
+            );
 
             let app_handle = app.handle().clone();
             main_window.on_window_event(move |event| match event {

@@ -112,6 +112,7 @@ pub fn open_child_window(app: &AppHandle, input: OpenWindowInput) -> Result<(), 
             AppError::Window(error.to_string())
         })?;
     center_child_window_on_main(app, &window);
+    watch_window_display_changes(&window, LogicalSize::new(min_width, min_height));
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         let variant = crate::commands::app_get_ui_preferences(app.clone())?.app_icon;
