@@ -35,13 +35,13 @@ fn registry_string(path: &str, name: &str) -> Value {
     json!(String::from_utf16_lossy(&buffer[..end]).trim())
 }
 
-fn cpu_sets() -> Value {
+pub(super) fn cpu_set_records() -> Result<Vec<(u16, u8, u8, u8)>, Value> {
     let mut bytes = 0;
     unsafe {
         GetSystemCpuSetInformation(null_mut(), 0, &mut bytes, null_mut(), 0);
     }
     if bytes == 0 || bytes > 1024 * 1024 {
-        return json!({"errorCode": unsafe { GetLastError() }});
+        return Err(json!({"errorCode": unsafe { GetLastError() }}));
     }
     // The API writes variable-size records; keep the allocation aligned and validate each record.
     let mut storage = vec![0u64; (bytes as usize).div_ceil(size_of::<u64>())];
@@ -56,13 +56,13 @@ fn cpu_sets() -> Value {
         )
     } == 0
     {
-        return json!({"errorCode": unsafe { GetLastError() }});
+        return Err(json!({"errorCode": unsafe { GetLastError() }}));
     }
     let data = unsafe {
         std::slice::from_raw_parts(storage.as_ptr().cast::<u8>(), bytes.min(capacity) as usize)
     };
     let mut offset = 0;
-    let mut classes: BTreeMap<u8, (usize, BTreeSet<(u16, u8)>)> = BTreeMap::new();
+    let mut records = Vec::new();
     while offset + size_of::<SYSTEM_CPU_SET_INFORMATION>() <= data.len() {
         let record = unsafe {
             data.as_ptr()
@@ -72,15 +72,35 @@ fn cpu_sets() -> Value {
         };
         let size = record.Size as usize;
         if size < size_of::<SYSTEM_CPU_SET_INFORMATION>() || size > data.len() - offset {
-            return json!({"error": "invalid-cpu-set-record"});
+            return Err(json!({"error": "invalid-cpu-set-record"}));
         }
         if record.Type == CpuSetInformation {
             let cpu = unsafe { record.Anonymous.CpuSet };
-            let entry = classes.entry(cpu.EfficiencyClass).or_default();
-            entry.0 += 1;
-            entry.1.insert((cpu.Group, cpu.CoreIndex));
+            records.push((
+                cpu.Group,
+                cpu.LogicalProcessorIndex,
+                cpu.CoreIndex,
+                cpu.EfficiencyClass,
+            ));
         }
         offset += size;
+    }
+    if offset != data.len() || records.is_empty() {
+        return Err(json!({"error": "incomplete-cpu-set-records"}));
+    }
+    Ok(records)
+}
+
+fn cpu_sets() -> Value {
+    let records = match cpu_set_records() {
+        Ok(records) => records,
+        Err(error) => return error,
+    };
+    let mut classes: BTreeMap<u8, (usize, BTreeSet<(u16, u8)>)> = BTreeMap::new();
+    for (group, _, core, class) in records {
+        let entry = classes.entry(class).or_default();
+        entry.0 += 1;
+        entry.1.insert((group, core));
     }
     json!({
         "efficiencyClasses": classes.iter().map(|(class, (logical, cores))| json!({
@@ -111,9 +131,11 @@ pub(super) fn power_status() -> Value {
 }
 
 pub(super) fn app_foreground() -> Option<bool> {
-    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId,
+    };
     let mut pid = 0;
-    let thread = unsafe { GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid)) };
+    let thread = unsafe { GetWindowThreadProcessId(GetForegroundWindow(), &mut pid) };
     (thread != 0).then_some(pid == std::process::id())
 }
 

@@ -6,7 +6,7 @@ mod format;
 mod layer;
 mod level;
 mod panic;
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", test))]
 mod windows_performance;
 mod writer;
 
@@ -87,6 +87,8 @@ pub fn write_global(level: &str, scope: &str, message: impl AsRef<str>) {
 }
 
 fn dispatch_event(directory: PathBuf, level: LogLevel, scope: &str, message: &str) {
+    #[cfg(target_os = "windows")]
+    windows_performance::observe(scope, message);
     if TRACING_LAYER_ACTIVE.load(Ordering::Acquire) {
         let category = LogCategory::from_scope(scope);
         match level {
@@ -136,6 +138,11 @@ fn dispatch_event(directory: PathBuf, level: LogLevel, scope: &str, message: &st
     }
     let line = format::build_line(level, LogCategory::from_scope(scope), scope, message);
     writer::dispatch(directory, level, line);
+}
+
+#[cfg(target_os = "windows")]
+pub fn run_scheduler_helper() {
+    windows_performance::run_helper();
 }
 
 /// Best-effort bounded drain on normal desktop exit; forced process termination cannot flush.

@@ -21,7 +21,13 @@ try {
     await loadTypeScript(page, root + 'apps/tauri/src/renderer/' + file + '.ts', symbol)
   const report = await page.evaluate(async () => {
     const frame = () => new Promise((resolve) => requestAnimationFrame(resolve))
-    const terminal = new window.Terminal({ cols: 80, rows: 12, allowProposedApi: true, cursorBlink: false })
+    const terminal = new window.Terminal({
+      cols: 80,
+      rows: 12,
+      scrollback: 200,
+      allowProposedApi: true,
+      cursorBlink: false
+    })
     terminal.open(document.getElementById('host'))
     const adapters = [
       window.registerTerminalBlockGlyphRenderer(terminal),
@@ -69,12 +75,43 @@ try {
     await frame()
     await frame()
     const resizedCanvases = terminal.element.querySelectorAll('.xterm-block-glyph-row').length
+    terminal.scrollToBottom()
+    await frame()
+    await frame()
+    scrollNotifications = 0
+    for (let index = 0; index < 100; index++) await write(`\r\noutput ${index}`)
+    await frame()
+    await frame()
+    const saturatedNotifications = scrollNotifications
+    await write('\x1b[?1049h')
+    await frame()
+    await frame()
+    scrollNotifications = 0
+    for (let index = 0; index < 100; index++) {
+      await write(`\x1b[H\x1b[2K\x1b[38;2;255;255;255m─ CC fullscreen ${index}\x1b[0m`)
+    }
+    await frame()
+    await frame()
+    const fullscreenNotifications = scrollNotifications
+    await write('\x1b[?1049l')
+    await frame()
+    await frame()
+    const restoredNotifications = scrollNotifications
     Element.prototype.getBoundingClientRect = originalBox
     buffer.getLine = originalLine
     unsubscribe()
     adapters.forEach((adapter) => adapter.dispose())
     terminal.dispose()
-    return { parsing, repaintNotifications, canvases, scrolledCanvases, resizedCanvases }
+    return {
+      parsing,
+      repaintNotifications,
+      canvases,
+      scrolledCanvases,
+      resizedCanvases,
+      saturatedNotifications,
+      fullscreenNotifications,
+      restoredNotifications
+    }
   })
   console.log(JSON.stringify(report))
   assert.ok(report.parsing.boxes < 100, 'scrolling output must not measure layout once per emitted line')
@@ -84,6 +121,9 @@ try {
     'scrollbar notifications must be batched per parser task'
   )
   assert.equal(report.repaintNotifications, 0, 'cursor or selection repaints must not update scroll metrics')
+  assert.equal(report.fullscreenNotifications, 0, 'fullscreen writes must not update unchanged scroll metrics')
+  assert.equal(report.saturatedNotifications, 0, 'output at the history limit must not update unchanged scroll metrics')
+  assert.equal(report.restoredNotifications, 1, 'returning to normal history must update scroll metrics')
   assert.ok(report.canvases > 0, 'output graphics still render')
   assert.ok(report.scrolledCanvases > 0, 'scrolling history still renders graphics')
   assert.ok(report.resizedCanvases > 0 && report.resizedCanvases <= 5, 'resize redraws and removes excess canvases')

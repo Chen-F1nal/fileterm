@@ -11,6 +11,14 @@ fn main() {
     #[cfg(target_os = "windows")]
     if std::env::args_os()
         .nth(1)
+        .is_some_and(|arg| arg == "--fileterm-scheduler-diagnostic")
+    {
+        fileterm_lib::services::logging::run_scheduler_helper();
+        return;
+    }
+    #[cfg(target_os = "windows")]
+    if std::env::args_os()
+        .nth(1)
         .is_some_and(|arg| arg == "--fileterm-portable-update")
     {
         if fileterm_lib::services::updates::portable::run_helper().is_err() {

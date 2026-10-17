@@ -1,15 +1,43 @@
 //! Low-frequency native evidence that continues while the WebView is stalled.
+#[cfg(target_os = "windows")]
 mod host;
+#[cfg(target_os = "windows")]
 mod processes;
+#[cfg(target_os = "windows")]
+mod scheduler;
+#[cfg(target_os = "windows")]
+mod scheduler_etw;
+mod scheduler_model;
+mod scheduler_policy;
+#[cfg(target_os = "windows")]
+mod scheduler_sessions;
+#[cfg(target_os = "windows")]
+mod scheduler_threads;
 
+#[cfg(target_os = "windows")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_os = "windows")]
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "windows")]
+pub(super) fn observe(scope: &str, message: &str) {
+    scheduler::observe(scope, message);
+}
+#[cfg(target_os = "windows")]
+pub(super) fn run_helper() {
+    scheduler::run_helper();
+}
+
+#[cfg(target_os = "windows")]
 pub(super) fn start(version: String) {
     static STARTED: AtomicBool = AtomicBool::new(false);
     if STARTED.swap(true, Ordering::AcqRel) {
         return;
     }
+    scheduler::start(
+        unsafe { windows_sys::Win32::System::Threading::GetCurrentThreadId() },
+        version.clone(),
+    );
     if let Err(error) = std::thread::Builder::new()
         .name("windows-performance".into())
         .spawn(move || {
@@ -35,6 +63,7 @@ pub(super) fn start(version: String) {
                         "host": host,
                         "power": host::power_status(),
                         "processes": processes,
+                        "scheduler": scheduler::status(),
                         "sampleDurationMs": sample_started.elapsed().as_millis(),
                     })
                     .to_string(),
