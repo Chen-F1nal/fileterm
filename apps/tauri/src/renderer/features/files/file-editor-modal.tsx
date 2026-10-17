@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboa
 import Editor, { loader, type Monaco, type OnMount } from '@monaco-editor/react'
 import OpenCC from 'opencc-js'
 import * as monacoEditor from 'monaco-editor'
-import type { FileContentSnapshot } from '@fileterm/core'
+import type { FileContentSnapshot, RemoteSystemPlatform } from '@fileterm/core'
 import { isDarkTheme, type ThemeMode } from '../../app/theme-config'
 import { t } from '../../i18n'
 import { getConfiguredMonoFontFamily, observeCanvasTextMetrics } from '../../app/font-metrics'
 import { CloseButton } from '../common/close-button'
 import { AppIcon } from '../common/app-icon'
 import { StableButtonContent, StableButtonLabel } from '../common/stable-button-content'
+import { loadFileEditorModel } from './file-editor-model'
 import {
   EDITOR_ENCODINGS,
   getEditorEncodingLabel,
@@ -24,8 +25,9 @@ const toSimplified = OpenCC.Converter({ from: 'tw', to: 'cn' })
 loader.config({ monaco: monacoEditor })
 
 type EditorInstance = Parameters<OnMount>[0]
-type EditorMenu = 'file' | 'edit' | 'search' | 'preferences' | 'encoding' | 'language'
+type EditorMenu = 'file' | 'edit' | 'search' | 'preferences' | 'encoding' | 'language' | 'line-ending'
 const MONACO_DARK_THEME = 'fileterm-default-dark'
+const WHITESPACE_STATE_KEY = 'file-editor.show-whitespace'
 
 function resolveCssColorToHex(cssValue: string): string | null {
   const trimmed = cssValue.trim()
@@ -114,6 +116,7 @@ export function FileEditorModal({
   onDraftChange,
   onReloadWithEncoding,
   onSave,
+  remotePlatform,
   standalone = false,
   themeMode
 }: {
@@ -126,6 +129,7 @@ export function FileEditorModal({
   onDraftChange?(content: string, encoding: string): void
   onReloadWithEncoding(encoding: string): void
   onSave(content: string, encoding: string): void
+  remotePlatform?: RemoteSystemPlatform
   standalone?: boolean
   themeMode: ThemeMode
 }) {
@@ -135,6 +139,8 @@ export function FileEditorModal({
   const [wordWrap, setWordWrap] = useState(true)
   const [showMinimap, setShowMinimap] = useState(false)
   const [showLineNumbers, setShowLineNumbers] = useState(true)
+  const [showWhitespace, setShowWhitespace] = useState(false)
+  const [lineEnding, setLineEnding] = useState('\n')
   const [cursorLine, setCursorLine] = useState(1)
   const [cursorColumn, setCursorColumn] = useState(1)
   const [openMenu, setOpenMenu] = useState<EditorMenu | null>(null)
@@ -144,12 +150,35 @@ export function FileEditorModal({
   const monacoRef = useRef<Monaco | null>(null)
   const disposeCanvasTextMetricsRef = useRef<(() => void) | null>(null)
   const encodingRef = useRef(encoding)
+  const fileRef = useRef(file)
+  const remotePlatformRef = useRef(remotePlatform)
+  const whitespaceChangedRef = useRef(false)
   const shellRef = useRef<HTMLDivElement | null>(null)
+  fileRef.current = file
+  remotePlatformRef.current = remotePlatform
 
   useEffect(() => {
-    setContent(file.content)
+    const model = editorRef.current?.getModel()
+    if (model) {
+      loadFileEditorModel(model, fileRef.current, remotePlatformRef.current)
+      setLineEnding(model.getEOL())
+    }
+    setContent(model?.getValue() ?? file.content)
     setEncoding(file.encoding ?? 'utf-8')
   }, [file.content, file.encoding, file.path])
+
+  useEffect(() => {
+    let disposed = false
+    void window.fileterm
+      ?.getUiStateItem(WHITESPACE_STATE_KEY)
+      .then((value) => {
+        if (!disposed && !whitespaceChangedRef.current) setShowWhitespace(value === 'true')
+      })
+      .catch((error: unknown) => console.warn('[FileTerm] Load editor whitespace preference', error))
+    return () => {
+      disposed = true
+    }
+  }, [])
 
   useEffect(() => {
     encodingRef.current = encoding
@@ -204,6 +233,16 @@ export function FileEditorModal({
     disposeCanvasTextMetricsRef.current?.()
     editorRef.current = editor
     monacoRef.current = monaco
+    const model = editor.getModel()
+    if (model) {
+      loadFileEditorModel(model, fileRef.current, remotePlatformRef.current)
+      setContent(model.getValue())
+      setLineEnding(model.getEOL())
+    }
+    editor.onDidChangeModelContent(() => {
+      setContent(editor.getValue())
+      setLineEnding(editor.getModel()?.getEOL() ?? '\n')
+    })
     setLanguages(sortEditorLanguages(monaco.languages.getLanguages()))
 
     defineFileTermMonacoTheme(monaco)
@@ -259,9 +298,29 @@ export function FileEditorModal({
       fixedOverflowWidgets: true,
       lineNumbers: showLineNumbers ? 'on' : 'off',
       minimap: { enabled: showMinimap },
+      renderWhitespace: showWhitespace ? 'all' : 'none',
       wordWrap: wordWrap ? 'on' : 'off'
     })
-  }, [showLineNumbers, showMinimap, wordWrap])
+  }, [showLineNumbers, showMinimap, showWhitespace, wordWrap])
+
+  const toggleWhitespace = () => {
+    const next = !showWhitespace
+    whitespaceChangedRef.current = true
+    setShowWhitespace(next)
+    void window.fileterm
+      ?.setUiStateItem(WHITESPACE_STATE_KEY, String(next))
+      .catch((error: unknown) => console.warn('[FileTerm] Save editor whitespace preference', error))
+  }
+
+  const changeLineEnding = (ending: monacoEditor.editor.EndOfLineSequence) => {
+    const editor = editorRef.current
+    if (!editor || isBusy || isSaving) return
+    editor.pushUndoStop()
+    editor.getModel()?.pushEOL(ending)
+    editor.pushUndoStop()
+    editor.focus()
+    setOpenMenu(null)
+  }
 
   const runEditorAction = async (actionId: string) => {
     const editor = editorRef.current
@@ -335,7 +394,7 @@ export function FileEditorModal({
             aria-busy={isSaving}
             className={`file-editor-save-button ${effectiveIsDirty ? 'is-dirty' : ''} ${isSaving ? 'is-saving' : ''}`}
             disabled={!effectiveIsDirty || isBusy || isSaving}
-            onClick={() => onSave(content, encoding)}
+            onClick={() => onSave(editorRef.current?.getValue() ?? content, encoding)}
             type="button"
           >
             <StableButtonContent busy={isSaving} busyLabel={t.saving} label={t.save} />
@@ -354,7 +413,7 @@ export function FileEditorModal({
                   busy={isSaving}
                   busyLabel={t.saving}
                   label={t.save}
-                  onClick={() => onSave(content, encoding)}
+                  onClick={() => onSave(editorRef.current?.getValue() ?? content, encoding)}
                 />
                 <MenuAction
                   disabled={effectiveIsDirty || isBusy || isSaving}
@@ -406,6 +465,7 @@ export function FileEditorModal({
                   checked={showMinimap}
                   onClick={() => setShowMinimap((value) => !value)}
                 />
+                <MenuToggle label={t.fileEditorShowWhitespace} checked={showWhitespace} onClick={toggleWhitespace} />
               </EditorMenuButton>
             </div>
 
@@ -437,6 +497,7 @@ export function FileEditorModal({
                   minimap: { enabled: showMinimap },
                   padding: { top: 14, bottom: 8 },
                   renderLineHighlight: 'line',
+                  renderWhitespace: showWhitespace ? 'all' : 'none',
                   roundedSelection: true,
                   scrollBeyondLastLine: false,
                   smoothScrolling: true,
@@ -462,6 +523,30 @@ export function FileEditorModal({
               {t.fileEditorCursor}: {cursorLine}:{cursorColumn}
             </span>
             <div className="file-editor-status-actions">
+              <StatusMenu
+                current={openMenu}
+                label={lineEnding === '\r\n' ? 'CRLF' : 'LF'}
+                menu="line-ending"
+                onToggle={setOpenMenu}
+              >
+                {(['\n', '\r\n'] as const).map((ending) => (
+                  <button
+                    className={lineEnding === ending ? 'is-active' : ''}
+                    disabled={isBusy || isSaving}
+                    key={ending}
+                    onClick={() =>
+                      changeLineEnding(
+                        ending === '\n'
+                          ? monacoEditor.editor.EndOfLineSequence.LF
+                          : monacoEditor.editor.EndOfLineSequence.CRLF
+                      )
+                    }
+                    type="button"
+                  >
+                    {ending === '\n' ? 'LF (Unix / Linux)' : 'CRLF (Windows)'}
+                  </button>
+                ))}
+              </StatusMenu>
               <StatusMenu current={openMenu} label={currentEncoding} menu="encoding" onToggle={setOpenMenu}>
                 {EDITOR_ENCODINGS.map((option) => (
                   <button
@@ -543,7 +628,7 @@ function StatusMenu({
   children: ReactNode
   current: EditorMenu | null
   label: string
-  menu: 'encoding' | 'language'
+  menu: 'encoding' | 'language' | 'line-ending'
   onToggle(menu: EditorMenu | null): void
 }) {
   const open = current === menu
@@ -588,7 +673,7 @@ function MenuAction({
 
 function MenuToggle({ checked, label, onClick }: { checked: boolean; label: string; onClick(): void }) {
   return (
-    <button className="file-editor-menu-toggle" onClick={onClick} type="button">
+    <button aria-pressed={checked} className="file-editor-menu-toggle" onClick={onClick} type="button">
       <span className="file-editor-menu-check">{checked ? <AppIcon name="check" size={12} /> : null}</span>
       {label}
     </button>

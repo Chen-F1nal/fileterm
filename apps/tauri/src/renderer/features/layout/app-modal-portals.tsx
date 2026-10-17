@@ -284,6 +284,8 @@ export function AppModalPortals({ model }: { model: AppViewModel }) {
             ? {
                 errorMessage: fileEditorError,
                 file: fileEditor,
+                remotePlatform:
+                  workspace.sessions[fileEditor.tabId ?? workspace.activeTabId ?? '']?.systemMetrics?.platform,
                 isBusy: isFileEditorBusy,
                 isDirty: isFileEditorDirty,
                 isSaving: isFileEditorSaving,

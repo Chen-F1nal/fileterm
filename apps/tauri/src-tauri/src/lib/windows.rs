@@ -74,10 +74,22 @@ pub fn open_child_window(app: &AppHandle, input: OpenWindowInput) -> Result<(), 
         Color(21, 21, 21, 255)
     };
 
+    let desired = LogicalSize::new(width, height);
+    let minimum = LogicalSize::new(min_width, min_height);
+    let (size, minimum) = app
+        .get_webview_window("main")
+        .and_then(|window| window.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten())
+        .map(|monitor| {
+            let (_, area) = monitor_work_area(&monitor);
+            fit_window_size(desired, minimum, area.to_logical(monitor.scale_factor()))
+        })
+        .unwrap_or((desired, minimum));
+
     let window = WebviewWindowBuilder::new(app, &label, window_url(&input))
         .title(title)
-        .inner_size(width, height)
-        .min_inner_size(min_width, min_height)
+        .inner_size(size.width, size.height)
+        .min_inner_size(minimum.width, minimum.height)
         .center()
         .decorations(decorations)
         // Match Electron's `show: false` + `ready-to-show` lifecycle. Wry
@@ -100,6 +112,7 @@ pub fn open_child_window(app: &AppHandle, input: OpenWindowInput) -> Result<(), 
             AppError::Window(error.to_string())
         })?;
     center_child_window_on_main(app, &window);
+    watch_window_display_changes(&window, LogicalSize::new(min_width, min_height));
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         let variant = crate::commands::app_get_ui_preferences(app.clone())?.app_icon;
