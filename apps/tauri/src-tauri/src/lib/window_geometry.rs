@@ -57,26 +57,31 @@ fn read_main_window_geometry(
     Ok(Some(geometry))
 }
 
-fn clamp_main_window_geometry(
-    window: &WebviewWindow<Wry>,
-    mut geometry: MainWindowGeometry,
-) -> MainWindowGeometry {
-    let monitor = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .or_else(|| window.primary_monitor().ok().flatten());
-    if let Some(monitor) = monitor {
-        let work_area = monitor
-            .work_area()
-            .size
-            .to_logical::<f64>(monitor.scale_factor());
-        let max_width = (work_area.width - 24.0).max(MAIN_WINDOW_MIN_WIDTH);
-        let max_height = (work_area.height - 48.0).max(MAIN_WINDOW_MIN_HEIGHT);
-        geometry.width = geometry.width.clamp(MAIN_WINDOW_MIN_WIDTH, max_width);
-        geometry.height = geometry.height.clamp(MAIN_WINDOW_MIN_HEIGHT, max_height);
+fn fit_window_size(
+    desired: LogicalSize<f64>,
+    minimum: LogicalSize<f64>,
+    work_area: LogicalSize<f64>,
+) -> (LogicalSize<f64>, LogicalSize<f64>) {
+    // Leave room for native frames without letting a minimum exceed the screen.
+    let max_width = (work_area.width - 24.0).max(1.0);
+    let max_height = (work_area.height - 48.0).max(1.0);
+    let minimum = LogicalSize::new(minimum.width.min(max_width), minimum.height.min(max_height));
+    (
+        LogicalSize::new(
+            desired.width.clamp(minimum.width, max_width),
+            desired.height.clamp(minimum.height, max_height),
+        ),
+        minimum,
+    )
+}
+
+fn monitor_work_area(monitor: &tauri::Monitor) -> (PhysicalPosition<i32>, PhysicalSize<u32>) {
+    let area = monitor.work_area();
+    if area.size.width > 0 && area.size.height > 0 {
+        (area.position, area.size)
+    } else {
+        (*monitor.position(), *monitor.size())
     }
-    geometry
 }
 
 fn restore_main_window_geometry(
@@ -87,24 +92,41 @@ fn restore_main_window_geometry(
     let geometry = if remember_window_size {
         match read_main_window_geometry(app) {
             Ok(Some(geometry)) => geometry,
-            Ok(None) => return,
+            Ok(None) => MainWindowGeometry::default(),
             Err(error) => {
                 crate::services::logging::warn(
                     app,
                     "window",
                     format!("unable to read saved main window size: {error}"),
                 );
-                return;
+                MainWindowGeometry::default()
             }
         }
     } else {
         MainWindowGeometry::default()
     };
-    let geometry = if remember_window_size {
-        clamp_main_window_geometry(window, geometry)
-    } else {
-        geometry
-    };
+    let monitor = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten());
+    let mut size = LogicalSize::new(geometry.width, geometry.height);
+    if let Some(monitor) = &monitor {
+        let (_, area) = monitor_work_area(monitor);
+        let (fitted, minimum) = fit_window_size(
+            size,
+            LogicalSize::new(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT),
+            area.to_logical(monitor.scale_factor()),
+        );
+        if let Err(error) = window.set_min_size(Some(minimum)) {
+            crate::services::logging::warn(
+                app,
+                "window",
+                format!("unable to adapt minimum window size: {error}"),
+            );
+        }
+        size = fitted;
+    }
     if !geometry.maximized && window.is_maximized().unwrap_or(false) {
         if let Err(error) = window.unmaximize() {
             crate::services::logging::warn(
@@ -114,7 +136,7 @@ fn restore_main_window_geometry(
             );
         }
     }
-    if let Err(error) = window.set_size(LogicalSize::new(geometry.width, geometry.height)) {
+    if let Err(error) = window.set_size(size) {
         crate::services::logging::warn(
             app,
             "window",
@@ -129,6 +151,19 @@ fn restore_main_window_geometry(
                 "window",
                 format!("unable to restore maximized main window: {error}"),
             );
+        }
+    } else if let Some(monitor) = monitor {
+        let (position, area) = monitor_work_area(&monitor);
+        if let Ok(outer_size) = window.outer_size() {
+            let centered =
+                center_child_window_position(position, area, outer_size, Some((position, area)));
+            if let Err(error) = window.set_position(centered) {
+                crate::services::logging::warn(
+                    app,
+                    "window",
+                    format!("unable to position main window in work area: {error}"),
+                );
+            }
         }
     }
 }
@@ -213,4 +248,60 @@ fn write_main_window_geometry(
         return Err(error);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod window_geometry_tests {
+    use super::*;
+
+    #[test]
+    fn high_dpi_work_area_limits_default_and_saved_sizes_and_native_minimum() {
+        let area = PhysicalSize::new(1920_u32, 1040_u32).to_logical(1.75);
+        for desired in [
+            LogicalSize::new(MAIN_WINDOW_DEFAULT_WIDTH, MAIN_WINDOW_DEFAULT_HEIGHT),
+            LogicalSize::new(3000.0, 2000.0),
+        ] {
+            let (size, minimum) = fit_window_size(
+                desired,
+                LogicalSize::new(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT),
+                area,
+            );
+            assert!(size.width < area.width && size.height < area.height);
+            assert!(minimum.width <= size.width && minimum.height <= size.height);
+            assert!(minimum.width < MAIN_WINDOW_MIN_WIDTH);
+            assert!(minimum.height < MAIN_WINDOW_MIN_HEIGHT);
+        }
+    }
+
+    #[test]
+    fn normal_screen_keeps_default_and_saved_sizes() {
+        let minimum = LogicalSize::new(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT);
+        for desired in [
+            LogicalSize::new(1280.0, 820.0),
+            LogicalSize::new(1600.0, 950.0),
+        ] {
+            assert_eq!(
+                fit_window_size(desired, minimum, LogicalSize::new(1920.0, 1040.0)),
+                (desired, minimum)
+            );
+        }
+    }
+
+    #[test]
+    fn small_work_area_also_fits_editor_and_connection_windows() {
+        for (desired, minimum) in [
+            (
+                LogicalSize::new(1220.0, 780.0),
+                LogicalSize::new(1040.0, 620.0),
+            ),
+            (
+                LogicalSize::new(860.0, 680.0),
+                LogicalSize::new(760.0, 620.0),
+            ),
+        ] {
+            let (size, minimum) = fit_window_size(desired, minimum, LogicalSize::new(800.0, 550.0));
+            assert!(size.width <= 776.0 && size.height <= 502.0);
+            assert!(minimum.width <= size.width && minimum.height <= size.height);
+        }
+    }
 }

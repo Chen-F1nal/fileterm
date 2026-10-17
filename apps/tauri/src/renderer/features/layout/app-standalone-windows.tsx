@@ -312,6 +312,7 @@ export function AppStandaloneWindows({ model }: { model: AppViewModel }) {
           <FileEditorModal
             errorMessage={fileEditorError}
             file={fileEditor}
+            remotePlatform={workspace.sessions[fileEditor.tabId ?? '']?.systemMetrics?.platform}
             isBusy={isFileEditorBusy}
             isDirty={isFileEditorDirty}
             isSaving={isFileEditorSaving}
