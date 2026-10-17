@@ -10,6 +10,7 @@ import { targetsNestedManagerControl } from '../common/manager-interactions'
 import { managerDropClass, resolveManagerDropPosition } from '../common/manager-drag'
 import { usePointerSortFallback, type PointerSortTarget } from '../../hooks/use-pointer-sort-fallback'
 import { buildConnectionTree, type ConnectionTreeNode } from './connection-tree'
+import { ContextMenu } from '../common/context-menu'
 
 export function ConnectionManagerModal({
   profiles,
@@ -61,6 +62,7 @@ export function ConnectionManagerModal({
   >(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ profileId: string; position: { x: number; y: number } } | null>(null)
   const deleteInFlightRef = useRef(false)
   const [openingProfileId, setOpeningProfileId] = useState<string | null>(null)
   const profileEditorOpenInFlightRef = useRef(false)
@@ -403,6 +405,12 @@ export function ConnectionManagerModal({
             }
             onOpenProfile(node.id)
           }}
+          onContextMenu={(event) => {
+            if (node.type !== 'ssh') return
+            event.preventDefault()
+            event.stopPropagation()
+            setContextMenu({ profileId: node.id, position: { x: event.clientX, y: event.clientY } })
+          }}
           onClick={(event) => {
             if (targetsNestedManagerControl(event) || suppressRowClickRef.current) {
               return
@@ -560,6 +568,7 @@ export function ConnectionManagerModal({
 
   const isSearching = searchQuery.trim().length > 0
   const emptyMessage = isSearching ? t.noMatchingConnections : t.noConnections
+  const contextProfile = contextMenu ? tree.map.get(contextMenu.profileId) : null
 
   const content = (
     <div
@@ -786,6 +795,23 @@ export function ConnectionManagerModal({
               })
           }}
           title={t.delete}
+        />
+      ) : null}
+      {contextMenu && contextProfile?.type === 'ssh' ? (
+        <ContextMenu
+          autoFocus={false}
+          items={[
+            { label: t.connect, action: () => onOpenProfile(contextProfile.id) },
+            { separator: true },
+            { label: t.edit, action: () => void handleEditProfile(contextProfile) },
+            {
+              label: t.delete,
+              danger: true,
+              action: () => setPendingDelete({ kind: 'profile', id: contextProfile.id, name: contextProfile.name })
+            }
+          ]}
+          onClose={() => setContextMenu(null)}
+          position={contextMenu.position}
         />
       ) : null}
     </>

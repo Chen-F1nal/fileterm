@@ -91,7 +91,17 @@ export function ConnectionSshAuthSection({
           />
         ) : null}
         {form.type === 'ssh' && form.authType === 'privateKey' ? (
-          <SshPrivateKeyField form={form} setForm={setForm} />
+          <SshPrivateKeyField
+            privateKeyId={form.privateKeyId}
+            privateKeyPath={form.privateKeyPath}
+            onChange={(privateKeyId) =>
+              setForm((previous) => ({
+                ...previous,
+                privateKeyId: privateKeyId || undefined,
+                privateKeyPath: privateKeyId ? undefined : previous.privateKeyPath
+              }))
+            }
+          />
         ) : null}
         {form.type === 'ssh' && (isKeyboardInteractiveAuth || form.authType === 'kubernetes') ? (
           <div className="span-2 ssh-auth-hint">

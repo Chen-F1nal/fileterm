@@ -1386,6 +1386,7 @@ export interface SshCredentialsPromptRequest extends SshInteractionEnvelope {
   host: string
   port: number
   username?: string
+  authType?: 'password' | 'kubernetes'
   passwordRequired: boolean
   reason: 'missing-username' | 'missing-password'
 }
@@ -1540,17 +1541,20 @@ export type SshHostVerificationResponse = {
   decision: 'accept-once' | 'accept-and-save' | 'cancel'
 }
 
-export type SshCredentialsPromptResponse =
+export type SshCredentialsInput =
   | {
-      kind: 'credentials'
-      canceled: true
-    }
-  | {
-      kind: 'credentials'
-      canceled: false
       username: string
+      authType?: 'password'
       password: string
     }
+  | {
+      username: string
+      authType: 'privateKey'
+      privateKeyId: string
+    }
+
+export type SshCredentialsPromptResponse =
+  { kind: 'credentials'; canceled: true } | (SshCredentialsInput & { kind: 'credentials'; canceled: false })
 
 export type SshKeyPassphrasePromptResponse =
   | {

@@ -145,6 +145,49 @@ async function interactionFixture({
   }
 }
 
+const credentialsPrompt = {
+  ...request,
+  kind: 'credentials',
+  stage: 'credentials',
+  reason: 'missing-password',
+  passwordRequired: true
+}
+
+test('SSH login forwards the chosen key without requiring a password', async () => {
+  const fixture = await interactionFixture({ prompt: credentialsPrompt })
+  await fixture.hook.submitCredentials({ authType: 'privateKey', username: ' ops ', privateKeyId: 'key-1' })
+  assert.deepEqual(
+    fixture.responses.map((response) => JSON.parse(JSON.stringify(response))),
+    [
+      {
+        kind: 'credentials',
+        canceled: false,
+        authType: 'privateKey',
+        username: 'ops',
+        privateKeyId: 'key-1'
+      }
+    ]
+  )
+})
+
+test('SSH login retains password input exactly and trims only the username', async () => {
+  const fixture = await interactionFixture({ prompt: credentialsPrompt })
+  await fixture.hook.submitCredentials({ authType: 'password', username: ' ops ', password: '  secret  ' })
+  assert.equal(fixture.responses[0].username, 'ops')
+  assert.equal(fixture.responses[0].password, '  secret  ')
+})
+
+test('SSH login rejects an empty username, password, or key selection before IPC', async () => {
+  const fixture = await interactionFixture({ prompt: credentialsPrompt })
+  for (const input of [
+    { authType: 'password', username: ' ', password: 'secret' },
+    { authType: 'password', username: 'ops', password: '' },
+    { authType: 'privateKey', username: 'ops', privateKeyId: '' }
+  ])
+    await fixture.hook.submitCredentials(input)
+  assert.equal(fixture.responses.length, 0)
+})
+
 async function saveForm(form, editingProfileId = null) {
   const saved = []
   const render = hookHarness('use-app-data-operations', {

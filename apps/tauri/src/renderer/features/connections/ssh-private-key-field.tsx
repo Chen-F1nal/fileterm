@@ -1,4 +1,4 @@
-import type { CreateProfileInput, SshKeyImportSource } from '@fileterm/core'
+import type { SshKeyImportSource } from '@fileterm/core'
 import { useState } from 'react'
 import { useSshKeyLibrary } from '../../hooks/use-ssh-key-library'
 import { DropdownSelect } from '../common/dropdown-select'
@@ -7,11 +7,13 @@ import { SshKeyNoteDialog } from '../ssh-keys/ssh-key-note-dialog'
 import { formatMessage, t } from '../../i18n'
 
 export function SshPrivateKeyField({
-  form,
-  setForm
+  privateKeyId,
+  privateKeyPath,
+  onChange
 }: {
-  form: CreateProfileInput
-  setForm(value: CreateProfileInput | ((previous: CreateProfileInput) => CreateProfileInput)): void
+  privateKeyId?: string
+  privateKeyPath?: string
+  onChange(privateKeyId: string): void
 }) {
   const { keys, error, clearError, selectKeyFile, importKey } = useSshKeyLibrary()
   const [busy, setBusy] = useState(false)
@@ -20,11 +22,7 @@ export function SshPrivateKeyField({
 
   const selectKey = (privateKeyId: string) => {
     setNotice(null)
-    setForm((previous) => ({
-      ...previous,
-      privateKeyId: privateKeyId || undefined,
-      privateKeyPath: privateKeyId ? undefined : previous.privateKeyPath
-    }))
+    onChange(privateKeyId)
   }
 
   const requestImport = (sourcePath?: string) => {
@@ -39,7 +37,7 @@ export function SshPrivateKeyField({
     try {
       const result = await importKey(note, source)
       if (result) {
-        setForm((previous) => ({ ...previous, privateKeyId: result.key.id, privateKeyPath: undefined }))
+        onChange(result.key.id)
         setNotice(
           result.duplicate
             ? formatMessage(t.privateKeyStatusExisting, { name: result.key.name })
@@ -62,7 +60,7 @@ export function SshPrivateKeyField({
       <div className="ssh-private-key-controls">
         <DropdownSelect
           id="connection-private-key"
-          value={form.privateKeyId ?? ''}
+          value={privateKeyId ?? ''}
           options={[
             { value: '', label: t.privateKeyChooseImported },
             ...keys.map((key) => ({
@@ -82,16 +80,16 @@ export function SshPrivateKeyField({
           <StableButtonLabel busy={busy} busyLabel={t.privateKeyImporting} label={t.privateKeyImportNew} />
         </button>
       </div>
-      {form.privateKeyPath && !form.privateKeyId ? (
+      {privateKeyPath && !privateKeyId ? (
         <div className="ssh-private-key-legacy">
           <span>
             {t.privateKeyLegacyPath}
-            {form.privateKeyPath}
+            {privateKeyPath}
           </span>
           <button
             className="flat-button ssh-private-key-action-button"
             disabled={busy}
-            onClick={() => requestImport(form.privateKeyPath)}
+            onClick={() => requestImport(privateKeyPath)}
             type="button"
           >
             {t.privateKeyImportToManager}

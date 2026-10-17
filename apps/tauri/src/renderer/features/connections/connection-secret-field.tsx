@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
 
@@ -26,8 +27,13 @@ export function ConnectionSecretField({
   onClear(): void
   onUndo(): void
 }) {
+  const [isVisible, setIsVisible] = useState(false)
   const markedForClear = value === null
   const showClearButton = canClear && hasSavedValue && !markedForClear
+
+  useEffect(() => {
+    if (!value || disabled) setIsVisible(false)
+  }, [disabled, value])
 
   return (
     <div className={`ssh-secret-field${fullWidth ? ' span-2' : ''}`}>
@@ -50,21 +56,34 @@ export function ConnectionSecretField({
           </span>
         ) : null}
       </div>
-      <input
-        id={id}
-        autoComplete="new-password"
-        disabled={disabled || markedForClear}
-        placeholder={
-          markedForClear
-            ? t.passwordMarkedForClear
-            : hasSavedValue
-              ? t.passwordReplacePlaceholder
-              : t.passwordPlaceholder
-        }
-        type="password"
-        value={value ?? ''}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <div className="ssh-secret-field__input-wrap">
+        <input
+          id={id}
+          autoComplete="new-password"
+          disabled={disabled || markedForClear}
+          placeholder={
+            markedForClear
+              ? t.passwordMarkedForClear
+              : hasSavedValue
+                ? t.passwordReplacePlaceholder
+                : t.passwordPlaceholder
+          }
+          type={isVisible ? 'text' : 'password'}
+          value={value ?? ''}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button
+          aria-label={isVisible ? t.hidePassword : t.showPassword}
+          aria-pressed={isVisible}
+          className="ssh-secret-field__toggle"
+          disabled={disabled || markedForClear}
+          onClick={() => setIsVisible((visible) => !visible)}
+          title={isVisible ? t.hidePassword : t.showPassword}
+          type="button"
+        >
+          <AppIcon name={isVisible ? 'eye-off' : 'eye'} size={15} />
+        </button>
+      </div>
     </div>
   )
 }

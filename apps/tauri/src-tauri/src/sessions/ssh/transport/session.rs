@@ -102,7 +102,7 @@ async fn open_session_hop(
             interaction_timeout.as_secs(),
         ),
     );
-    ensure_password_credentials(
+    ensure_ssh_credentials(
         &mut effective_profile,
         app,
         &interaction,

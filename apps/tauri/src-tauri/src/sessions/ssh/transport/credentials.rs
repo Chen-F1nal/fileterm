@@ -60,7 +60,7 @@ fn trusted_host_fingerprint(profile: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-async fn ensure_password_credentials(
+async fn ensure_ssh_credentials(
     profile: &mut Value,
     app: &AppHandle,
     interaction: &SshInteractionContext,
@@ -83,11 +83,7 @@ async fn ensure_password_credentials(
         pending.insert(request_id.clone(), tx);
         pending.len()
     };
-    let _pending_cleanup = PendingSshInteractionGuard::new(
-        app,
-        &interaction.tab_id,
-        &request_id,
-    );
+    let _pending_cleanup = PendingSshInteractionGuard::new(app, &interaction.tab_id, &request_id);
     interaction.log_interaction(
         app,
         "DEBUG",
@@ -115,6 +111,7 @@ async fn ensure_password_credentials(
         "host": interaction.host,
         "port": interaction.port,
         "username": profile.get("username").and_then(Value::as_str),
+        "authType": profile.get("authType").and_then(Value::as_str).unwrap_or("password"),
         "passwordRequired": true,
         "reason": reason,
     });
@@ -176,9 +173,7 @@ async fn ensure_password_credentials(
                 "credentials",
                 "credentials",
                 sequence,
-                format!(
-                    "canceled reason=connection-cancelled pending={pending_after}"
-                ),
+                format!("canceled reason=connection-cancelled pending={pending_after}"),
             );
             return Err("SSH credentials request canceled".to_string());
         }
@@ -200,16 +195,7 @@ async fn ensure_password_credentials(
         );
         return Err("SSH credentials request canceled".to_string());
     }
-    let username = response
-        .get("username")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .trim();
-    let password = response
-        .get("password")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    if username.is_empty() || password.is_empty() {
+    if let Err(error) = apply_ssh_credentials_response(profile, &response) {
         interaction.log_interaction(
             app,
             "WARN",
@@ -217,19 +203,10 @@ async fn ensure_password_credentials(
             "credentials",
             "credentials",
             sequence,
-            format!(
-                "resolved with incomplete values username_present={} password_present={} pending={pending_after}",
-                !username.is_empty(),
-                !password.is_empty(),
-            ),
+            format!("rejected credential response pending={pending_after} error={error}"),
         );
-        return Err("SSH username and password are required".to_string());
+        return Err(error);
     }
-    let object = profile
-        .as_object_mut()
-        .ok_or_else(|| "SSH profile is invalid".to_string())?;
-    object.insert("username".to_string(), Value::String(username.to_string()));
-    object.insert("password".to_string(), Value::String(password.to_string()));
     interaction.log_interaction(
         app,
         "INFO",
@@ -237,7 +214,109 @@ async fn ensure_password_credentials(
         "credentials",
         "credentials",
         sequence,
-        format!("resolved canceled=false username_present=true password_present=true pending={pending_after}"),
+        format!(
+            "resolved canceled=false auth_type={} pending={pending_after}",
+            profile["authType"].as_str().unwrap_or("password")
+        ),
     );
     Ok(())
+}
+
+fn apply_ssh_credentials_response(profile: &mut Value, response: &Value) -> Result<(), String> {
+    let username = response
+        .get("username")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if username.is_empty() {
+        return Err("SSH username is required".to_string());
+    }
+    let auth_type = response
+        .get("authType")
+        .and_then(Value::as_str)
+        .unwrap_or("password");
+    let kubernetes = profile.get("authType").and_then(Value::as_str) == Some("kubernetes");
+    let (field, value) = match auth_type {
+        "password" => (
+            "password",
+            response
+                .get("password")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty()),
+        ),
+        "privateKey" if !kubernetes => (
+            "privateKeyId",
+            response
+                .get("privateKeyId")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
+        ),
+        _ => return Err("Unsupported SSH credential authentication method".to_string()),
+    };
+    let value = value.ok_or_else(|| format!("SSH {field} is required"))?;
+    let object = profile
+        .as_object_mut()
+        .ok_or_else(|| "SSH profile is invalid".to_string())?;
+    object.insert("username".to_string(), Value::String(username.to_string()));
+    object.insert(
+        "authType".to_string(),
+        Value::String(if kubernetes { "kubernetes" } else { auth_type }.to_string()),
+    );
+    object.insert("useEmptyPassword".to_string(), Value::Bool(false));
+    for key in ["password", "privateKeyId", "privateKeyPath", "passphrase"] {
+        object.remove(key);
+    }
+    object.insert(field.to_string(), Value::String(value.to_string()));
+    Ok(())
+}
+
+#[cfg(test)]
+mod credentials_tests {
+    use super::*;
+
+    #[test]
+    fn explicit_private_key_choice_replaces_only_transient_authentication() {
+        let mut profile = serde_json::json!({"authType": "password", "username": "old", "password": "old-password", "privateKeyPath": "/old/key", "passphrase": "old-passphrase", "host": "server"});
+        apply_ssh_credentials_response(&mut profile, &serde_json::json!({"authType": "privateKey", "username": " ops ", "privateKeyId": "key-1"})).unwrap();
+        assert_eq!(profile["authType"], "privateKey");
+        assert_eq!(profile["username"], "ops");
+        assert_eq!(profile["privateKeyId"], "key-1");
+        assert_eq!(profile["host"], "server");
+        for field in ["password", "privateKeyPath", "passphrase"] {
+            assert!(profile.get(field).is_none());
+        }
+    }
+
+    #[test]
+    fn password_responses_remain_compatible_and_preserve_kubernetes_mode() {
+        for method in ["password", "kubernetes"] {
+            let mut profile = serde_json::json!({"authType": method, "useEmptyPassword": true});
+            apply_ssh_credentials_response(
+                &mut profile,
+                &serde_json::json!({"username": "ops", "password": "  secret  "}),
+            )
+            .unwrap();
+            assert_eq!(profile["authType"], method);
+            assert_eq!(password_for_authentication(&profile), Some("  secret  "));
+        }
+    }
+
+    #[test]
+    fn incomplete_or_unsupported_responses_do_not_mutate_the_profile() {
+        for response in [
+            serde_json::json!({"username": "", "password": "secret"}),
+            serde_json::json!({"username": "ops", "password": ""}),
+            serde_json::json!({"username": "ops", "authType": "privateKey", "privateKeyId": " "}),
+            serde_json::json!({"username": "ops", "authType": "system"}),
+            serde_json::json!({"username": "ops", "authType": "privateKey", "privateKeyPath": "/unmanaged/key"}),
+        ] {
+            let original = serde_json::json!({"authType": "password", "host": "server"});
+            let mut profile = original.clone();
+            assert!(apply_ssh_credentials_response(&mut profile, &response).is_err());
+            assert_eq!(profile, original);
+        }
+        let mut kubernetes = serde_json::json!({"authType": "kubernetes"});
+        assert!(apply_ssh_credentials_response(&mut kubernetes, &serde_json::json!({"username": "ops", "authType": "privateKey", "privateKeyId": "key-1"})).is_err());
+    }
 }
