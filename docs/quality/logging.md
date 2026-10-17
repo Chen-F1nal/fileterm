@@ -104,8 +104,76 @@ Windows 构建在日志初始化后启动一个独立原生采样线程，立即
 
 对照同一时间的 `renderer-health`、`event-loop-gap`、`terminal-output-parse`：若页面心跳中断而
 原生日志继续，可进一步看 WebView2 的 CPU、内存与策略变化；策略 masks 不能证明线程被调度到
-小核，确认实际核心驻留和调度等待仍需 Windows 线程/ETW 采样。这里不改变绑核、优先级或节能策略，
-不采集用户名、命令行、窗口标题、终端内容或凭据，也不写独立的无限增长日志文件。
+小核。实际核心驻留和调度等待由下面的短时 ETW 诊断补充。这里不改变绑核、业务线程优先级或
+节能策略，不采集用户名、命令行、窗口标题、终端内容或凭据，也不写独立的无限增长日志文件。
+
+### 自动线程调度采集
+
+Windows 启动约 10 秒后，原生侧只检查并回收孤儿会话，不启动全局 ETW 跟踪。
+仅既有 `event-loop-gap` / `terminal-output-parse` 告警触发一次 3 秒采集，采集起点至少相隔
+30 秒；触发队列最多一项，`collectionMode=warning-triggered`。正常使用没有周期 ETW 采集，
+原有每分钟进程健康日志保持不变。页面完全冻结且未恢复时可能没有新的告警；恢复后的 WARN
+只能触发后续窗口，不能还原已经错过的卡顿。无需用户手动启动 WPR；用户只需发送 `app.log` 与 `app.log.1`，
+并提供卡顿的大致时间。新事件 `windows-thread-scheduling` 使用同一 scope，级别 INFO。
+
+精确采集受 Windows 内核跟踪权限限制。helper 只启用现有 token 中的
+`SeSystemProfilePrivilege`，不提权、不弹 UAC、不安装服务或修改账户权限。普通权限不足时
+记录 `status=unavailable`、`stage`、`errorCode`、`requiresElevation=true`，停止本次运行中的
+重复尝试；若需要精确数据，用户可以自行选择以管理员身份重启 FileTerm 后复现。没有权限时
+现有每分钟进程健康采样继续工作，`windows-native-health.scheduler` 重复保留采集状态，避免
+日志轮转后把“未采到”误认为“未发生”。多处理器组、拓扑不完整等情况同样明确降级，不猜 CPU 映射。
+
+每次采集使用独立的内部 helper 进程，不初始化 Tauri/WebView。只创建自己命名的短时实时
+会话，不接管 WPR 或其他程序的跟踪。会话名称和 GUID 同时带 FileTerm 所有权标记、主进程
+PID 与创建时间；启动和每次采集前枚举并回收确认原所有者已退出或 PID 已复用的会话。
+仅前缀相同、身份不明、权限不足或枚举不完整时不擅自停止会话，并停止新采集。枚举最多
+256 个会话；报告回收数量或 `orphan-recovery` 错误，不记录其他会话的名称或路径。
+helper 正常退出前停止会话，主程序即使先退出，helper
+仍会完成这项清理。父进程对 helper 设置 8 秒超时并尝试清理自己的会话后终止 helper；
+若整个进程树同时被强杀，任何用户态清理代码都无法立即执行；旧会话要在下次具备权限的启动
+或采集前回收。无法保证强杀瞬间已清理完毕，不能把进程退出等同于 ETW 会话已停止。
+
+开销限制：请求 16 个 64 KiB ETW 缓冲（禁用按 CPU 自动扩张），不启用堆栈、磁盘或网络事件；
+最多消费 250,000 个事件，消费线程每 4,096 个事件检查一次累计 CPU 时间，超过 50ms 提前结束。
+消费结束和汇总后再次检查尾段 CPU；helper 完成报告裁剪/序列化后检查整个进程的 CPU，预算
+为 200ms。`consumerCpuMs` / `helperCpuMs` 分别记录消费线程和整个 helper 的成本，
+`budgetExceeded` / `helperBudgetExceeded` 超限或无法读取 CPU 时间时令证据失效并停止后续采集。
+上述限制不是整机 ETW 开销的保证，实际分配量见 `bufferBytes`，真实 Windows 负载仍需验证。
+最多筛选 32 个本应用/WebView2 进程、持有 1,024 个线程对象，只输出至多 12 个线程；helper
+报告限制 12 KiB，超出先裁剪末尾线程并标记。一次失败、事件丢失、版本不支持、超预算或
+采集总耗时超过 5 秒时停止后续自动采集，状态中的 `automaticCaptureStopped=true` 会保留。
+
+主要字段：
+
+| 字段                                                                                      | 含义与边界                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `windowStartedUnixMs` / `observedWindowMs` / `triggerUnixMs`                              | 采集开始、观察到的事件跨度和 WARN 到达原生侧的时间；启动回收没有采集窗口。不能把后续采集当作卡顿现场。                                                                               |
+| `threads[].pid` / `tid` / `role`                                                          | UI 和 renderer-main 优先于其他角色，其次 browser/GPU main，再其次 compositor/IO。同优先级包含未结束等待/运行时长，避免裁掉卡住的线程；字节上限裁剪也保留该顺序。角色来自固定白名单。 |
+| `runtimeByEfficiencyClassMs` / `runtimeByProcessorMs`                                     | CSwitch 中实际 CPU 的已完成切入/切出区间，不是理想核心或 affinity。起点之前已经在运行的时间不猜测；处理器明细最多八项，可能裁剪，等级汇总仍保留。                                    |
+| `runningAtWindowEnd`                                                                      | 窗口末端仍在运行的线程所在处理器、效率等级与已观察运行时长下界，和已完成区间分开记录，避免漏掉长时间没有切出的忙线程。                                                               |
+| `readyWaitTotalMs` / `readyWaitMaxMs` / `observedReadyDispatches` / `readyWaitOver16ms`   | ReadyThread（或抢占后 Ready 状态切出）到下一次切入的等待；不把 IO、锁或睡眠时间算作调度等待。16ms 仅是统计阈值。                                                                     |
+| `pendingReadyMsLowerBound`                                                                | 截止最后观察时间仍未得到运行机会的 Ready 等待下界；未知 Ready 起点为 `null`。                                                                                                        |
+| `processorEfficiencyClasses` / `processorNonIdleScheduledMs`                              | Windows CPU Sets 的 CPU→效率等级，以及非 idle 线程的调度驻留时间和 `coveredMs`。不是完整 CPU 忙碌时间，未校正 DPC/ISR 中断；不能据此反推可用算力或“大核有空却不用”。                 |
+| `rendererMainThreads` / `uiThreadTracked` / `inaccessibleThreads` / `threadLimitReached`  | 当前关键线程识别和覆盖情况；采集开始后新建的线程不进入本次跟踪，下一次重新枚举。                                                                                                     |
+| `evidenceUsable` / `eventsLost` / `buffersLost` / `unsupportedEvents` / `discontinuities` | 只在存在本应用线程转换、载荷版本受支持、事件序列和 ETW 消费无已知错误且未超预算时将已观察证据标为可用。`true` 不代表覆盖所有线程或整个卡顿时间。                                     |
+
+`interruptTimeAccounted=false`、`availableCpuCapacityKnown=false` 和
+`runtimeInterpretation=scheduled-residency-includes-interrupts` 始终明确缺失的中断信息。
+已运行线程迟到的同时间戳 Ready 通知不会重新挂上等待；运行/等待状态存在无法消解的矛盾时
+`discontinuities` 增加，证据失效，不能据此诊断调度饥饿。
+
+Windows 的效率等级数值越高，表示内在性能较高、能效较低；只有多个等级时才可作相对
+快/慢核心对照，不把某个固定数字硬编码成 Intel P/E 核。定义见
+[SYSTEM_CPU_SET_INFORMATION](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-system_cpu_set_information)。
+调度等待来自 [ReadyThread](https://learn.microsoft.com/en-us/windows/win32/etw/readythread) 与
+[CSwitch](https://learn.microsoft.com/en-us/windows/win32/etw/cswitch)，权限限制见
+[StartTraceW](https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-starttracew)。
+
+这些记录可以确认采集窗口内某个已识别线程实际在哪类核心运行、何时处于 Ready 等待，
+但不能据此判断较快核心的实际执行余量，也不能单独证明“小核导致卡顿”。必须先确认窗口
+与实际卡顿重合、事件没有丢失、关键线程有覆盖，再结合前后样本及相同工作负载下的对照；
+频率、热降频、驱动中断或应用自身工作量仍可能影响结果。日志始终保留
+`causality=not-established`，不会自动给出已确认根因或自动绑核的结论。
 
 ## 前端异常
 

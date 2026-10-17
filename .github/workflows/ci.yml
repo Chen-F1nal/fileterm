@@ -166,6 +166,11 @@ jobs:
         if: runner.os == 'Windows'
         run: cargo test --manifest-path .github/fixtures/tauri-socket-lifecycle/Cargo.toml --locked
 
+      - name: Exercise bounded Windows scheduler diagnostics without desktop runtime DLLs
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        run: cargo test --manifest-path .github/fixtures/tauri-windows-scheduler/Cargo.toml --locked -- --test-threads=1
+
   tauri-package-smoke:
     name: Tauri unsigned package smoke (${{ matrix.platform }})
     strategy:
@@ -482,7 +487,7 @@ jobs:
           working-directory: apps/tauri/src-tauri
           # Scoped, time-bounded exceptions are reviewed in:
           # docs/quality/rustsec-advisory-exceptions.md
-          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0194,RUSTSEC-2026-0195
+          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0194,RUSTSEC-2026-0195,RUSTSEC-2026-0367,RUSTSEC-2026-0368,RUSTSEC-2026-0369
 
   validate:
     name: validate

@@ -45,11 +45,14 @@ test('continuous output coalesces scroll and parse notifications without animati
   const f = fixture()
   let notifications = 0
   const dispose = f.controller.subscribe(() => notifications++)
+  f.terminal.buffer.active.length = 110
+  f.terminal.buffer.active.viewportY = 100
   for (let index = 0; index < 1000; index++) f.events.get('scroll')()
   f.events.get('parsed')()
   await Promise.resolve()
   assert.equal(notifications, 1)
   assert.equal(f.events.has('render'), false, 'cursor repaint must not reveal or update the scrollbar')
+  f.terminal.rows = 12
   f.events.get('resize')()
   f.events.get('buffer')()
   await Promise.resolve()
@@ -58,11 +61,42 @@ test('continuous output coalesces scroll and parse notifications without animati
   assert.equal(f.events.size, 0)
 })
 
+test('redraws in separate parser tasks do not notify when scroll metrics stay unchanged', async () => {
+  const f = fixture()
+  let notifications = 0
+  const dispose = f.controller.subscribe(() => notifications++)
+  for (let index = 0; index < 100; index++) {
+    f.events.get('parsed')()
+    await Promise.resolve()
+  }
+  assert.equal(notifications, 0)
+  // Growing history must still notify even when the user has scrolled away from the bottom.
+  f.terminal.buffer.active.length++
+  f.events.get('parsed')()
+  await Promise.resolve()
+  assert.equal(notifications, 1)
+  f.terminal.buffer.active.viewportY--
+  f.events.get('scroll')()
+  await Promise.resolve()
+  assert.equal(notifications, 2)
+  f.terminal.buffer.active = { length: 10, viewportY: 0 }
+  f.events.get('buffer')()
+  await Promise.resolve()
+  assert.equal(notifications, 3)
+  for (let index = 0; index < 100; index++) {
+    f.events.get('parsed')()
+    await Promise.resolve()
+  }
+  assert.equal(notifications, 3)
+  dispose()
+})
+
 test('unsubscribe and terminal replacement discard pending notifications', async () => {
   for (const stop of ['unsubscribe', 'replace']) {
     const f = fixture()
     let notifications = 0
     const dispose = f.controller.subscribe(() => notifications++)
+    f.terminal.buffer.active.viewportY--
     f.events.get('scroll')()
     if (stop === 'unsubscribe') dispose()
     else f.ref.current = null

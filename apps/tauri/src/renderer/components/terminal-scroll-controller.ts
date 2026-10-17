@@ -36,12 +36,27 @@ export function createTerminalScrollController(
       if (!terminal) return () => undefined
       let pending = false
       let disposed = false
+      let previousRows = terminal.rows
+      let previousLength = terminal.buffer.active.length
+      let previousViewportY = terminal.buffer.active.viewportY
       const notify = () => {
         if (pending || disposed || terminalRef.current !== terminal) return
         pending = true
         queueMicrotask(() => {
           pending = false
-          if (!disposed && terminalRef.current === terminal) listener()
+          if (disposed || terminalRef.current !== terminal) return
+          const buffer = terminal.buffer.active
+          // Fullscreen redraws and output at the history limit can leave scroll metrics unchanged.
+          if (
+            previousRows === terminal.rows &&
+            previousLength === buffer.length &&
+            previousViewportY === buffer.viewportY
+          )
+            return
+          previousRows = terminal.rows
+          previousLength = buffer.length
+          previousViewportY = buffer.viewportY
+          listener()
         })
       }
       // Cursor/selection paints do not change scroll metrics; parser events already cover new output.

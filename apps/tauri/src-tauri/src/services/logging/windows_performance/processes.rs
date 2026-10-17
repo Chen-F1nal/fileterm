@@ -17,7 +17,7 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ,
 };
 
-struct OwnedHandle(HANDLE);
+pub(super) struct OwnedHandle(pub HANDLE);
 impl Drop for OwnedHandle {
     fn drop(&mut self) {
         unsafe {
@@ -82,6 +82,17 @@ fn webview_tree(root: u32, items: &[Process]) -> BTreeSet<u32> {
             return selected;
         }
     }
+}
+
+pub(super) fn diagnostic_processes(root: u32) -> Result<BTreeSet<u32>, u32> {
+    let items = process_list()?;
+    if !items
+        .iter()
+        .any(|item| item.pid == std::process::id() && item.parent == root)
+    {
+        return Err(windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER);
+    }
+    Ok(webview_tree(root, &items))
 }
 
 fn filetime(value: FILETIME) -> u64 {
