@@ -24,7 +24,7 @@
 
 ### 本版本包含的主要 PR 和问题修复
 
-- 本版本的改动与完整提交记录见下方版本对比；发布后补充对应 PR 链接。
+- [PR #330](https://github.com/St0ff3l/fileterm/pull/330)：增加受限的 Windows 线程调度诊断并减少滚动时的无效滚动条更新。
 
 完整变更记录请查看 [v2.3.1-beta.6 与 v2.3.1-beta.7 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.6...v2.3.1-beta.7)。
 
@@ -61,7 +61,7 @@ This beta adds Windows thread scheduling diagnostics to help investigate termina
 
 ### Main PRs and issues
 
-- This beta's changes and complete commit history are listed in the comparison below; the corresponding PR link will be added after the PR is created.
+- [PR #330](https://github.com/St0ff3l/fileterm/pull/330): Add bounded Windows thread scheduling diagnostics and skip unnecessary scrollbar updates during scrolling.
 
 See the [comparison between v2.3.1-beta.6 and v2.3.1-beta.7](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.6...v2.3.1-beta.7) for the complete change set.
 
