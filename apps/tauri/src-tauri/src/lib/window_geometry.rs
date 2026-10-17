@@ -370,4 +370,97 @@ mod window_geometry_tests {
             assert!(minimum.width <= size.width && minimum.height <= size.height);
         }
     }
+
+    #[test]
+    fn resolution_scale_and_desktop_work_area_matrix() {
+        let resolutions = [
+            (1280_u32, 720_u32),
+            (1366, 768),
+            (1920, 1080),
+            (2048, 1080),
+            (2560, 1440),
+            (2560, 1600),
+            (2880, 1800),
+            (3024, 1964),
+            (3456, 2234),
+            (3840, 2160),
+            (5120, 2880),
+            (3440, 1440),
+            (1080, 1920),
+        ];
+        let windows = [
+            ("main", (1280.0, 820.0), (1150.0, 790.0)),
+            ("editor", (1220.0, 780.0), (1040.0, 620.0)),
+            ("connection", (860.0, 680.0), (760.0, 620.0)),
+            ("saved-large", (3000.0, 1800.0), (1150.0, 790.0)),
+        ];
+        // Insets are fixture inputs, not claims about native desktop reporting.
+        let desktop_insets = [
+            ("unreserved", (0.0, 0.0, 0.0)),
+            ("bottom-taskbar", (0.0, 0.0, 48.0)),
+            ("left-taskbar", (64.0, 0.0, 0.0)),
+            ("menu-and-dock", (0.0, 32.0, 80.0)),
+            ("top-bottom-panels", (0.0, 32.0, 48.0)),
+        ];
+        let mut checked = 0;
+        for (width, height) in resolutions {
+            for scale in [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0, 4.0] {
+                for (desktop, (left, top, bottom)) in desktop_insets {
+                    let reserved = LogicalSize::new(left, top + bottom).to_physical::<u32>(scale);
+                    let area = PhysicalSize::new(width - reserved.width, height - reserved.height);
+                    for (kind, desired, minimum) in windows {
+                        let context = format!("{width}x{height} scale={scale} {desktop} {kind}");
+                        let (size, minimum) = fit_window_size(
+                            LogicalSize::new(desired.0, desired.1),
+                            LogicalSize::new(minimum.0, minimum.1),
+                            area.to_logical(scale),
+                        );
+                        assert!(size.width > 0.0 && size.height > 0.0, "{context}");
+                        assert!(
+                            minimum.width <= size.width && minimum.height <= size.height,
+                            "{context}"
+                        );
+                        let outer_size = LogicalSize::new(size.width + 24.0, size.height + 48.0)
+                            .to_physical::<u32>(scale);
+                        assert!(
+                            outer_size.width <= area.width && outer_size.height <= area.height,
+                            "{context}"
+                        );
+                        for (x, y) in [
+                            (0, 0),
+                            (-(width as i32), 120),
+                            (width as i32, -(height as i32)),
+                        ] {
+                            let origin = PhysicalPosition::new(
+                                x + (left * scale) as i32,
+                                y + (top * scale) as i32,
+                            );
+                            let position = center_child_window_position(
+                                origin,
+                                area,
+                                outer_size,
+                                Some((origin, area)),
+                            );
+                            assert!(
+                                position.x >= origin.x && position.y >= origin.y,
+                                "{context}"
+                            );
+                            assert!(
+                                i64::from(position.x) + i64::from(outer_size.width)
+                                    <= i64::from(origin.x) + i64::from(area.width),
+                                "{context}"
+                            );
+                            assert!(
+                                i64::from(position.y) + i64::from(outer_size.height)
+                                    <= i64::from(origin.y) + i64::from(area.height),
+                                "{context}"
+                            );
+                            checked += 1;
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(checked, 7020);
+    }
 }

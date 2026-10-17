@@ -38,4 +38,9 @@ Refs #333、#332。
 - 追加后 6 项窗口定向回归、775 项 Rust 单元测试、10 项 CLI、23 项 contract 和全目标 Clippy 通过。
 - 当前策略针对启动和新建独立窗口；运行中跨屏拖动不会主动重设窗口尺寸，不能把上述计算回归当作原生跨屏拖动验收。
 
+### 分辨率与系统缩放矩阵追加
+
+- 公共几何回归扩展至 13 种分辨率、9 档缩放、5 种工作区占用和 4 类窗口，包含边框余量及负坐标定位。
+- 自动计算覆盖和三平台原生验收状态分别记录在 [显示矩阵](../../quality/window-display-matrix.md)，没有把参数组合通过表述为 Windows/macOS/Linux 原生实测通过。
+
 复现编辑器回归：使用本机已安装的 Playwright，运行 `node apps/tauri/tests/browser/file-editor.mjs`；可通过 `PLAYWRIGHT_MODULE_PATH` 指定依赖路径、`PLAYWRIGHT_CHANNEL=chrome` 使用已安装 Chrome。
