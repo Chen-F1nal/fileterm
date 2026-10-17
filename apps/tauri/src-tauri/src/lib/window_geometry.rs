@@ -288,6 +288,72 @@ mod window_geometry_tests {
     }
 
     #[test]
+    fn four_k_keeps_default_logical_size_at_common_scales() {
+        let desired = LogicalSize::new(MAIN_WINDOW_DEFAULT_WIDTH, MAIN_WINDOW_DEFAULT_HEIGHT);
+        let minimum = LogicalSize::new(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT);
+        let physical_area = PhysicalSize::new(3840_u32, 2080_u32);
+        for scale in [1.0, 1.25, 1.5, 1.75, 2.0] {
+            let (size, fitted_minimum) =
+                fit_window_size(desired, minimum, physical_area.to_logical(scale));
+            assert_eq!(size, desired, "4K scale={scale}");
+            assert_eq!(fitted_minimum, minimum, "4K scale={scale}");
+            let physical_size = size.to_physical::<u32>(scale);
+            assert_eq!(physical_size.width, (1280.0 * scale) as u32);
+            assert_eq!(physical_size.height, (820.0 * scale) as u32);
+        }
+    }
+
+    #[test]
+    fn four_k_extreme_scaling_and_saved_large_windows_fit_work_area() {
+        let physical_area = PhysicalSize::new(3840_u32, 2080_u32);
+        let minimum = LogicalSize::new(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT);
+        for scale in [1.0, 1.5, 2.0, 2.5, 3.0, 4.0] {
+            let area = physical_area.to_logical::<f64>(scale);
+            for desired in [
+                LogicalSize::new(1280.0, 820.0),
+                LogicalSize::new(3000.0, 1800.0),
+            ] {
+                let (size, fitted_minimum) = fit_window_size(desired, minimum, area);
+                assert!(size.width <= area.width - 24.0, "4K scale={scale}");
+                assert!(size.height <= area.height - 48.0, "4K scale={scale}");
+                assert!(fitted_minimum.width <= size.width && fitted_minimum.height <= size.height);
+                let physical_size = size.to_physical::<u32>(scale);
+                assert!(physical_size.width <= physical_area.width);
+                assert!(physical_size.height <= physical_area.height);
+            }
+        }
+    }
+
+    #[test]
+    fn saved_four_k_window_fits_smaller_screen_and_negative_origin_display() {
+        let desired = LogicalSize::new(3000.0, 1800.0);
+        let minimum = LogicalSize::new(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT);
+        for (area, scale) in [
+            (PhysicalSize::new(3840_u32, 2080_u32), 2.0),
+            (PhysicalSize::new(1920_u32, 1040_u32), 1.75),
+        ] {
+            let (size, _) = fit_window_size(desired, minimum, area.to_logical(scale));
+            let physical_size = size.to_physical(scale);
+            for origin in [
+                PhysicalPosition::new(-3840, 80),
+                PhysicalPosition::new(1920, 0),
+            ] {
+                let position =
+                    center_child_window_position(origin, area, physical_size, Some((origin, area)));
+                assert!(position.x >= origin.x && position.y >= origin.y);
+                assert!(
+                    i64::from(position.x) + i64::from(physical_size.width)
+                        <= i64::from(origin.x) + i64::from(area.width)
+                );
+                assert!(
+                    i64::from(position.y) + i64::from(physical_size.height)
+                        <= i64::from(origin.y) + i64::from(area.height)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn small_work_area_also_fits_editor_and_connection_windows() {
         for (desired, minimum) in [
             (
