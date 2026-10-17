@@ -1705,6 +1705,49 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
   color: var(--action-primary-bg);
 }
 
+.ssh-secret-field__input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.ssh-grid .ssh-secret-field__input-wrap > input[type] {
+  padding-right: 36px;
+}
+
+.ssh-secret-field__toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ssh-secret-field__toggle:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.ssh-secret-field__toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ssh-secret-field__toggle:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 1px;
+}
+
 .ssh-form-field input::placeholder,
 .ssh-secret-field input::placeholder {
   color: var(--text-muted);

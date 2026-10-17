@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   FileTermDesktopApi,
   SshCredentialsPromptRequest,
+  SshCredentialsInput,
   SshHostVerificationRequest,
   SshKeyboardInteractiveRequest,
   SshInteractionRequest,
@@ -15,11 +16,6 @@ import {
   getActiveSshInteraction,
   removeSshInteraction
 } from './ssh-interaction-queue'
-
-export type SshCredentialsInput = {
-  username: string
-  password: string
-}
 
 export type UseSshInteractionsOptions = {
   desktopApi?: FileTermDesktopApi
@@ -207,22 +203,26 @@ export function useSshInteractions({
   }, [credentialsRequest, resolve])
 
   const submitCredentials = useCallback(
-    async ({ username: rawUsername, password }: SshCredentialsInput) => {
+    async (input: SshCredentialsInput) => {
       if (!credentialsRequest) {
         return
       }
 
-      const username = rawUsername.trim()
-      if (!username || !password) {
-        setErrorMessage(t.sshAuthPromptFillRequired)
+      const username = input.username.trim()
+      if (!username) {
+        setErrorMessage(t.sshAuthPromptUsernameRequired)
+        return
+      }
+      if (input.authType === 'privateKey' ? !input.privateKeyId : !input.password) {
+        setErrorMessage(input.authType === 'privateKey' ? t.privateKeyChooseImported : t.sshAuthPromptPasswordRequired)
         return
       }
 
       await resolve(credentialsRequest.requestId, {
         kind: 'credentials',
         canceled: false,
-        username,
-        password
+        ...input,
+        username
       })
     },
     [credentialsRequest, resolve]
