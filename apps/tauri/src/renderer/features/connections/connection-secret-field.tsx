@@ -77,6 +77,7 @@ export function ConnectionSecretField({
           aria-pressed={isVisible}
           className="ssh-secret-field__toggle"
           disabled={disabled || markedForClear}
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => setIsVisible((visible) => !visible)}
           title={isVisible ? t.hidePassword : t.showPassword}
           type="button"

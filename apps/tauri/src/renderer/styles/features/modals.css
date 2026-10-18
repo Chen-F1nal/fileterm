@@ -1718,6 +1718,7 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
 
 .ssh-secret-field__toggle {
   position: absolute;
+  z-index: 2;
   top: 50%;
   right: 6px;
   display: inline-flex;
@@ -1732,6 +1733,15 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ssh-secret-field__input-wrap:focus-within .ssh-secret-field__toggle {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .ssh-secret-field__toggle:hover:not(:disabled) {
