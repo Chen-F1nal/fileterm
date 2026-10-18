@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check actual extracted deb/rpm/pacman desktop and icon payloads."""
+"""Check actual extracted Linux desktop and icon payloads."""
 
 import argparse
 import configparser
@@ -16,7 +16,7 @@ ICON_FILES = {
 }
 
 
-def verify(root, icons_dir):
+def verify(root, icons_dir, appimage=False):
     for relative, (source, size) in ICON_FILES.items():
         payload = (root / relative).read_bytes()
         expected = (icons_dir / source).read_bytes()
@@ -27,6 +27,7 @@ def verify(root, icons_dir):
         if struct.unpack(">II", payload[16:24]) != (size, size):
             raise ValueError(f"Incorrect icon dimensions: {relative}")
 
+    executable = "fileterm" if appimage else "/usr/bin/fileterm"
     for name, hidden in [("FileTerm.desktop", False), ("com.fileterm.desktop.desktop", True)]:
         entry = configparser.ConfigParser(interpolation=None)
         path = root / "usr/share/applications" / name
@@ -37,20 +38,37 @@ def verify(root, icons_dir):
         values = entry["Desktop Entry"]
         for key, expected in {
             "Type": "Application", "Name": "FileTerm", "Icon": "fileterm",
-            "Exec": "/usr/bin/fileterm %U", "TryExec": "/usr/bin/fileterm",
+            "Exec": f"{executable} %U", "TryExec": None if appimage else executable,
             "StartupWMClass": "fileterm",
         }.items():
             if values.get(key) != expected:
                 raise ValueError(f"Incorrect {key} in {name}: {values.get(key)!r}")
         if values.getboolean("NoDisplay", fallback=False) != hidden:
             raise ValueError(f"Incorrect launcher visibility: {name}")
+    if appimage:
+        verify_appimage(root)
     print(f"Verified Linux launcher IDs and five classic icon payloads: {root}")
+
+
+def verify_appimage(root):
+    desktops = list(root.glob("*.desktop"))
+    if len(desktops) != 1 or desktops[0].name != "FileTerm.desktop":
+        raise ValueError("AppDir must expose exactly one root desktop entry: FileTerm.desktop")
+    if desktops[0].read_bytes() != (root / "usr/share/applications/FileTerm.desktop").read_bytes():
+        raise ValueError("AppDir root desktop entry differs from the packaged launcher")
+    for executable in ["AppRun", "AppRun.wrapped", "usr/bin/fileterm"]:
+        if not (root / executable).is_file():
+            raise ValueError(f"AppDir executable is missing: {executable}")
+    icon = (root / "usr/share/icons/hicolor/256x256@2/apps/fileterm.png").read_bytes()
+    if (root / "fileterm.png").read_bytes() != icon or (root / ".DirIcon").read_bytes() != icon:
+        raise ValueError("AppDir launcher and thumbnail must use the bundled 256px icon")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", type=Path, help="Extracted deb/rpm/pacman package root")
+    parser.add_argument("root", type=Path, help="Extracted Linux package root")
+    parser.add_argument("--appimage", action="store_true", help="Check portable AppDir launchers and root entries")
     parser.add_argument("--icons-dir", type=Path,
                         default=Path(__file__).resolve().parents[1] / "src-tauri/icons")
     args = parser.parse_args()
-    verify(args.root, args.icons_dir)
+    verify(args.root, args.icons_dir, args.appimage)

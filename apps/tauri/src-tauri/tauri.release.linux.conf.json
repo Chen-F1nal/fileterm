@@ -29,8 +29,8 @@
     "linux": {
       "appimage": {
         "files": {
-          "/usr/share/applications/FileTerm.desktop": "linux/FileTerm.desktop",
-          "/usr/share/applications/com.fileterm.desktop.desktop": "linux/com.fileterm.desktop.desktop",
+          "/usr/share/applications/FileTerm.desktop": "linux/appimage/FileTerm.desktop",
+          "/usr/share/applications/com.fileterm.desktop.desktop": "linux/appimage/com.fileterm.desktop.desktop",
           "/usr/share/metainfo/com.fileterm.desktop.metainfo.xml": "linux/com.fileterm.desktop.metainfo.xml",
           "/usr/share/pixmaps/com.fileterm.desktop.png": "icons/app/linux/128x128.png",
           "/usr/share/pixmaps/fileterm.png": "icons/app/linux/128x128.png",

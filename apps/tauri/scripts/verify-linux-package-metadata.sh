@@ -143,4 +143,12 @@ for package_path in "${package_paths[@]}"; do
   fi
 done
 
+appdir="$appimage_verify_root/squashfs-root"
+python3 "$script_dir/verify-linux-icon-files.py" "$appdir" --appimage
+desktop-file-validate "$appdir/FileTerm.desktop" "$appdir/usr/share/applications/com.fileterm.desktop.desktop"
+# appdir-lint only discovers *.appdata.xml; explicitly validate our canonical *.metainfo.xml too.
+appstreamcli validate-tree --no-net "$appdir"
+APPIMAGE_EXTRACT_AND_RUN=1 "$appimage_file" --help > "$appimage_verify_root/appimage-help.txt"
+grep -q 'Usage:' "$appimage_verify_root/appimage-help.txt"
+
 echo "Verified DEB ($actual_deb_arch), RPM ($actual_rpm_arch), and AppImage metadata."
