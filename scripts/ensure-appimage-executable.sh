@@ -39,6 +39,12 @@ for launcher in AppRun AppRun.wrapped; do
   test -f "$appdir/$launcher"
 done
 
+# Keep the GNOME companion inside usr/share; AppDir permits only one root desktop entry.
+if [ -L "$appdir/com.fileterm.desktop.desktop" ] || [ -f "$appdir/com.fileterm.desktop.desktop" ]; then
+  unlink "$appdir/com.fileterm.desktop.desktop"
+fi
+ln -sfn usr/share/icons/hicolor/256x256@2/apps/fileterm.png "$appdir/fileterm.png"
+
 # Runtime extraction may apply private permissions to its temporary tree, so
 # verify the repacked SquashFS directly instead of inspecting that temp tree.
 find "$appdir" -type d -exec chmod 755 {} +
@@ -71,7 +77,7 @@ fi
 python3 scripts/verify-appimage-zsync.py "$appimage_file"
 
 squashfs_offset="$("$appimage_file" --appimage-offset)"
-root_access="$(unsquashfs -lls -no-progress -offset "$squashfs_offset" "$appimage_file" | awk '$NF == "squashfs-root" { print substr($1, 8, 1) substr($1, 10, 1); exit }')"
+root_access="$(unsquashfs -lls -no-progress -offset "$squashfs_offset" "$appimage_file" | awk '$NF == "squashfs-root" { access = substr($1, 8, 1) substr($1, 10, 1) } END { print access }')"
 if [ "$root_access" != "rx" ]; then
   echo "AppImage root directory is not readable and traversable by other users: ${root_access:-missing metadata}" >&2
   exit 1

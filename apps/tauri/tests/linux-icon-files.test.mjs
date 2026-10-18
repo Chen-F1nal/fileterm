@@ -10,15 +10,15 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const script = join(root, 'scripts/verify-linux-icon-files.py')
 const python = process.platform === 'win32' ? 'python' : 'python3'
 
-test('Linux package verification checks installed artwork, both desktop IDs, and wrapper execution', () => {
+test('Linux package verification checks installed launchers and portable AppImage entries', () => {
   const fixture = mkdtempSync(join(tmpdir(), 'fileterm-package-icons-'))
   const put = (path, contents) => {
     const target = join(fixture, path)
     mkdirSync(dirname(target), { recursive: true })
     writeFileSync(target, contents)
   }
-  const run = () => {
-    const result = spawnSync(python, [script, fixture], { encoding: 'utf8' })
+  const run = (...args) => {
+    const result = spawnSync(python, [script, fixture, ...args], { encoding: 'utf8' })
     assert.ifError(result.error)
     return result
   }
@@ -51,6 +51,33 @@ test('Linux package verification checks installed artwork, both desktop IDs, and
     assert.match(run().stderr, /must use LF line endings/)
     rmSync(join(fixture, companion))
     assert.notEqual(run().status, 0)
+
+    put(companion, desktop)
+    assert.match(run('--appimage').stderr, /Incorrect Exec/)
+    const config = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.release.linux.conf.json'), 'utf8'))
+    for (const name of ['FileTerm.desktop', 'com.fileterm.desktop.desktop']) {
+      const source = config.bundle.linux.appimage.files[`/usr/share/applications/${name}`]
+      put(`usr/share/applications/${name}`, readFileSync(join(root, 'src-tauri', source)))
+    }
+    const appimageDesktop = readFileSync(join(fixture, 'usr/share/applications/FileTerm.desktop'))
+    put('FileTerm.desktop', appimageDesktop)
+    const rootIcon = readFileSync(join(root, 'src-tauri/icons/app/linux/128x128@2x.png'))
+    put('fileterm.png', rootIcon)
+    put('.DirIcon', rootIcon)
+    for (const executable of ['AppRun', 'AppRun.wrapped', 'usr/bin/fileterm']) put(executable, 'fixture executable')
+    assert.equal(run('--appimage').status, 0)
+
+    put('com.fileterm.desktop.desktop', desktop)
+    assert.match(run('--appimage').stderr, /exactly one root desktop entry/)
+    rmSync(join(fixture, 'com.fileterm.desktop.desktop'))
+    put('FileTerm.desktop', Buffer.concat([appimageDesktop, Buffer.from('# stale root entry\n')]))
+    assert.match(run('--appimage').stderr, /root desktop entry differs/)
+    put('FileTerm.desktop', appimageDesktop)
+    put('fileterm.png', expected)
+    assert.match(run('--appimage').stderr, /bundled 256px icon/)
+    put('fileterm.png', rootIcon)
+    rmSync(join(fixture, 'usr/bin/fileterm'))
+    assert.match(run('--appimage').stderr, /AppDir executable is missing/)
   } finally {
     rmSync(fixture, { recursive: true, force: true })
   }
