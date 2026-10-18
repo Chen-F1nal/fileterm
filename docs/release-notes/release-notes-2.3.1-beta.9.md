@@ -24,7 +24,7 @@
 
 ### 本版本包含的主要 PR 和问题修复
 
-- AppImage 启动入口改为包内相对路径，并按 AppDir 规范保留唯一根目录 desktop 文件。
+- [PR #338](https://github.com/St0ff3l/fileterm/pull/338)：修复 AppImage 包内启动入口，并按 AppDir 规范保留唯一根目录 desktop 文件。
 
 完整变更记录请查看 [v2.3.1-beta.8 与 v2.3.1-beta.9 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.8...v2.3.1-beta.9)。
 
@@ -61,7 +61,7 @@ This beta fixes Linux AppImages failing to launch on systems without an installe
 
 ### Main PRs and issues
 
-- Use a portable launcher inside the AppImage and keep exactly one root desktop entry as required by the AppDir specification.
+- [PR #338](https://github.com/St0ff3l/fileterm/pull/338): Fix the bundled AppImage launcher and keep exactly one root desktop entry as required by the AppDir specification.
 
 See the [comparison between v2.3.1-beta.8 and v2.3.1-beta.9](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.8...v2.3.1-beta.9) for the complete change set.
 
