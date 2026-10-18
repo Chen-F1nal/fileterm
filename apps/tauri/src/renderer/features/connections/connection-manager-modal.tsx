@@ -62,7 +62,7 @@ export function ConnectionManagerModal({
   >(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ profileId: string; position: { x: number; y: number } } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; position: { x: number; y: number } } | null>(null)
   const deleteInFlightRef = useRef(false)
   const [openingProfileId, setOpeningProfileId] = useState<string | null>(null)
   const profileEditorOpenInFlightRef = useRef(false)
@@ -406,10 +406,10 @@ export function ConnectionManagerModal({
             onOpenProfile(node.id)
           }}
           onContextMenu={(event) => {
-            if (node.type !== 'ssh') return
+            if (targetsNestedManagerControl(event)) return
             event.preventDefault()
             event.stopPropagation()
-            setContextMenu({ profileId: node.id, position: { x: event.clientX, y: event.clientY } })
+            setContextMenu({ nodeId: node.id, position: { x: event.clientX, y: event.clientY } })
           }}
           onClick={(event) => {
             if (targetsNestedManagerControl(event) || suppressRowClickRef.current) {
@@ -568,7 +568,7 @@ export function ConnectionManagerModal({
 
   const isSearching = searchQuery.trim().length > 0
   const emptyMessage = isSearching ? t.noMatchingConnections : t.noConnections
-  const contextProfile = contextMenu ? tree.map.get(contextMenu.profileId) : null
+  const contextNode = contextMenu ? tree.map.get(contextMenu.nodeId) : null
 
   const content = (
     <div
@@ -607,6 +607,15 @@ export function ConnectionManagerModal({
               data-fileterm-sort-id={item.id}
               data-fileterm-sort-kind={item.id === 'all' ? 'root' : 'folder'}
               onClick={() => setActiveFolderId(item.id)}
+              onContextMenu={
+                item.id === 'all'
+                  ? undefined
+                  : (event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setContextMenu({ nodeId: item.id, position: { x: event.clientX, y: event.clientY } })
+                    }
+              }
               onDragOver={item.id === 'all' ? handleRootDragOver : undefined}
               onDragLeave={item.id === 'all' ? handleRootDragLeave : undefined}
               onDrop={item.id === 'all' ? handleRootDrop : undefined}
@@ -797,19 +806,37 @@ export function ConnectionManagerModal({
           title={t.delete}
         />
       ) : null}
-      {contextMenu && contextProfile?.type === 'ssh' ? (
+      {contextMenu && contextNode ? (
         <ContextMenu
           autoFocus={false}
-          items={[
-            { label: t.connect, action: () => onOpenProfile(contextProfile.id) },
-            { separator: true },
-            { label: t.edit, action: () => void handleEditProfile(contextProfile) },
-            {
-              label: t.delete,
-              danger: true,
-              action: () => setPendingDelete({ kind: 'profile', id: contextProfile.id, name: contextProfile.name })
-            }
-          ]}
+          items={
+            contextNode.type === 'folder'
+              ? [
+                  {
+                    label: t.rename,
+                    action: () => {
+                      setActiveFolderId(contextNode.parentId ?? 'all')
+                      setEditingFolder({ id: contextNode.id, name: contextNode.name })
+                    }
+                  },
+                  { separator: true },
+                  {
+                    label: t.delete,
+                    danger: true,
+                    action: () => setPendingDelete({ kind: 'folder', id: contextNode.id, name: contextNode.name })
+                  }
+                ]
+              : [
+                  { label: t.connect, action: () => onOpenProfile(contextNode.id) },
+                  { separator: true },
+                  { label: t.edit, action: () => void handleEditProfile(contextNode) },
+                  {
+                    label: t.delete,
+                    danger: true,
+                    action: () => setPendingDelete({ kind: 'profile', id: contextNode.id, name: contextNode.name })
+                  }
+                ]
+          }
           onClose={() => setContextMenu(null)}
           position={contextMenu.position}
         />

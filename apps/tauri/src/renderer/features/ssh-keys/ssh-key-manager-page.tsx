@@ -1,6 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent as ReactMouseEvent
+} from 'react'
 import type { SshKeyImportSource, SshKeyMetadata } from '@fileterm/core'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
+import { ContextMenu } from '../common/context-menu'
+import { targetsNestedManagerControl } from '../common/manager-interactions'
 import { managerDropClass, resolveManagerDropPosition } from '../common/manager-drag'
 import { useSshKeyLibrary } from '../../hooks/use-ssh-key-library'
 import { SshKeyNoteDialog } from './ssh-key-note-dialog'
@@ -44,6 +54,9 @@ export function SshKeyManagerPage({
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set())
   const [editingFolder, setEditingFolder] = useState<{ id: string; name: string } | null>(null)
   const [pendingDelete, setPendingDelete] = useState<DeleteTarget | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ target: DeleteTarget; position: { x: number; y: number } } | null>(
+    null
+  )
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [dragging, setDragging] = useState<DragItem | null>(null)
   const [dragOver, setDragOver] = useState<{ id: string; kind: DragItem['kind']; position: DragPosition } | null>(null)
@@ -228,6 +241,13 @@ export function SshKeyManagerPage({
     clearError()
     setDeleteError(null)
     setPendingDelete({ kind, id, name })
+  }
+
+  const openContextMenu = (event: ReactMouseEvent<HTMLElement>, target: DeleteTarget) => {
+    if (targetsNestedManagerControl(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ target, position: { x: event.clientX, y: event.clientY } })
   }
 
   const confirmDelete = async () => {
@@ -560,6 +580,7 @@ export function SshKeyManagerPage({
       className={`${className} ${isKeyDragOver(key.id)}`.trim()}
       draggable={false}
       onPointerDown={(event) => handlePointerDown(event, { kind: 'key', id: key.id })}
+      onContextMenu={(event) => openContextMenu(event, { kind: 'key', id: key.id, name: key.name })}
       item={key}
       onDragStart={(event) => handleDragStart(event, { kind: 'key', id: key.id })}
       onDragOver={(event) => handleDragOver(event, { kind: 'key', id: key.id })}
@@ -576,6 +597,7 @@ export function SshKeyManagerPage({
       }}
     />
   )
+  const contextKey = contextMenu?.target.kind === 'key' ? keys.find((key) => key.id === contextMenu.target.id) : null
 
   return (
     <section className="ssh-key-manager-page manager-inline connection-manager-modal">
@@ -614,6 +636,7 @@ export function SshKeyManagerPage({
           if (suppressRowClickRef.current) return
           toggleFolder(folderId)
         }}
+        onContextMenuItem={openContextMenu}
         onFolderNameChange={(folderId, name) => setEditingFolder({ id: folderId, name })}
         onCancelFolderRename={() => setEditingFolder(null)}
         onFolderRename={() => void saveFolderRename()}
@@ -687,6 +710,49 @@ export function SshKeyManagerPage({
           }}
           onConfirm={() => void confirmDelete()}
           title={t.delete}
+        />
+      ) : null}
+      {contextMenu ? (
+        <ContextMenu
+          autoFocus={false}
+          items={
+            contextMenu.target.kind === 'folder'
+              ? [
+                  {
+                    label: t.renameFolder,
+                    action: () => {
+                      setActiveFolderId('all')
+                      setEditingFolder({ id: contextMenu.target.id, name: contextMenu.target.name })
+                    }
+                  },
+                  { separator: true },
+                  {
+                    label: t.deleteFolder,
+                    danger: true,
+                    action: () => requestDelete('folder', contextMenu.target.id, contextMenu.target.name)
+                  }
+                ]
+              : contextKey
+                ? [
+                    {
+                      label: t.editKeyNote,
+                      action: () => {
+                        clearError()
+                        setNoteDialog({ mode: 'edit', keyId: contextKey.id, initialNote: contextKey.note ?? '' })
+                      }
+                    },
+                    { separator: true },
+                    {
+                      label: t.deleteKey,
+                      danger: true,
+                      disabled: contextKey.usageCount > 0,
+                      action: () => handleDelete(contextKey.id, contextKey.name)
+                    }
+                  ]
+                : []
+          }
+          onClose={() => setContextMenu(null)}
+          position={contextMenu.position}
         />
       ) : null}
     </section>

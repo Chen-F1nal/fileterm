@@ -1,4 +1,4 @@
-import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import type { SshKeyMetadata } from '@fileterm/core'
 import { AppIcon } from '../common/app-icon'
 import { t } from '../../i18n'
@@ -10,6 +10,7 @@ export function SshKeyRow({
   draggable = false,
   onDelete,
   onEdit,
+  onContextMenu,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -22,6 +23,7 @@ export function SshKeyRow({
   draggable?: boolean
   onDelete(): void
   onEdit(): void
+  onContextMenu(event: ReactMouseEvent<HTMLDivElement>): void
   onDragStart?(event: DragEvent): void
   onDragOver?(event: DragEvent): void
   onDragLeave?(event: DragEvent): void
@@ -35,6 +37,7 @@ export function SshKeyRow({
       draggable={draggable}
       data-fileterm-sort-id={item.id}
       data-fileterm-sort-kind="key"
+      onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
       onDragStart={onDragStart}
       onDragOver={onDragOver}

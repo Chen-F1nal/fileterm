@@ -10,10 +10,8 @@ pub fn open_child_window(app: &AppHandle, input: OpenWindowInput) -> Result<(), 
 
     let label = window_label(&input);
     if let Some(window) = app.get_webview_window(&label) {
-        // Match Electron's form lifecycle: opening a form always reloads it
-        // with the new mode/id URL. Do this by navigating the existing
-        // WebviewWindow instead of destroying and immediately rebuilding the
-        // same label. Native window destruction is asynchronous on macOS and
+        // Reuse the form window and navigate only when its mode/id changes.
+        // Native window destruction is asynchronous on macOS and
         // Windows; rebuilding synchronously used to race with label removal,
         // leaving an old form/listener alive and making SSH prompts appear
         // intermittently.
@@ -27,11 +25,20 @@ pub fn open_child_window(app: &AppHandle, input: OpenWindowInput) -> Result<(), 
             let target_url = current_url
                 .join(&window_url(&input).to_string())
                 .map_err(|error| AppError::Window(error.to_string()))?;
+            if current_url == target_url {
+                center_child_window_on_main(app, &window);
+                restore_window(app, &window, true);
+                return Ok(());
+            }
             window
-                .navigate(target_url)
+                .hide()
                 .map_err(|error| AppError::Window(error.to_string()))?;
+            if let Err(error) = window.navigate(target_url) {
+                restore_window(app, &window, true);
+                return Err(AppError::Window(error.to_string()));
+            }
             center_child_window_on_main(app, &window);
-            restore_window(app, &window, true);
+            // The new renderer reveals the window after its form is ready.
             crate::services::logging::debug(
                 app,
                 "window",

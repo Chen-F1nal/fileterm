@@ -238,6 +238,7 @@ Renderer 只显示遮罩、倒计时和操作反馈，`app_retry_monitoring` 只
 - 首次启动的 UI 语言由系统首选语言决定：中文语言环境使用简体中文，其余语言环境使用英文；用户保存的语言选择优先。Rust 在创建默认 preferences 时判定系统语言，renderer 在偏好读取失败时按 WebView 的首选语言回退，并同步 HTML `lang` 属性。
 - xterm 与 Monaco 会缓存字体尺寸/像素比并生成运行时样式，统一使用随包的 JetBrains Mono；本地字体完成加载、窗口缩放或跨显示器 DPI 变化后必须主动重测。生产 CSP 仅禁止 Tauri 为 `style-src` 注入 nonce，使声明的 `unsafe-inline` 能供这两个受信任的本地组件生成样式；`script-src` 继续保留 Tauri 的 hash/nonce 加固。
 - Renderer 的持久化操作必须返回并应用 Rust command 的最新 snapshot；跨窗口广播只负责同步其他窗口，不能作为发起窗口更新成功状态的唯一来源。弹窗、传输与隧道操作在 React 提交态之外还必须使用同步 guard，避免下一帧禁用按钮前的快速双击重复调用 backend。
+- 独立表单保持原生窗口隐藏，等工作区快照（代理/隧道表单则等各自配置库）就绪并提交两帧后显示；隐藏 WebView 暂停动画帧时保留显窗超时回退。同一表单 URL 再次打开只聚焦，切换目标时隐藏并导航，由新 renderer 就绪后显示；命令、代理与隧道编辑入口使用同步 guard 防止重复请求。
 - 本地文件面板访问 SMB/UNC 路径时，首次认证失败由 Rust 返回稳定的 `SMB_CREDENTIALS_REQUIRED` 标记，经 `tauri-api.ts` 进入 renderer 凭据弹窗，再通过 `app_connect_local_network_share` 重试。macOS 主机级路径先查询可访问共享目录并由 renderer 让用户选择，再只挂载所选 `smbfs` 共享；Windows 使用临时 WNet 连接。SMB 系统命令有超时保护，账号和密码只在本次 IPC/系统连接期间驻留内存，不写入 profile、日志或 workspace snapshot；macOS 挂载会在应用退出时卸载。
 - Tauri workspace tab 状态由 Rust 枚举限制为 core `TabStatus` 的 `idle/connecting/connected/error/closed`；正常或主动断开使用 `closed`，worker/连接失败使用 `error`，renderer 不接受运行时自造状态字符串。
 - profile、folder、command 的持久化 mutation 由 Rust workspace 级锁串行化，成功后统一广播 `workspace:snapshot`；完整快照读取使用同一把锁，不能观察跨文件级联写入的中间态。广播失败只记录告警，不能把已经落盘的操作伪装成失败并诱发重复提交。
