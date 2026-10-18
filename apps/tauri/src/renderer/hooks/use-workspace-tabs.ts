@@ -72,6 +72,7 @@ export function useWorkspaceTabs({
   const localTabsRef = useRef(localTabs)
   const pendingHomeReplacementKeyRef = useRef<string | null>(null)
   const pendingProfileOpenIdRef = useRef<string | null>(null)
+  const openingProfileIdsRef = useRef<Set<string>>(new Set())
   const hasSanitizedStoredPlaceholderRef = useRef(false)
   const handledCloseActiveRequestVersionRef = useRef(0)
   const handledNewTabRequestVersionRef = useRef(0)
@@ -571,7 +572,8 @@ export function useWorkspaceTabs({
     setDraggingTabKey,
     localTabsRef,
     pendingHomeReplacementKeyRef,
-    pendingProfileOpenIdRef
+    pendingProfileOpenIdRef,
+    openingProfileIdsRef
   }
   const {
     activateSessionTab,
