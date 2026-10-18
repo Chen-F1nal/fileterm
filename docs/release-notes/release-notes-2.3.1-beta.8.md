@@ -28,6 +28,7 @@
 
 - [PR #334](https://github.com/St0ff3l/fileterm/pull/334)：SSH 交互认证支持密码和已导入私钥，并增加密码显隐。
 - [PR #335](https://github.com/St0ff3l/fileterm/pull/335)：适配窗口尺寸与屏幕变化，并为 Monaco 编辑器增加空白字符和行尾控制。
+- [PR #336](https://github.com/St0ff3l/fileterm/pull/336)：修复密码眼睛的焦点与再次点按隐藏行为。
 
 完整变更记录请查看 [v2.3.1-beta.7 与 v2.3.1-beta.8 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.7...v2.3.1-beta.8)。
 
@@ -68,6 +69,7 @@ This beta adds display-aware window sizing, Monaco whitespace controls and impro
 
 - [PR #334](https://github.com/St0ff3l/fileterm/pull/334): Support password or managed-key SSH interactive authentication and password visibility.
 - [PR #335](https://github.com/St0ff3l/fileterm/pull/335): Adapt window sizing to display changes and add Monaco whitespace and line-ending controls.
+- [PR #336](https://github.com/St0ff3l/fileterm/pull/336): Keep the password visibility toggle available while focused and make it reliably clickable again to hide the value.
 
 See the [comparison between v2.3.1-beta.7 and v2.3.1-beta.8](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.7...v2.3.1-beta.8) for the complete change set.
 
