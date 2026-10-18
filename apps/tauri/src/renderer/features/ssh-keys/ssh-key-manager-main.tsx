@@ -1,10 +1,22 @@
-import { Fragment, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  Fragment,
+  type DragEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent
+} from 'react'
 import type { SshKeyMetadata } from '@fileterm/core'
 import { formatMessage, t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
 import { ManagerInlineFolderRow } from '../common/manager-inline-folder-row'
 import { ROOT_DROP_TARGET_ID } from './ssh-key-manager-utils'
-import type { DragItem, DragOverState, RenderKeyRow, SortableItem, SshKeyFolder } from './ssh-key-manager-utils'
+import type {
+  DeleteTarget,
+  DragItem,
+  DragOverState,
+  RenderKeyRow,
+  SortableItem,
+  SshKeyFolder
+} from './ssh-key-manager-utils'
 
 export function SshKeyManagerMain({
   query,
@@ -38,6 +50,7 @@ export function SshKeyManagerMain({
   onFolderDrop,
   onFolderDragEnd,
   onFolderToggle,
+  onContextMenuItem,
   onFolderNameChange,
   onCancelFolderRename,
   onFolderRename,
@@ -89,6 +102,7 @@ export function SshKeyManagerMain({
   onFolderDrop(event: DragEvent, folderId: string): void
   onFolderDragEnd(): void
   onFolderToggle(folderId: string): void
+  onContextMenuItem(event: ReactMouseEvent<HTMLElement>, target: DeleteTarget): void
   onFolderNameChange(folderId: string, name: string): void
   onCancelFolderRename(): void
   onFolderRename(): void
@@ -159,6 +173,7 @@ export function SshKeyManagerMain({
               data-fileterm-sort-id={folder.id}
               data-fileterm-sort-kind="folder"
               onClick={() => onActiveFolderChange(folder.id)}
+              onContextMenu={(event) => onContextMenuItem(event, { kind: 'folder', id: folder.id, name: folder.name })}
             >
               <span className="connection-manager-sidebar-icon">
                 <AppIcon name="folder" size={14} />
@@ -223,6 +238,9 @@ export function SshKeyManagerMain({
                           onDrop={(event) => onFolderDrop(event, folder.id)}
                           onDragEnd={onFolderDragEnd}
                           onClick={() => onFolderToggle(folder.id)}
+                          onContextMenu={(event) =>
+                            onContextMenuItem(event, { kind: 'folder', id: folder.id, name: folder.name })
+                          }
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault()

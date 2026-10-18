@@ -14,6 +14,7 @@ import { StandaloneWindowFrame } from './standalone-window-frame'
 import type { AppViewModel } from './app-view-model'
 import { isDarkTheme } from '../../app/theme-config'
 import { t } from '../../i18n'
+import { useWindowReveal } from '../../hooks/use-window-reveal'
 
 const FileEditorModal = lazy(() =>
   import('../files/file-editor-modal').then((module) => ({
@@ -96,6 +97,9 @@ export function AppStandaloneWindows({ model }: { model: AppViewModel }) {
     handleDeleteProfile,
     handleClearHostFingerprint
   } = data
+
+  // Proxy and tunnel hosts wait for their own libraries before revealing.
+  useWindowReveal(Boolean(desktopApi) && shell.hasLoadedInitialSnapshot && !isProxyFormWindow && !isTunnelFormWindow)
 
   if (isConnectionManagerWindow) {
     return (

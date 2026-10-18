@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   CreateProxyProfileInput,
   CreateTunnelProfileInput,
@@ -13,6 +13,8 @@ import { useProxyLibrary } from '../../hooks/use-proxy-library'
 import { useTunnelLibrary } from '../../hooks/use-tunnel-library'
 import { AppIcon } from '../common/app-icon'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
+import { ContextMenu } from '../common/context-menu'
+import { targetsNestedManagerControl } from '../common/manager-interactions'
 import { ProxyEditDialog } from './proxy-edit-dialog'
 import { TunnelEditDialog } from '../tunnels/tunnel-edit-dialog'
 
@@ -52,6 +54,10 @@ export function ProxyManagerPage({
   const [createTunnelType, setCreateTunnelType] = useState<TunnelProfileType>('ssh')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deletingEntry, setDeletingEntry] = useState<ManagerEntry | null>(null)
+  const editorOpenInFlightRef = useRef(false)
+  const [contextMenu, setContextMenu] = useState<{ entry: ManagerEntry; position: { x: number; y: number } } | null>(
+    null
+  )
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [testStates, setTestStates] = useState<
     Record<string, { testing: boolean; success?: boolean; latencyMs?: number }>
@@ -158,22 +164,30 @@ export function ProxyManagerPage({
     setIsTunnelModalOpen(true)
   }
 
-  const openEntry = (entry: ManagerEntry) => {
-    if (entry.kind === 'proxy') {
-      if (window.fileterm?.openProxyFormWindow) {
-        void window.fileterm.openProxyFormWindow('edit', entry.item.id)
+  const openEntry = async (entry: ManagerEntry) => {
+    if (editorOpenInFlightRef.current) return
+    editorOpenInFlightRef.current = true
+    try {
+      if (entry.kind === 'proxy') {
+        if (window.fileterm?.openProxyFormWindow) {
+          await window.fileterm.openProxyFormWindow('edit', entry.item.id)
+          return
+        }
+        setEditingProxy(entry.item)
+        setIsProxyModalOpen(true)
         return
       }
-      setEditingProxy(entry.item)
-      setIsProxyModalOpen(true)
-      return
+      if (window.fileterm?.openTunnelFormWindow) {
+        await window.fileterm.openTunnelFormWindow('edit', entry.item.id)
+        return
+      }
+      setEditingTunnel(entry.item)
+      setIsTunnelModalOpen(true)
+    } catch (error) {
+      console.error('Failed to open proxy or tunnel editor:', error)
+    } finally {
+      editorOpenInFlightRef.current = false
     }
-    if (window.fileterm?.openTunnelFormWindow) {
-      void window.fileterm.openTunnelFormWindow('edit', entry.item.id)
-      return
-    }
-    setEditingTunnel(entry.item)
-    setIsTunnelModalOpen(true)
   }
 
   const handleDeleteConfirm = async () => {
@@ -207,6 +221,8 @@ export function ProxyManagerPage({
   }
 
   const libraryError = proxyError || tunnelError
+  const contextEntry = contextMenu?.entry ?? null
+  const contextProxy = contextEntry?.kind === 'proxy' ? contextEntry.item : null
 
   return (
     <div className="modal-card manager-modal connection-manager-modal proxy-manager-modal manager-inline">
@@ -304,6 +320,11 @@ export function ProxyManagerPage({
                     setDeletingEntry(entry)
                     setDeleteError(null)
                   }}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    setContextMenu({ entry, position: { x: event.clientX, y: event.clientY } })
+                  }}
                   onTest={() => {
                     if (entry.kind === 'proxy') void handleTestProxy(entry.item)
                   }}
@@ -377,6 +398,34 @@ export function ProxyManagerPage({
           }}
           onConfirm={() => void handleDeleteConfirm()}
           title={t.delete}
+        />
+      ) : null}
+      {contextMenu && contextEntry ? (
+        <ContextMenu
+          autoFocus={false}
+          items={[
+            ...(contextProxy
+              ? [
+                  {
+                    label: t.testProxy,
+                    disabled: testStates[contextProxy.id]?.testing,
+                    action: () => void handleTestProxy(contextProxy)
+                  },
+                  { separator: true }
+                ]
+              : []),
+            { label: t.edit, action: () => openEntry(contextEntry) },
+            {
+              label: t.delete,
+              danger: true,
+              action: () => {
+                setDeletingEntry(contextEntry)
+                setDeleteError(null)
+              }
+            }
+          ]}
+          onClose={() => setContextMenu(null)}
+          position={contextMenu.position}
         />
       ) : null}
 
@@ -454,12 +503,14 @@ function ManagerRow({
   testState,
   onEdit,
   onDelete,
+  onContextMenu,
   onTest
 }: {
   entry: ManagerEntry
   testState?: { testing: boolean; success?: boolean; latencyMs?: number }
   onEdit(): void
   onDelete(): void
+  onContextMenu(event: React.MouseEvent<HTMLDivElement>): void
   onTest(): void
 }) {
   const isProxy = entry.kind === 'proxy'
@@ -492,7 +543,20 @@ function ManagerRow({
   }
 
   return (
-    <div className="manager-row" onClick={onEdit}>
+    <div
+      className="manager-row"
+      onDoubleClick={(event) => {
+        if (!targetsNestedManagerControl(event)) onEdit()
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' || targetsNestedManagerControl(event)) return
+        event.preventDefault()
+        onEdit()
+      }}
+      onContextMenu={onContextMenu}
+      role="button"
+      tabIndex={0}
+    >
       <span className="manager-name-cell">
         <span className="manager-node-icon">
           <AppIcon name={isProxy ? 'shield' : entry.item.type === 'ssh' ? 'connections' : 'cloud'} size={14} />

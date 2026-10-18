@@ -9,6 +9,7 @@ FileTerm 是 Rust + Tauri + React + TypeScript 桌面远程工作台。仅维护
 - PR 默认使用普通 Merge（Create a merge commit）；用户明确指定时才使用其他策略。
 - 修复、创建 PR 或合并 PR 不表示 Issue 已解决。使用 `Refs #123` / `Related to #123`，禁止自动关闭关键词；仅在用户明确确认发布并验证通过且允许关闭后关闭 Issue。
 - 在已授权范围内完成实现、验证和必要修复；只在缺少关键输入或需要超出授权范围时询问。完成报告说明改动、验证结果与未验证项。
+- 桌面 UI 验证按当前项目的 `npm run dev` 进程识别。macOS 开发运行的是小写 `fileterm`（`apps/tauri/src-tauri/target/debug/fileterm`）；先核对进程路径、工作目录、Vite 端口和页面版本。不要用可能自动启动应用的名称/包 ID 查询探测窗口：`FileTerm Dev` / `com.fileterm.desktop.dev` 可能启动旧 `.app`，小写 `fileterm` 也可能被忽略大小写后匹配到 `/Applications/FileTerm.app`。工具无法精确绑定当前未打包进程时，停止桌面操作并报告，不启动其他版本代替验证；详见 [开发版识别与预览](docs/quality/desktop-ui-preview.md)。
 
 ## 按任务读取
 

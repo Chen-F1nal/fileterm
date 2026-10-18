@@ -662,8 +662,10 @@ fn desktop_main_windows_wait_for_renderer_first_paint_before_showing() {
     }
 
     let renderer = include_str!("../../src/renderer/lib/main-window-reveal.tsx");
-    assert!(renderer.contains("requestAnimationFrame"));
-    assert!(renderer.contains("showCurrentWindow()"));
+    assert!(renderer.contains("useWindowReveal(true)"));
+    let reveal = include_str!("../../src/renderer/hooks/use-window-reveal.ts");
+    assert!(reveal.contains("requestAnimationFrame"));
+    assert!(reveal.contains("showCurrentWindow()"));
 
     let startup = include_str!("../../src/renderer/main.tsx");
     assert!(startup.contains("<MainWindowReveal />"));

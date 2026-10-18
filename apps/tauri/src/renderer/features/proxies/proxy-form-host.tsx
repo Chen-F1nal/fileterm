@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { CreateProxyProfileInput, UpdateProxyProfileInput } from '@fileterm/core'
 import { useProxyLibrary } from '../../hooks/use-proxy-library'
+import { useWindowReveal } from '../../hooks/use-window-reveal'
+import { WorkspaceLoadingState } from '../common/workspace-loading-state'
 import { ProxyEditDialog } from './proxy-edit-dialog'
 
 export function ProxyFormHost({
@@ -18,6 +20,7 @@ export function ProxyFormHost({
 }) {
   const { proxies, loading, saveProxy, testProxy } = useProxyLibrary()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  useWindowReveal(standalone && Boolean(window.fileterm) && (mode !== 'edit' || !loading))
 
   const editingProxy = useMemo(() => {
     if (mode !== 'edit' || !proxyId) return null
@@ -34,15 +37,8 @@ export function ProxyFormHost({
     }
   }
 
-  // If in edit mode and still loading the proxy profile from desktopApi, wait briefly
   if (mode === 'edit' && proxyId && loading && !editingProxy) {
-    return (
-      <div className="connection-form-window">
-        <div className="modal-card ssh-modal standalone" style={{ alignItems: 'center', justifyContent: 'center' }}>
-          <span className="button-spinner" />
-        </div>
-      </div>
-    )
+    return <WorkspaceLoadingState className="connection-form-window" />
   }
 
   return (

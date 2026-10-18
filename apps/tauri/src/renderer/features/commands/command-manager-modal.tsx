@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, type DragEvent } from 'react'
 import type { CommandFolder, CommandTemplate, CommandTemplateInput } from '@fileterm/core'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
+import { ContextMenu } from '../common/context-menu'
 import { t } from '../../i18n'
 import { CommandEditorModal, emptyCommandForm, toCommandTemplateInput } from './command-editor-modal'
 import { AppIcon } from '../common/app-icon'
@@ -55,9 +56,11 @@ export function CommandManagerModal({
   const [pendingDelete, setPendingDelete] = useState<
     { kind: 'folder'; id: string; name: string } | { kind: 'command'; id: string; name: string } | null
   >(null)
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; position: { x: number; y: number } } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const deleteInFlightRef = useRef(false)
+  const editorOpenInFlightRef = useRef(false)
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null)
   const folderRenameInFlightRef = useRef(false)
   const suppressRowClickRef = useRef(false)
@@ -369,12 +372,27 @@ export function CommandManagerModal({
     clearDragState()
   }
 
-  const openEditorWindow = (mode: 'create' | 'edit', commandId?: string) => {
+  const openEditorWindow = async (mode: 'create' | 'edit', commandId?: string) => {
+    if (editorOpenInFlightRef.current) return
     if (!desktopApi) {
       setEditorState({ mode, commandId })
       return
     }
-    void desktopApi.openCommandFormWindow(mode, commandId)
+    editorOpenInFlightRef.current = true
+    try {
+      await desktopApi.openCommandFormWindow(mode, commandId)
+    } catch (error) {
+      console.error('Failed to open command editor:', error)
+    } finally {
+      editorOpenInFlightRef.current = false
+    }
+  }
+
+  const openContextMenu = (event: React.MouseEvent<HTMLElement>, nodeId: string) => {
+    if (targetsNestedManagerControl(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ nodeId, position: { x: event.clientX, y: event.clientY } })
   }
 
   const editorInitialValue =
@@ -421,6 +439,7 @@ export function CommandManagerModal({
             }
             openEditorWindow('edit', node.id)
           }}
+          onContextMenu={(event) => openContextMenu(event, node.id)}
           onClick={(event) => {
             if (targetsNestedManagerControl(event) || suppressRowClickRef.current) {
               return
@@ -564,6 +583,7 @@ export function CommandManagerModal({
 
   const isSearching = searchQuery.trim().length > 0
   const emptyMessage = isSearching ? t.noMatchingCommands : t.commandEmpty
+  const contextNode = contextMenu ? tree.map.get(contextMenu.nodeId) : null
 
   const content = (
     <div
@@ -602,6 +622,7 @@ export function CommandManagerModal({
               data-fileterm-sort-id={item.id}
               data-fileterm-sort-kind={item.id === 'all' ? 'root' : 'folder'}
               onClick={() => setActiveFolderId(item.id)}
+              onContextMenu={item.id === 'all' ? undefined : (event) => openContextMenu(event, item.id)}
               onDragOver={item.id === 'all' ? handleRootDragOver : undefined}
               onDragLeave={item.id === 'all' ? handleRootDragLeave : undefined}
               onDrop={item.id === 'all' ? handleRootDrop : undefined}
@@ -757,6 +778,40 @@ export function CommandManagerModal({
               })
           }}
           title={t.delete}
+        />
+      ) : null}
+      {contextMenu && contextNode ? (
+        <ContextMenu
+          autoFocus={false}
+          items={
+            contextNode.type === 'command-folder'
+              ? [
+                  {
+                    label: t.rename,
+                    action: () => {
+                      setActiveFolderId(contextNode.parentId ?? 'all')
+                      setEditingFolder({ id: contextNode.id, name: contextNode.name })
+                    }
+                  },
+                  { separator: true },
+                  {
+                    label: t.delete,
+                    danger: true,
+                    action: () => setPendingDelete({ kind: 'folder', id: contextNode.id, name: contextNode.name })
+                  }
+                ]
+              : [
+                  { label: t.edit, action: () => openEditorWindow('edit', contextNode.id) },
+                  { separator: true },
+                  {
+                    label: t.delete,
+                    danger: true,
+                    action: () => setPendingDelete({ kind: 'command', id: contextNode.id, name: contextNode.name })
+                  }
+                ]
+          }
+          onClose={() => setContextMenu(null)}
+          position={contextMenu.position}
         />
       ) : null}
     </>

@@ -183,7 +183,6 @@ export function useAppShellState({
   const [isResizingAiCopilot, setIsResizingAiCopilot] = useState(false)
   const [isAiCopilotOpen, setIsAiCopilotOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'interface' | 'ai'>('interface')
-  const hasRevealedStandaloneWindowRef = useRef(false)
 
   const formatError = (scope: string, err: unknown, details?: ErrorDetails) =>
     formatAppError(scope, err, locale, details)
@@ -461,17 +460,6 @@ export function useAppShellState({
     hasLoadedFilePanelRatios,
     isMainWorkspaceWindow
   ])
-
-  // Child windows and the transparent Linux main window remain hidden until
-  // their route's first data fetch has settled.
-  useEffect(() => {
-    const waitsForFirstPaint = !isMainWorkspaceWindow || rendererPlatform === 'linux'
-    if (!waitsForFirstPaint || !desktopApi || !ipc.hasLoadedInitialSnapshot || hasRevealedStandaloneWindowRef.current) {
-      return
-    }
-    hasRevealedStandaloneWindowRef.current = true
-    void desktopApi.showCurrentWindow().catch((cause) => reportAppError(setError, '显示窗口', cause))
-  }, [desktopApi, ipc.hasLoadedInitialSnapshot, isMainWorkspaceWindow, rendererPlatform])
 
   useEffect(() => {
     if (rendererPlatform !== 'linux') {
