@@ -2114,6 +2114,10 @@ export const UI_ZOOM_PERCENT_STEP = 10
 
 export type AppIconVariant = 'classic' | 'material' | 'clean'
 
+/** Session tabs grouped under a host list, or every tab in one row. */
+export type TabBarLayout = 'host-groups' | 'single-row'
+export const DEFAULT_TAB_BAR_LAYOUT: TabBarLayout = 'host-groups'
+
 export interface UiPreferences {
   theme: ThemeMode
   locale: 'zhCN' | 'enUS'
@@ -2128,6 +2132,7 @@ export interface UiPreferences {
   uiZoomLocked: boolean
   uiZoomPercent: number
   rememberWindowSize: boolean
+  tabBarLayout: TabBarLayout
   localTerminalShells: LocalTerminalShellPreferences
   filePanelRememberRatio: boolean
   resourceMonitoringMetrics: ResourceMonitoringMetric[]
@@ -2154,6 +2159,7 @@ export interface UiPreferencesInput {
   uiZoomLocked?: boolean
   uiZoomPercent?: number
   rememberWindowSize?: boolean
+  tabBarLayout?: TabBarLayout
   localTerminalShells?: Partial<LocalTerminalShellPreferences>
   filePanelRememberRatio?: boolean
   resourceMonitoringMetrics?: ResourceMonitoringMetric[]
