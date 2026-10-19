@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::*;
 
@@ -309,7 +309,7 @@ fn wildcard_matching() {
 #[cfg(unix)]
 #[test]
 fn expand_user_path_handles_tilde() {
-    let home = Path::new("/home/someone");
+    let home = std::path::Path::new("/home/someone");
     assert_eq!(
         expand_user_path(" ~/.bitwarden-ssh-agent.sock ", home),
         PathBuf::from("/home/someone/.bitwarden-ssh-agent.sock")
