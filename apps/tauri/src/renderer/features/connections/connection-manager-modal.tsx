@@ -486,6 +486,9 @@ export function ConnectionManagerModal({
                 onPointerDown={stopInteractiveEvent}
                 onClick={(e) => {
                   e.stopPropagation()
+                  // The connect button opens on a single click; ignore the
+                  // second click of a double-click.
+                  if (e.detail > 1) return
                   onOpenProfile(node.id)
                 }}
               >

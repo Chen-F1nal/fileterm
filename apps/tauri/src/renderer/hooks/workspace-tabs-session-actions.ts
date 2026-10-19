@@ -7,6 +7,7 @@ import type {
 import { homeTabKey, sessionTabKey, settledResultsError } from '../app/app-utils'
 import { resolveSelectedTabIds, type SendScope } from '../features/common/session-send-targets'
 import { t } from '../i18n'
+import { runProfileOpenOnce } from './profile-open-guard'
 import type { WorkspaceTabsActionContext } from './workspace-tabs-types'
 import { uniqueStrings } from './workspace-tabs-utils'
 
@@ -128,44 +129,35 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
     }
   }
 
-  const openProfileInCurrentWorkspace = async (profileId: string) => {
-    if (!desktopApi) {
-      return
-    }
-
-    // A profile can be opened from several controls (and a double-click can
-    // arrive before React has rendered the busy state). Coalesce only the
-    // in-flight request for this profile; once it settles, opening it again
-    // remains an intentional way to create another session tab.
-    if (context.openingProfileIdsRef.current.has(profileId)) {
-      return
-    }
-    context.openingProfileIdsRef.current.add(profileId)
-
-    const activeHomeId = context.isHomeWorkspaceVisible ? context.activeLocalTabIdForUi : null
-    const replacementKey = activeHomeId ? homeTabKey(activeHomeId) : null
-    pendingHomeReplacementKeyRef.current = replacementKey
-
-    try {
-      onBusyChange(true)
-      const snapshot = await desktopApi.openProfile(profileId)
-      applySnapshot(snapshot)
-      onStatusMessage(null)
-      if (activeHomeId && snapshot.activeTabId && replacementKey) {
-        const nextSessionKey = sessionTabKey(snapshot.activeTabId)
-        setTabOrder((current) => uniqueStrings(current.map((key) => (key === replacementKey ? nextSessionKey : key))))
-        setLocalTabs((current) => current.filter((tab) => tab.id !== activeHomeId))
-        pendingHomeReplacementKeyRef.current = null
+  const openProfileInCurrentWorkspace = (profileId: string) =>
+    runProfileOpenOnce(profileId, async () => {
+      if (!desktopApi) {
+        return
       }
-      setActiveLocalTabId(null)
-    } catch (error) {
-      pendingHomeReplacementKeyRef.current = null
-      onError('打开连接', error)
-    } finally {
-      context.openingProfileIdsRef.current.delete(profileId)
-      onBusyChange(false)
-    }
-  }
+
+      const activeHomeId = context.isHomeWorkspaceVisible ? context.activeLocalTabIdForUi : null
+      const replacementKey = activeHomeId ? homeTabKey(activeHomeId) : null
+      pendingHomeReplacementKeyRef.current = replacementKey
+
+      try {
+        onBusyChange(true)
+        const snapshot = await desktopApi.openProfile(profileId)
+        applySnapshot(snapshot)
+        onStatusMessage(null)
+        if (activeHomeId && snapshot.activeTabId && replacementKey) {
+          const nextSessionKey = sessionTabKey(snapshot.activeTabId)
+          setTabOrder((current) => uniqueStrings(current.map((key) => (key === replacementKey ? nextSessionKey : key))))
+          setLocalTabs((current) => current.filter((tab) => tab.id !== activeHomeId))
+          pendingHomeReplacementKeyRef.current = null
+        }
+        setActiveLocalTabId(null)
+      } catch (error) {
+        pendingHomeReplacementKeyRef.current = null
+        onError('打开连接', error)
+      } finally {
+        onBusyChange(false)
+      }
+    })
 
   const openProfile = async (profileId: string) => {
     if (isMainWorkspaceWindow && (!hasLoadedInitialSnapshot || !context.hasHydratedMainTabUiState)) {

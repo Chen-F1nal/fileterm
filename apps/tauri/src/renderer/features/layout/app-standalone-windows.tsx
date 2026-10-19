@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef } from 'react'
+import { lazy, Suspense } from 'react'
 import { CommandEditorModal, emptyCommandForm, toCommandTemplateInput } from '../commands/command-editor-modal'
 import { CommandManagerModal } from '../commands/command-manager-modal'
 import { ConnectionFormHost } from '../connections/connection-form-host'
@@ -15,6 +15,7 @@ import type { AppViewModel } from './app-view-model'
 import { isDarkTheme } from '../../app/theme-config'
 import { t } from '../../i18n'
 import { useWindowReveal } from '../../hooks/use-window-reveal'
+import { runProfileOpenOnce } from '../../hooks/profile-open-guard'
 
 const FileEditorModal = lazy(() =>
   import('../files/file-editor-modal').then((module) => ({
@@ -81,7 +82,6 @@ export function AppStandaloneWindows({ model }: { model: AppViewModel }) {
     openCreateConnection,
     openEditConnection
   } = workspaceState
-  const openingProfileIdsRef = useRef<Set<string>>(new Set())
   const {
     saveCommandTemplate,
     createCommandFolder,
@@ -115,25 +115,15 @@ export function AppStandaloneWindows({ model }: { model: AppViewModel }) {
             onDeleteProfile={handleDeleteProfile}
             onEditProfile={openEditConnection}
             onOpenProfile={(profileId) => {
-              // The manager accepts both double-clicks and an explicit
-              // connect button. Keep duplicate events from creating two
-              // sessions while the first IPC request is still in flight.
-              if (openingProfileIdsRef.current.has(profileId)) {
-                return
-              }
-              openingProfileIdsRef.current.add(profileId)
-
-              const finish = () => openingProfileIdsRef.current.delete(profileId)
               if (desktopApi) {
-                void desktopApi
-                  .openProfileFromManager(profileId)
-                  .catch((error) => {
+                void runProfileOpenOnce(profileId, () =>
+                  desktopApi.openProfileFromManager(profileId).catch((error) => {
                     reportError('从管理器打开连接', error)
                   })
-                  .finally(finish)
+                )
                 return
               }
-              void openProfile(profileId).finally(finish)
+              void openProfile(profileId)
             }}
             onCreateFolder={createConnectionFolder}
             onDeleteFolder={deleteConnectionFolder}
