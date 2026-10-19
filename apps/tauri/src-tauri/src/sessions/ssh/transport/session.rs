@@ -173,7 +173,7 @@ async fn open_session_hop(
     let remote_sshid = Arc::new(StdMutex::new(None));
     let disconnect_reason = Arc::new(StdMutex::new(None));
     let host_verification_waiting = Arc::new(AtomicBool::new(false));
-    let handler = new_client_handler(
+    let mut handler = new_client_handler(
         app,
         tab_id,
         &profile_id,
@@ -187,6 +187,23 @@ async fn open_session_hop(
         remote_sshid.clone(),
         disconnect_reason.clone(),
     );
+    handler.known_hosts_files = ssh_config_known_hosts_files(profile);
+    handler.strict_host_key_checking = profile
+        .get(SSH_CONFIG_RESOLVED_KEY)
+        .and_then(|resolved| resolved.get("strictHostKeyChecking"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    handler.agent_forward_socket = ssh_config_agent_forwarding(profile).map(|socket| {
+        let home = app.path().home_dir().ok();
+        socket
+            .map(|raw| match home.as_deref() {
+                Some(home) => crate::services::ssh_config::expand_user_path(&raw, home)
+                    .to_string_lossy()
+                    .into_owned(),
+                None => raw,
+            })
+            .or_else(|| configured_agent_socket(profile, home.as_deref()))
+    });
     let handle = if let Some(upstream) = upstream.as_ref() {
         connect_target_through_jump(
             upstream,

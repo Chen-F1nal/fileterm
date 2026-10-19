@@ -1185,6 +1185,7 @@ mod ui_preferences_tests {
             resource_monitoring_metric_order: default_resource_monitoring_metric_order(),
             reconnect_mode: "enter".to_string(),
             legacy_algorithms: false,
+            ssh_agent_socket_path: "/run/agent.sock".to_string(),
         };
         let profile = serde_json::json!({
             "type": "ssh",
@@ -1207,6 +1208,7 @@ mod ui_preferences_tests {
         assert_eq!(resolved["resourceMonitoringIntervalSeconds"], 5);
         assert_eq!(resolved["reconnectMode"], "auto");
         assert_eq!(resolved["legacyAlgorithms"], true);
+        assert_eq!(resolved["sshAgentSocketPath"], "/run/agent.sock");
         assert_eq!(profile["enableExecChannel"], true);
     }
 

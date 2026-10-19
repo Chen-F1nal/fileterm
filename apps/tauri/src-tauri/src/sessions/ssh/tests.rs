@@ -34,7 +34,8 @@ mod tests {
         ShellSetupEchoSuppression, SshAuthenticationTarget, SshDeviceModeResolution,
         SshDisconnectInfo, SshDisconnectKind, SshInteractionContext, SshInteractionFlow,
         SshInteractionWaitResult, SshTunnelRule, SshWorkerExit, TunnelCommand,
-        BUSYBOX_SHELL_CWD_SETUP, SHELL_CWD_SETUP, SHELL_SETUP_SETTLE_DELAY, SU_EXEC_OUTPUT_MARKER,
+        BUSYBOX_SHELL_CWD_SETUP, SHELL_CWD_SETUP, SHELL_HOME_DIRECTORY_RECOVERY,
+        SHELL_SETUP_SETTLE_DELAY, SU_EXEC_OUTPUT_MARKER,
     };
     #[cfg(unix)]
     use super::{forward_local_connection, forward_socks5_connection};
@@ -1539,7 +1540,7 @@ mod tests {
         assert_eq!(
             suppress_shell_setup_echo(
                 &mut pending,
-                "Debian GNU/Linux\r\nuser@host:~$ test -z \"${FISH_VERSION-}\" && eval '__tdcwd(){ printf"
+                "Debian GNU/Linux\r\nuser@host:~$ test -z \"$FISH_VERSION\" && eval '__tdcwd(){ printf"
             ),
             ""
         );
@@ -1592,6 +1593,11 @@ mod tests {
         assert!(SHELL_CWD_SETUP.contains("7777;FileTermReady"));
         assert!(SHELL_CWD_SETUP.contains("history -d"));
         assert!(SHELL_CWD_SETUP.contains("__FILETERM_INTERNAL_SETUP_1"));
+        // The guard itself must parse in fish. `${name-}` is POSIX-only and
+        // would be echoed by fish when a PTY redraws the injected command.
+        assert!(SHELL_CWD_SETUP.contains("test -z \"$FISH_VERSION\""));
+        assert!(!SHELL_CWD_SETUP.contains("${FISH_VERSION-}"));
+        assert!(SHELL_HOME_DIRECTORY_RECOVERY.contains("test -z \"$FISH_VERSION\""));
         assert!(BUSYBOX_SHELL_CWD_SETUP.contains("7777;FileTermReady"));
     }
 
@@ -3057,4 +3063,5 @@ mod tests {
     }
 
     include!("transport/route_tests.rs");
+    include!("transport/ssh_config_route_tests.rs");
 }

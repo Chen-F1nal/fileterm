@@ -16,6 +16,11 @@ fn spawn_terminal_output_pump(app: &AppHandle, tab_id: &str) -> TerminalOutputPu
             )
             .await;
         }
+        let state = pump_app.state::<crate::services::workspace::WorkspaceState>();
+        if !state.sessions.read().await.contains_key(&pump_tab_id) {
+            // A closing worker can drain its final output after the tab was removed.
+            state.forget_terminal_output_tab(&pump_tab_id);
+        }
     });
 
     TerminalOutputPump {

@@ -543,6 +543,22 @@ SSH profile 继续通过 `jumpProfileId` 引用上游连接，最多经过 8 个
 整条链的 handles 由当前连接拥有，认证失败、取消、测试完成或关闭会话时显式断开。
 连接表单和工作区底部显示已解析的跳板路径，候选项排除循环和失效链路。
 
+### SSH config 别名连接
+
+`authType: 'sshConfig'` 的 profile 只保存 OpenSSH `Host` 别名（`host` 字段）。每次打开
+会话时，`services/ssh_config` 按 OpenSSH 规则读取 `~/.ssh/config` 与系统 `ssh_config`
+（先到先得、`IdentityFile` 累加、`Host`/`Match host`/`Include`、`%n`/`%h`/`%p`/`%r`/`%u`/`%d`
+等 token），`sessions/ssh/transport/ssh_config_route.rs` 把别名展开为真实地址并把 `ProxyJump`
+链展开为运行时跳板（不另存 profile，与 profile 级跳板/代理互斥）。profile 中非空的用户名
+覆盖 `User`，`Port` 缺省时回退到 profile 端口；`ProxyCommand` 不执行，会明确报错。
+
+认证使用 SSH agent：`IdentityFile` 可以只是 `.pub` 公钥（或私钥的 `.pub` 兄弟文件），按
+配置顺序挑选 agent 中对应的身份签名，`IdentitiesOnly yes` 时只尝试这些身份；agent 优先级为
+`IdentityAgent` > 设置中的 `connectionDefaults.sshAgentSocketPath` > `SSH_AUTH_SOCK`（Windows
+默认 `\\.\pipe\openssh-ssh-agent`，再回退 Pageant）。agent socket 设置只在运行时注入 profile，
+不写回连接。配置展开出的跳板没有 profile，主机密钥先比对 `UserKnownHostsFile`（默认
+`~/.ssh/known_hosts`），用户选择“接受并保存”时写入该文件；目标主机仍保存在 profile 指纹中。
+
 ### FTP
 
 - 独立协议
@@ -606,7 +622,7 @@ SSH/SFTP 和 FTP/FTPS 会在会话建立后上报实际能力，而不是把所�
 - Tauri 的 SSH 终端输入使用 renderer 到 Rust backend 的单向 command，并进入每个 tab 独立的无界输入 channel；SSH worker 在写入 PTY 前按序合并当前积压，不能与 SFTP/文件操作共用有界 worker command 队列，也不能因该队列满而丢失按键。
 - 终端 resize 同样使用单向 command；终端输出在 Rust backend 按 16ms 合并，再交给 renderer 按 16 KiB 分批写入 xterm；空闲时立即提交，积压由解析完成回调继续排空，绘制帧交给 xterm，避免后台 WebView 暂停动画帧时停止消费输出。
 - 终端日志颜色属于 renderer 的 xterm 表现层：远端原有 ANSI 继续由 xterm 解析，纯文本日志只在普通缓冲区完成解析后按主题色补充语义颜色；备用屏幕程序保持原始输出，避免破坏 TUI。
-- Tauri 终端输出使用持久的 IPC `Channel`，SSH/本地 PTY 输出按 UTF-8 边界分为至多 16 KiB 的批次，每窗口最多 4 批待确认；renderer 在 xterm 解析完成后经 `app_ack_terminal_data` 归还额度。通道按原生窗口绑定，每窗口独立转发并保留 8 项待发送队列，慢窗口不阻塞其他窗口或 SSH IO；重订阅和销毁时取消旧转发并释放等待者。SSH pump 保留有界显示队列并持续读取共享连接，饱和时沿用显示跳过策略，限频告警并在后续输出中标记跳过字节数，输入/取消仍由 worker 单独处理；空闲不启动输出刷新定时器。串口/Telnet 的读取和输入共用 worker，沿用非等待显示额度的发送路径，避免暂停设备 IO。普通 Tauri events 只承载低频状态和 snapshot，避免持续 PTY 输出与状态广播争用同一事件路径。
+- Tauri 终端输出使用持久的 IPC `Channel`，SSH/本地 PTY 输出按 UTF-8 边界分为至多 16 KiB 的批次，每窗口最多 4 批待确认；renderer 在 xterm 解析完成后经 `app_ack_terminal_data` 归还额度。通道按原生窗口绑定，每窗口独立转发；每标签最多 8 批待发送（最多 128 KiB），每窗口最多 128 批（最多 2 MiB），防止单个刷屏标签占满窗口待发送容量。转发取得额度后再按就绪标签轮转取批次，各标签内部保持顺序。同一标签的新输出可合入该标签最后一个尚未发送的批次，单批仍不超过 16 KiB，丢失计数与合并屏障按标签隔离，不跨显示丢失点合并，也不为凑批增加等待。关闭标签清理其缓存与计数，SSH pump 的迟到排空在标签已移除时补做清理。慢窗口不阻塞其他窗口或 SSH IO；重订阅和销毁时取消旧转发、清空旧缓存并释放等待者，入队在队列锁内检查关闭状态。SSH pump 保留有界显示队列并持续读取共享连接，饱和时沿用显示跳过策略，限频告警并在后续输出中标记跳过字节数，输入/取消仍由 worker 单独处理；空闲不启动输出刷新定时器。串口/Telnet 的读取和输入共用 worker，沿用非等待显示额度的发送路径，避免暂停设备 IO。普通 Tauri events 只承载低频状态和 snapshot，避免持续 PTY 输出与状态广播争用同一事件路径。
 - SSH transcript 由 controller 的有界分块缓冲统一维护，runtime 不重复拼接第二份历史。
 - 系统指标首次绑定时发送完整历史，稳定轮询只发送最新样本，由 renderer 追加到固定长度历史。
 - 同一 Renderer 的并发完整快照采用单飞和尾随合并，确保最终状态可达，同时避免重复磁盘读取与大对象序列化。
