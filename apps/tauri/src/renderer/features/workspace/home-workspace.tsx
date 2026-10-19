@@ -30,6 +30,7 @@ import { CommandManagerModal } from '../commands/command-manager-modal'
 import { SshKeyManagerPage } from '../ssh-keys/ssh-key-manager-page'
 import { SettingsModal } from '../settings/settings-modal'
 import { TabBar, type TabBarProps } from '../layout/tab-bar'
+import { HostGroupList } from '../layout/host-group-list'
 import { BackgroundSessionsPage } from './background-sessions-page'
 
 export function HomeWorkspace({
@@ -43,6 +44,7 @@ export function HomeWorkspace({
   themeConfig,
   customThemes,
   locale,
+  suppressEntrance: suppressEntranceProp,
   overviewShowStats,
   overviewShowRecent,
   overviewShowAllConnections,
@@ -91,6 +93,7 @@ export function HomeWorkspace({
   themeConfig: ThemeConfig
   customThemes: SavedTheme[]
   locale: 'zhCN' | 'enUS'
+  suppressEntrance?: boolean
   overviewShowStats: boolean
   overviewShowRecent: boolean
   overviewShowAllConnections: boolean
@@ -145,6 +148,13 @@ export function HomeWorkspace({
   >('overview')
   const contentBodyRef = useRef<HTMLDivElement | null>(null)
   const [navDirection, setNavDirection] = useState<'down' | 'up'>('down')
+  const [suppressEntrance, setSuppressEntrance] = useState(Boolean(suppressEntranceProp))
+  useEffect(() => {
+    if (!suppressEntrance) return
+    // Only the initial mount of a switched/closed-into tab is suppressed.
+    const timeout = window.setTimeout(() => setSuppressEntrance(false), 800)
+    return () => window.clearTimeout(timeout)
+  }, [suppressEntrance])
   const [activeConnectionFolderName, setActiveConnectionFolderName] = useState('')
   const [activeCommandFolderName, setActiveCommandFolderName] = useState('')
   const [activeSshKeyFolderName, setActiveSshKeyFolderName] = useState(t.allKeys)
@@ -247,7 +257,7 @@ export function HomeWorkspace({
   const updateHint =
     updateStatus?.state === 'available'
       ? {
-          icon: 'system_update',
+          icon: 'system_update_alt',
           label: t.updateAvailableShort.replace('{version}', updateStatus.availableVersion ?? '—'),
           title: updateStatus.updateMode === 'release-page' ? t.openReleasePage : t.downloadUpdate
         }
@@ -260,8 +270,10 @@ export function HomeWorkspace({
         : updateStatus?.state === 'downloaded'
           ? { icon: 'restart_alt', label: t.restartToUpdate, title: t.restartToUpdate }
           : updateStatus?.state === 'error'
-            ? { icon: 'error_outline', label: t.updateRetry, title: updateStatus.message ?? t.updateFailed }
+            ? { icon: 'error', label: t.updateRetry, title: updateStatus.message ?? t.updateFailed }
             : null
+
+  const hostNavigation = tabBarProps.hostNavigation
 
   return (
     <section className={`home-workspace ${isSidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
@@ -354,6 +366,13 @@ export function HomeWorkspace({
           {/* Docs sidebar button hidden — handleOpenDocs still available */}
         </nav>
 
+        {hostNavigation && hostNavigation.groups.some((group) => group.kind !== 'home') ? (
+          <section aria-label={t.hostRailTitle} className="home-sidebar-hosts">
+            {!isSidebarCollapsed ? <h3 className="fs-host-rail-title">{t.hostRailTitle}</h3> : null}
+            <HostGroupList collapsed={isSidebarCollapsed} includeHome={false} navigation={hostNavigation} />
+          </section>
+        ) : null}
+
         {/* Sidebar Footer */}
         <div className="sidebar-footer">
           <button
@@ -397,7 +416,10 @@ export function HomeWorkspace({
 
       {/* Main Content Area */}
       <main className="home-main-content">
-        <div className="home-content-body scrollbar-scroll" ref={contentBodyRef}>
+        <div
+          className={`home-content-body scrollbar-scroll ${suppressEntrance ? 'suppress-home-entrance' : ''}`}
+          ref={contentBodyRef}
+        >
           {activeTab === 'overview' && (
             <div key="overview" className="page-transition" data-nav-direction={navDirection}>
               <OverviewPage

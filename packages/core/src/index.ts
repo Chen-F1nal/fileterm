@@ -1010,13 +1010,26 @@ export interface ResourceMonitoringState {
   generation: number
   revision: number
   phase:
-    'starting' | 'healthy' | 'paused' | 'waiting' | 'recovering' | 'failed' | 'stopped' | 'disconnected' | 'unsupported'
+    | 'starting'
+    | 'healthy'
+    | 'paused'
+    | 'waiting'
+    | 'recovering'
+    | 'failed'
+    | 'stopped'
+    | 'disconnected'
+    | 'unsupported'
+    | 'shared'
   attempt: number
   maxAttempts: number
   intervalSeconds: ResourceMonitoringIntervalSeconds
   lastSampleAt?: number
   nextRetryAt?: number
   reason?: string
+  /** In the `shared` phase: the tab whose collector serves the same machine. */
+  sharedFromTabId?: string
+  /** Captured connection target, unchanged by edits to the saved profile. */
+  targetKey?: string
 }
 
 export interface SessionSnapshot {
@@ -2133,6 +2146,12 @@ export const UI_ZOOM_PERCENT_STEP = 10
 
 export type AppIconVariant = 'classic' | 'material' | 'clean'
 
+/** Session tabs grouped under a host list, or every tab in one row. */
+export type TabBarLayout = 'host-groups' | 'single-row'
+export const DEFAULT_TAB_BAR_LAYOUT: TabBarLayout = 'single-row'
+/** Compact tab bars are 36px tall; the original height is 48px. */
+export const DEFAULT_COMPACT_TAB_BAR = false
+
 export interface UiPreferences {
   theme: ThemeMode
   locale: 'zhCN' | 'enUS'
@@ -2147,6 +2166,8 @@ export interface UiPreferences {
   uiZoomLocked: boolean
   uiZoomPercent: number
   rememberWindowSize: boolean
+  tabBarLayout: TabBarLayout
+  compactTabBar: boolean
   localTerminalShells: LocalTerminalShellPreferences
   filePanelRememberRatio: boolean
   resourceMonitoringMetrics: ResourceMonitoringMetric[]
@@ -2173,6 +2194,8 @@ export interface UiPreferencesInput {
   uiZoomLocked?: boolean
   uiZoomPercent?: number
   rememberWindowSize?: boolean
+  tabBarLayout?: TabBarLayout
+  compactTabBar?: boolean
   localTerminalShells?: Partial<LocalTerminalShellPreferences>
   filePanelRememberRatio?: boolean
   resourceMonitoringMetrics?: ResourceMonitoringMetric[]

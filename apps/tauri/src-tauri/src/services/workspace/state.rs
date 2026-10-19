@@ -2,6 +2,7 @@ impl Default for WorkspaceState {
     fn default() -> Self {
         Self {
             monitoring_controls: Arc::new(RwLock::new(HashMap::new())),
+            monitoring_leases: Arc::new(MonitoringLeases::default()),
             next_monitoring_generation: AtomicU64::new(0),
             tabs: Arc::new(RwLock::new(Vec::new())),
             active_tab_id: Arc::new(RwLock::new(None)),

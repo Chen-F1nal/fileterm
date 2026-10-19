@@ -16,7 +16,8 @@ function fixture(options = {}) {
       useMemo: (fn) => fn(),
       useRef: (value) => ({ current: value }),
       useState: (value) => [typeof value === 'function' ? value() : value, () => {}],
-      useEffect: () => {}
+      useEffect: () => {},
+      useLayoutEffect: () => {}
     },
     '../lib/diagnostic-log': {},
     '../app/app-shell-utils': { DEFAULT_FILE_PANEL_RATIO: 30, DEFAULT_COMMAND_LIST_WIDTH: 250 },
@@ -44,6 +45,10 @@ function fixture(options = {}) {
     ['./use-sudo-password-prompt', 'useSudoPasswordPrompt']
   ])
     dependencies[path] = { [symbol]: () => ({}) }
+  dependencies['../features/workspace/home-transition'] = {
+    consumeHomeTabTransition: () => false,
+    peekHomeTabTransition: () => false
+  }
   const exports = {}
   vm.runInNewContext(
     ts.transpileModule(readFileSync(new URL('../src/renderer/hooks/use-app-workspace.ts', import.meta.url), 'utf8'), {

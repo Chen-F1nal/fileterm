@@ -2,13 +2,13 @@
 mod tests {
     use super::{
         authentication_result_from_auth_result, build_http_connect_request, build_legacy_preferred,
-        capture_root_access_password_input, coalesce_terminal_input, configured_authentication_method,
-        contains_interrupt_byte,
-        decode_bytes, default_ssh_key_paths, detect_network_device_family,
+        capture_root_access_password_input, coalesce_terminal_input,
+        configured_authentication_method, contains_interrupt_byte, decode_bytes,
+        default_ssh_key_paths, delete_remote_path_command, detect_network_device_family,
         detect_remote_exec_input_kind, effective_exec_channel_enabled, effective_remote_file_type,
         effective_remote_forward_port, effective_resource_monitoring_enabled,
         effective_sftp_enabled, encode_text, enqueue_tunnel_command, exec_channel_enabled,
-        finish_shell_setup_suppression, format_sftp_unavailable_reason,
+        extract_root_read_base64, finish_shell_setup_suppression, format_sftp_unavailable_reason,
         initial_remote_listing_can_be_fallback, initial_remote_listing_matches_current_session,
         is_implicit_ssh_home_path, is_password_prompt, is_root_upload_staging_path,
         is_sftp_path_not_found_message, looks_like_mfa_prompt, looks_like_root_prompt,
@@ -21,22 +21,19 @@ mod tests {
         root_editor_verify_shell_command, root_editor_write_shell_command, root_file_command,
         root_list_shell_command, root_read_shell_command, root_replace_remote_file_command,
         root_stat_shell_command, root_upload_base64_shell_command, root_upload_shell_command,
-        shell_cwd_setup_for_platform,
-        shell_cwd_sftp_path_candidates, should_buffer_terminal_input_during_shell_setup,
-        should_reinject_root_shell_setup, should_restart_keyboard_interactive,
-        spawn_cancellable_file_operation, split_prompt_tail_for_setup_wait, ssh_terminal_type,
-        extract_root_read_base64, strip_su_exec_output, su_exec_command, suppress_shell_setup_echo,
-        track_cwd_and_user,
-        track_root_access_prompt_from_terminal, trim_string_front, trusted_host_fingerprint,
-        try_keyboard_interactive_with_responder, tunnel_bind_address,
-        validate_root_download_completion, validate_tunnel_rule,
-        wait_for_ssh_handshake_with_timeouts, wait_for_ssh_stage, AuthenticationResult,
-        ConfiguredAuthenticationMethod,
-        KeyboardInteractiveMode, KeyboardInteractiveRequest, ResolvedSshDeviceMode, RootFileAccessMethod,
-        ShellSetupEchoSuppression, SshDeviceModeResolution, SshTunnelRule, TunnelCommand,
-        SshInteractionContext, SshInteractionFlow, SshAuthenticationTarget,
-        SshInteractionWaitResult, wait_for_ssh_interaction,
-        SshDisconnectInfo, SshDisconnectKind, SshWorkerExit,
+        shell_cwd_setup_for_platform, shell_cwd_sftp_path_candidates, shell_file_path_candidates,
+        should_buffer_terminal_input_during_shell_setup, should_reinject_root_shell_setup,
+        should_restart_keyboard_interactive, spawn_cancellable_file_operation,
+        split_prompt_tail_for_setup_wait, ssh_terminal_type, strip_su_exec_output, su_exec_command,
+        suppress_shell_setup_echo, track_cwd_and_user, track_root_access_prompt_from_terminal,
+        trim_string_front, trusted_host_fingerprint, try_keyboard_interactive_with_responder,
+        tunnel_bind_address, validate_root_download_completion, validate_tunnel_rule,
+        wait_for_ssh_handshake_with_timeouts, wait_for_ssh_interaction, wait_for_ssh_stage,
+        AuthenticationResult, ConfiguredAuthenticationMethod, KeyboardInteractiveMode,
+        KeyboardInteractiveRequest, ResolvedSshDeviceMode, RootFileAccessMethod,
+        ShellSetupEchoSuppression, SshAuthenticationTarget, SshDeviceModeResolution,
+        SshDisconnectInfo, SshDisconnectKind, SshInteractionContext, SshInteractionFlow,
+        SshInteractionWaitResult, SshTunnelRule, SshWorkerExit, TunnelCommand,
         BUSYBOX_SHELL_CWD_SETUP, SHELL_CWD_SETUP, SHELL_HOME_DIRECTORY_RECOVERY,
         SHELL_SETUP_SETTLE_DELAY, SU_EXEC_OUTPUT_MARKER,
     };
@@ -537,6 +534,37 @@ mod tests {
     }
 
     #[test]
+    fn shell_file_path_mapping_resolves_synology_sftp_alias() {
+        assert_eq!(
+            shell_file_path_candidates("/homes/Stoffel/file.dmg", Some("/volume1/homes/Stoffel")),
+            vec![
+                "/homes/Stoffel/file.dmg".to_string(),
+                "/volume1/homes/Stoffel/file.dmg".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn delete_command_maps_synology_alias_without_force() {
+        let command = delete_remote_path_command(
+            "/homes/Stoffel/file.dmg",
+            "file",
+            Some("/volume1/homes/Stoffel"),
+        );
+        assert!(command.contains("/homes/Stoffel/file.dmg"));
+        assert!(command.contains("/volume1/homes/Stoffel/file.dmg"));
+        assert!(command.contains("rm --"));
+        assert!(!command.contains("rm -f"));
+    }
+
+    #[test]
+    fn delete_command_refuses_the_filesystem_root() {
+        let command = delete_remote_path_command("/", "folder", Some("/volume1/homes/Stoffel"));
+        assert!(!command.contains("rm -r --"));
+        assert!(command.contains("拒绝删除根目录"));
+    }
+
+    #[test]
     fn only_no_such_file_errors_trigger_sftp_namespace_fallback() {
         assert!(is_sftp_path_not_found_message("No such file: No such file"));
         assert!(!is_sftp_path_not_found_message("Permission denied"));
@@ -583,7 +611,10 @@ mod tests {
             "password": "container-password"
         });
         assert_eq!(missing_password_credential(&kubernetes_password), None);
-        assert_eq!(password_for_authentication(&kubernetes_password), Some("container-password"));
+        assert_eq!(
+            password_for_authentication(&kubernetes_password),
+            Some("container-password")
+        );
     }
 
     #[test]
@@ -734,8 +765,7 @@ mod tests {
         let (_sender, receiver) = oneshot::channel();
         cancellation.cancel();
 
-        let result =
-            wait_for_ssh_interaction(&context, receiver, Duration::from_secs(60)).await;
+        let result = wait_for_ssh_interaction(&context, receiver, Duration::from_secs(60)).await;
 
         assert!(matches!(result, SshInteractionWaitResult::Cancelled));
     }

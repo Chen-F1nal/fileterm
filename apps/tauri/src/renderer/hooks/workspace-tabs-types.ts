@@ -7,7 +7,8 @@ import type {
   PaneFocusDirection,
   SessionSnapshot,
   WorkspaceSnapshot,
-  WorkspaceTab
+  WorkspaceTab,
+  TabBarLayout
 } from '@fileterm/core'
 import type { OrderedTabEntry, TabContextTarget } from '../features/layout/tab-bar'
 import type { SendScope, SessionSendTarget } from '../features/common/session-send-targets'
@@ -52,6 +53,7 @@ export type WorkspaceNavigationDirection = 'up' | 'down'
 export type UseWorkspaceTabsOptions = {
   desktopApi?: FileTermDesktopApi
   workspace: WorkspaceSnapshot
+  tabBarLayout: TabBarLayout
   isMainWorkspaceWindow: boolean
   hasLoadedInitialSnapshot: boolean
   locale: AppLocale
@@ -95,6 +97,7 @@ export type WorkspaceTabsActionContext = Pick<
   UseWorkspaceTabsOptions,
   | 'desktopApi'
   | 'workspace'
+  | 'tabBarLayout'
   | 'isMainWorkspaceWindow'
   | 'hasLoadedInitialSnapshot'
   | 'isBusy'
@@ -109,10 +112,13 @@ export type WorkspaceTabsActionContext = Pick<
   | 'onCloseCurrentWindow'
   | 'onRequestQuit'
 > & {
+  orderedTabs: OrderedTabEntry[]
   localTabs: LocalTab[]
   setLocalTabs: Dispatch<SetStateAction<LocalTab[]>>
   activeLocalTabId: string | null
   setActiveLocalTabId: Dispatch<SetStateAction<string | null>>
+  setPendingActiveTabId: Dispatch<SetStateAction<string | null>>
+  tabActivationRequestRef: MutableRefObject<number>
   nextHomeTabNumber: number
   setNextHomeTabNumber: Dispatch<SetStateAction<number>>
   tabOrder: string[]

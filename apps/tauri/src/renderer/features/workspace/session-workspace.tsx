@@ -223,6 +223,7 @@ export function SessionWorkspace({
   } | null>(null)
   const layoutFrameRef = useRef<number | null>(null)
   const filePanelSnapTargetRef = useRef<FilePanelSnapTarget | null>(null)
+  const manualFilePanelHeightRef = useRef(false)
   const alignmentInitializedTabRef = useRef<string | null>(null)
   const lastExpandedFilePanelHeight = useRef(filePanelHeight)
   const appliedWorkspaceFocusMode = useRef<boolean | null>(null)
@@ -294,6 +295,17 @@ export function SessionWorkspace({
       }
     }
 
+    // A drag outside every snap point is still a deliberate in-session height.
+    // Keep it until the tab/session is recreated instead of falling back to the
+    // persisted ratio on the next layout observer callback.
+    if (manualFilePanelHeightRef.current) {
+      setFilePanelHeight((prev) => {
+        const clamped = clampFilePanelHeight(workspaceRect.height, prev)
+        return prev === clamped ? prev : clamped
+      })
+      return
+    }
+
     const nextHeight = filePanelHeightFromRatio(workspaceRect.height, filePanelRatio)
     setFilePanelHeight((prev) => (prev === nextHeight ? prev : nextHeight))
   }
@@ -346,6 +358,9 @@ export function SessionWorkspace({
 
     const stopFilePanelDragging = () => {
       const finalDragState = dragStateRef.current
+      if (finalDragState) {
+        manualFilePanelHeightRef.current = !finalDragState.latestSnapTarget
+      }
       if (rememberFilePanelRatio && finalDragState) {
         if (workspaceRef.current) {
           onFilePanelRatioCommit(filePanelRatioFromHeight(finalDragState.height, finalDragState.latestHeight))

@@ -7,11 +7,13 @@ import type {
 } from '@fileterm/core'
 import { t } from '../../i18n'
 import { SystemSidebar } from './system-sidebar'
+import type { MonitoringTarget } from './shared-monitoring'
 
 export function SystemSidebarShell({
   activeProfile,
   activeSession,
   activeTabId,
+  monitoringPeers,
   collapsed,
   connectionStatus,
   showResourceMeters,
@@ -26,6 +28,7 @@ export function SystemSidebarShell({
   activeProfile: ConnectionProfile | null
   activeSession: SessionSnapshot | null
   activeTabId: string | null
+  monitoringPeers?: MonitoringTarget[]
   collapsed: boolean
   connectionStatus: TabStatus | null
   showResourceMeters: boolean
@@ -43,6 +46,7 @@ export function SystemSidebarShell({
         activeProfile={activeProfile}
         activeSession={activeSession}
         activeTabId={activeTabId}
+        monitoringPeers={monitoringPeers}
         collapsed={collapsed}
         connectionStatus={connectionStatus}
         showResourceMeters={showResourceMeters}

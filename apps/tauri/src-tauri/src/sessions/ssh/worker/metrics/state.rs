@@ -132,6 +132,9 @@ impl MetricsRuntime {
         {
             return false;
         }
+        if self.status.phase != "shared" {
+            self.status.shared_from_tab_id = None;
+        }
         self.status.revision += 1;
         if session
             .monitoring

@@ -8,7 +8,7 @@ import { homeTabKey, sessionTabKey, settledResultsError } from '../app/app-utils
 import { resolveSelectedTabIds, type SendScope } from '../features/common/session-send-targets'
 import { t } from '../i18n'
 import type { WorkspaceTabsActionContext } from './workspace-tabs-types'
-import { uniqueStrings } from './workspace-tabs-utils'
+import { nextTabAfterClose, uniqueStrings } from './workspace-tabs-utils'
 
 export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionContext) {
   const {
@@ -24,6 +24,8 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
     setLocalTabs,
     activeLocalTabId,
     setActiveLocalTabId,
+    setPendingActiveTabId,
+    tabActivationRequestRef,
     setNextHomeTabNumber,
     tabOrder,
     setTabOrder,
@@ -133,7 +135,14 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
       return
     }
 
-    const activeHomeId = context.isHomeWorkspaceVisible ? context.activeLocalTabIdForUi : null
+    const activeHomeId =
+      context.activeLocalTab?.kind === 'home'
+        ? context.activeLocalTab.id
+        : context.isHomeWorkspaceVisible
+          ? (context.activeLocalTabIdForUi ??
+            [...context.localTabs].reverse().find((tab) => tab.kind === 'home')?.id ??
+            null)
+          : null
     const replacementKey = activeHomeId ? homeTabKey(activeHomeId) : null
     pendingHomeReplacementKeyRef.current = replacementKey
 
@@ -144,10 +153,16 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
       onStatusMessage(null)
       if (activeHomeId && snapshot.activeTabId && replacementKey) {
         const nextSessionKey = sessionTabKey(snapshot.activeTabId)
-        setTabOrder((current) => uniqueStrings(current.map((key) => (key === replacementKey ? nextSessionKey : key))))
+        setTabOrder((current) => {
+          const replacementIndex = current.indexOf(replacementKey)
+          const next = current.filter((key) => key !== replacementKey)
+          if (next.includes(nextSessionKey)) return next
+          if (replacementIndex < 0) return [nextSessionKey, ...next]
+          return [...next.slice(0, replacementIndex), nextSessionKey, ...next.slice(replacementIndex)]
+        })
         setLocalTabs((current) => current.filter((tab) => tab.id !== activeHomeId))
-        pendingHomeReplacementKeyRef.current = null
       }
+      pendingHomeReplacementKeyRef.current = null
       setActiveLocalTabId(null)
     } catch (error) {
       pendingHomeReplacementKeyRef.current = null
@@ -208,14 +223,20 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
       return
     }
 
+    // Switch before the snapshot round trip, which carries every session's metrics history.
+    const topLevelTabId = workspace.tabs.find((tab) => tab.id === tabId)?.paneRootTabId ?? tabId
+    const requestId = ++tabActivationRequestRef.current
+    setPendingActiveTabId(topLevelTabId)
+    setActiveLocalTabId(null)
     try {
       onBusyChange(true)
       const snapshot = await desktopApi.activateTab(tabId)
       applySnapshot(snapshot)
-      setActiveLocalTabId(null)
     } catch (error) {
+      if (tabActivationRequestRef.current === requestId) setActiveLocalTabId(activeLocalTabId)
       onError('激活标签页', error)
     } finally {
+      if (tabActivationRequestRef.current === requestId) setPendingActiveTabId(null)
       onBusyChange(false)
     }
   }
@@ -368,6 +389,20 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
       .filter((tab) => tab.kind === 'system' && tab.sessionTabId === tabId)
       .map((tab) => tab.id)
 
+    const closingActive =
+      (!activeLocalTabId && context.visibleActiveSessionTabId === tabId) ||
+      relatedLocalTabs.includes(activeLocalTabId ?? '')
+    const next = closingActive
+      ? nextTabAfterClose(
+          context.orderedTabs,
+          activeLocalTabId ? homeTabKey(activeLocalTabId) : sessionTabKey(tabId),
+          context.tabBarLayout === 'host-groups',
+          [sessionTabKey(tabId), ...relatedLocalTabs.map(homeTabKey)]
+        )
+      : null
+    // Select the neighbour before closing so the backend cannot choose its last tab.
+    if (next?.kind === 'session') applySnapshot(await desktopApi.activateTab(next.tab.id))
+
     setClosingSessionTabIds((current) => (current.includes(tabId) ? current : [...current, tabId]))
     setTabOrder((current) => current.filter((key) => key !== sessionTabKey(tabId)))
     if (relatedLocalTabs.length) {
@@ -379,6 +414,8 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
     } else if (!activeLocalTabId && workspace.activeTabId === tabId && nextVisibleSessionTabs.length === 0) {
       closeHomeTabs([], 'home-1', nextVisibleSessionTabs)
     }
+
+    if (next) setActiveLocalTabId(next.kind === 'local' ? next.id : null)
 
     const snapshot = await desktopApi.closeTab(tabId)
     applySnapshot(snapshot)

@@ -1,4 +1,7 @@
 include!("policy.rs");
+include!("target.rs");
+include!("attempt.rs");
+include!("attempt_tests.rs");
 include!("state.rs");
 include!("recovery.rs");
 include!("startup.rs");
@@ -88,72 +91,57 @@ async fn spawn_metrics_collector(
 }
 
 impl MetricsRuntime {
-    async fn run_enabled(&mut self, retry_rx: &mut mpsc::Receiver<()>) {
-        while retry_rx.try_recv().is_ok() {}
-        loop {
-            if self.attempt_cancellation.is_cancelled() || self.handle.is_closed() {
-                break;
-            }
-            let prepared = self.prepare().await;
-            let reason = match prepared {
-                Ok(prepared) => {
-                    self.started_at = tokio::time::Instant::now();
-                    self.health.last_sample = None;
-                    read_metrics_channel(self, prepared, retry_rx).await
-                }
-                Err(()) => "startup-failed",
-            };
-            if self.attempt_cancellation.is_cancelled() || self.handle.is_closed() {
-                break;
-            }
-            if self.status.phase == "unsupported" || reason == "session-replaced" {
-                break;
-            }
-            self.gap = true;
-            self.health.interrupt();
-            if self.status.reason.is_none() {
-                self.status.reason = Some(reason.into());
-            }
-            let manual = reason == "manual-retry";
-            if manual && self.status.attempt >= self.status.max_attempts {
-                self.status.attempt = 0;
-            }
-            let immediate = manual || reason == "stalled-channel";
-            if let Some(delay) = MetricsPolicy::retry_delay(self.status.attempt) {
-                let delay = if immediate { Duration::ZERO } else { delay };
-                self.status.phase = "waiting".into();
-                self.status.next_retry_at = Some(metrics_now_ms() + delay.as_millis() as u64);
-                if !self.publish(None).await {
-                    break;
-                }
-                if !wait_for_metrics_retry(&self.attempt_cancellation, retry_rx, Some(delay)).await
-                {
-                    break;
-                }
-            } else {
-                self.status.phase = "failed".into();
-                self.status.next_retry_at = None;
-                if !self.publish(None).await {
-                    break;
-                }
-                if !wait_for_metrics_retry(&self.attempt_cancellation, retry_rx, None).await {
-                    break;
-                }
-                self.status.attempt = 0;
-            }
-            self.status.attempt += 1;
-            self.status.phase = "recovering".into();
-            self.status.next_retry_at = None;
-            self.status.reason = None;
-            if !self.publish(None).await {
-                break;
-            }
-            // Discard clicks accepted just before the busy state was published.
-            while retry_rx.try_recv().is_ok() {}
-        }
-    }
 
     async fn prepare(&mut self) -> Result<PreparedMetrics, ()> {
         prepare_metrics_channel(self).await
+    }
+
+    /// Followers publish `shared` and wait until the machine's leader releases
+    /// its lease. Returns None when this attempt ends while waiting.
+    async fn acquire_monitoring_lease(
+        &mut self,
+    ) -> Option<Option<crate::services::workspace::MonitoringLease>> {
+        let Some(key) = self.status.target_key.clone() else {
+            return Some(None);
+        };
+        let leases = self
+            .app
+            .state::<crate::services::workspace::WorkspaceState>()
+            .monitoring_leases
+            .clone();
+        let mut released = leases.subscribe();
+        loop {
+            match leases.try_acquire(&key, &self.tab_id) {
+                Ok(lease) => {
+                    if self.status.phase == "shared" {
+                        self.status.phase = "starting".into();
+                        if !self.publish(None).await {
+                            return None;
+                        }
+                    }
+                    return Some(Some(lease));
+                }
+                Err(holder) => {
+                    if self.status.phase != "shared"
+                        || self.status.shared_from_tab_id.as_deref() != Some(holder.as_str())
+                    {
+                        self.status.phase = "shared".into();
+                        self.status.shared_from_tab_id = Some(holder);
+                        self.status.next_retry_at = None;
+                        self.status.reason = None;
+                        self.gap = true;
+                        self.health.interrupt();
+                        if !self.publish(None).await {
+                            return None;
+                        }
+                    }
+                }
+            }
+            tokio::select! {
+                biased;
+                _ = self.attempt_cancellation.cancelled() => return None,
+                result = released.changed() => if result.is_err() { return None; },
+            }
+        }
     }
 }
