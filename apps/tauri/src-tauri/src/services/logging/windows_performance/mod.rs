@@ -14,8 +14,17 @@ mod scheduler_policy;
 mod scheduler_sessions;
 #[cfg(target_os = "windows")]
 mod scheduler_threads;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows-scheduler-fixture")))]
 pub(crate) mod webview_processes;
+#[cfg(all(target_os = "windows", feature = "windows-scheduler-fixture"))]
+pub(crate) mod webview_processes {
+    pub(super) fn snapshot() -> (Vec<u32>, serde_json::Value) {
+        (
+            Vec::new(),
+            serde_json::json!({"status": "fixture-disabled"}),
+        )
+    }
+}
 
 #[cfg(target_os = "windows")]
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -5,6 +5,9 @@ description = "FileTerm desktop workspace"
 authors = ["FileTerm"]
 edition = "2021"
 
+[features]
+windows-scheduler-fixture = []
+
 [lib]
 name = "fileterm_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
