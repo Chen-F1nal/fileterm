@@ -61,6 +61,7 @@ pub fn app_set_ui_preferences(
     let previous_app_icon = preferences.app_icon.clone();
     #[cfg(target_os = "macos")]
     let previous_ui_zoom_percent = preferences.ui_zoom_percent;
+    #[cfg(target_os = "macos")]
     let previous_compact_tab_bar = preferences.compact_tab_bar;
     #[cfg(target_os = "macos")]
     let theme_changed = input.theme.is_some() || input.theme_config.is_some();
