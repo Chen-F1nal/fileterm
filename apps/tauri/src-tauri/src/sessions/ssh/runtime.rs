@@ -328,10 +328,68 @@ pub struct ClientHandler {
     interaction_window_label: Option<String>,
     interaction: SshInteractionContext,
     disconnect_reason: SharedSshDisconnectReason,
+    /// OpenSSH known_hosts files for hops resolved from `~/.ssh/config`. A
+    /// recorded matching key is trusted without prompting, like `ssh`.
+    known_hosts_files: Vec<std::path::PathBuf>,
+    strict_host_key_checking: bool,
+    /// `ForwardAgent` for this hop: `Some(None)` forwards the platform default
+    /// agent, `Some(Some(path))` a specific socket / named pipe.
+    agent_forward_socket: Option<Option<String>>,
+}
+
+impl ClientHandler {
+    fn log_agent_forward_failure(&self, error: &str) {
+        crate::services::logging::session(
+            &self.app,
+            "WARN",
+            "ssh",
+            &self.tab_id,
+            format!("SSH agent forwarding rejected: {error}"),
+        );
+    }
 }
 
 impl Handler for ClientHandler {
     type Error = russh::Error;
+
+    async fn server_channel_open_agent_forward(
+        &mut self,
+        channel: Channel<russh::client::Msg>,
+        reply: russh::client::ChannelOpenHandle,
+        _session: &mut russh::client::Session,
+    ) -> Result<(), Self::Error> {
+        let Some(socket) = self.agent_forward_socket.clone() else {
+            reply
+                .reject(russh::ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        };
+        let agent = match timeout(
+            SSH_AGENT_FORWARD_CONNECT_TIMEOUT,
+            connect_ssh_agent_socket(socket.as_deref()),
+        )
+        .await
+        {
+            Ok(Ok(agent)) => agent,
+            Ok(Err(error)) => {
+                self.log_agent_forward_failure(&error);
+                reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
+                return Ok(());
+            }
+            Err(_) => {
+                self.log_agent_forward_failure("local SSH agent connect timed out");
+                reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
+                return Ok(());
+            }
+        };
+        reply.accept().await;
+        tokio::spawn(async move {
+            let mut agent = agent.into_inner();
+            let mut stream = channel.into_stream();
+            let _ = copy_bidirectional(&mut stream, &mut agent).await;
+        });
+        Ok(())
+    }
 
     async fn disconnected(
         &mut self,
@@ -413,20 +471,32 @@ impl Handler for ClientHandler {
                 self.host, self.port
             ),
         );
-        // Short-circuit: if the profile already trusts this exact
-        // fingerprint, accept without prompting. This is the common path
-        // after the user previously chose "accept-and-save".
-        if let Some(known) = &self.trusted_fingerprint {
-            if known == &fp {
-                crate::services::logging::session(
-                    &self.app,
-                    "INFO",
-                    "ssh",
-                    &self.tab_id,
-                    "host-key matched saved fingerprint",
-                );
-                return Ok(true);
-            }
+        let known_hosts = ssh_config_known_hosts_match(
+            &self.known_hosts_files,
+            &self.host,
+            self.port,
+            &server_public_key.public_key(),
+        );
+        if let Some(trusted) = ssh_host_key_trust_decision(
+            self.strict_host_key_checking,
+            self.trusted_fingerprint.as_deref(),
+            &fp,
+            known_hosts,
+        ) {
+            crate::services::logging::session(
+                &self.app,
+                if trusted { "INFO" } else { "WARN" },
+                "ssh",
+                &self.tab_id,
+                if trusted {
+                    "host-key matched configured trust policy"
+                } else {
+                    "StrictHostKeyChecking yes: rejecting unknown or changed host key"
+                },
+            );
+            return Ok(trusted);
+        }
+        if self.trusted_fingerprint.is_some() || known_hosts == KnownHostsMatch::Changed {
             crate::services::logging::session(
                 &self.app,
                 "WARN",
@@ -597,12 +667,25 @@ impl Handler for ClientHandler {
                     .library_mutation
                     .clone();
                 let _guard = library_mutation.lock().await;
-                let _ = crate::services::profile_ops::update_trusted_host_fingerprint(
-                    &self.app,
-                    &self.profile_id,
-                    &fp,
-                )
-                .await;
+                if self.profile_id.is_empty() {
+                    // A jump host that only exists in ~/.ssh/config has no
+                    // saved profile; record it where OpenSSH would.
+                    ssh_config_learn_known_host(
+                        &self.app,
+                        &self.tab_id,
+                        &self.known_hosts_files,
+                        &self.host,
+                        self.port,
+                        &server_public_key.public_key(),
+                    );
+                } else {
+                    let _ = crate::services::profile_ops::update_trusted_host_fingerprint(
+                        &self.app,
+                        &self.profile_id,
+                        &fp,
+                    )
+                    .await;
+                }
                 self.trusted_fingerprint = Some(fp);
                 Ok(true)
             }

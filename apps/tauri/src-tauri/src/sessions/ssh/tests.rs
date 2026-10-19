@@ -3033,4 +3033,5 @@ mod tests {
     }
 
     include!("transport/route_tests.rs");
+    include!("transport/ssh_config_route_tests.rs");
 }

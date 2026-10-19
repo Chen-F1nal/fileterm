@@ -41,5 +41,8 @@ fn new_client_handler(
         interaction,
         remote_sshid,
         disconnect_reason,
+        known_hosts_files: Vec::new(),
+        strict_host_key_checking: false,
+        agent_forward_socket: None,
     }
 }
