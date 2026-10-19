@@ -226,6 +226,7 @@ async fn run_worker_loop(
                 _ = terminal_writer_cancellation.cancelled() => break,
                 data = terminal_write_rx.recv() => {
                     let Some(data) = data else { break };
+                    let data = coalesce_terminal_writes(data, &mut terminal_write_rx);
                     if let Err(error) = write_shell_data(&terminal_writer, data).await {
                         crate::services::logging::session(
                             &terminal_writer_app,

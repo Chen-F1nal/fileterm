@@ -80,6 +80,8 @@ const PROXY_IO_TIMEOUT: Duration = Duration::from_secs(8);
 /// A remote PTY write must not pin the SSH worker forever when the server has
 /// stopped consuming the channel or the channel window is exhausted.
 const TERMINAL_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+const TERMINAL_INPUT_COALESCE_MESSAGES: usize = 64;
+const TERMINAL_INPUT_COALESCE_BYTES: usize = 64 * 1024;
 /// SIGINT is an out-of-band emergency path. Keep its wait short so a broken
 /// SSH transport cannot make Ctrl+C look like a frozen desktop app.
 const TERMINAL_INTERRUPT_TIMEOUT: Duration = Duration::from_millis(500);
@@ -558,6 +560,23 @@ async fn write_shell_data(
         .await
         .map_err(|_| "SSH terminal write timed out".to_string())?
         .map_err(|error| error.to_string())
+}
+
+// Input-loop yielding must not turn an already queued burst into one SSH write per fragment.
+fn coalesce_terminal_writes(
+    mut first: Vec<u8>,
+    receiver: &mut mpsc::UnboundedReceiver<Vec<u8>>,
+) -> Vec<u8> {
+    for _ in 1..TERMINAL_INPUT_COALESCE_MESSAGES {
+        if first.len() >= TERMINAL_INPUT_COALESCE_BYTES {
+            break;
+        }
+        let Ok(next) = receiver.try_recv() else {
+            break;
+        };
+        first.extend_from_slice(&next);
+    }
+    first
 }
 
 fn contains_interrupt_byte(data: &str) -> bool {
