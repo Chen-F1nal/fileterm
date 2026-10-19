@@ -31,6 +31,7 @@
 - [PR #341](https://github.com/St0ff3l/fileterm/pull/341)：增加主机分组标签导航和紧凑标签栏。
 - [PR #342](https://github.com/St0ff3l/fileterm/pull/342)：改进 Fish shell 初始化兼容性。
 - [PR #343](https://github.com/St0ff3l/fileterm/pull/343)：限制终端输出积压并公平调度多个终端。
+- [PR #345](https://github.com/St0ff3l/fileterm/pull/345)：限制输入与诊断积压，改进长时间终端任务性能和诊断。
 
 完整变更记录请查看 [v2.3.1-beta.9 与 v2.3.1-beta.10 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.9...v2.3.1-beta.10)。
 
@@ -74,6 +75,7 @@ This beta improves multi-connection tab management, SSH compatibility, and respo
 - [PR #341](https://github.com/St0ff3l/fileterm/pull/341): Add host-grouped tab navigation and a compact tab bar.
 - [PR #342](https://github.com/St0ff3l/fileterm/pull/342): Improve Fish shell initialization compatibility.
 - [PR #343](https://github.com/St0ff3l/fileterm/pull/343): Bound terminal output backlog and schedule terminal output fairly.
+- [PR #345](https://github.com/St0ff3l/fileterm/pull/345): Bound input and diagnostic backlogs and improve long-running terminal performance and diagnostics.
 
 See the [comparison between v2.3.1-beta.9 and v2.3.1-beta.10](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.9...v2.3.1-beta.10) for the complete change set.
 
