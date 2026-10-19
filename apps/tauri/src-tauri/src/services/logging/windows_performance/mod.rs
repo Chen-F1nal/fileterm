@@ -1,6 +1,7 @@
 //! Low-frequency native evidence that continues while the WebView is stalled.
 #[cfg(target_os = "windows")]
 mod host;
+mod process_tree;
 #[cfg(target_os = "windows")]
 mod processes;
 #[cfg(target_os = "windows")]
@@ -13,6 +14,8 @@ mod scheduler_policy;
 mod scheduler_sessions;
 #[cfg(target_os = "windows")]
 mod scheduler_threads;
+#[cfg(target_os = "windows")]
+pub(crate) mod webview_processes;
 
 #[cfg(target_os = "windows")]
 use std::sync::atomic::{AtomicBool, Ordering};

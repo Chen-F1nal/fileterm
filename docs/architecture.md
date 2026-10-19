@@ -765,6 +765,7 @@ tokens -> theme vars -> component skins -> terminal colors
 
 Rust 诊断日志集中在 `services/logging/`，由 `mod.rs` 保留稳定 facade；tracing subscriber/layer 接收结构化事件和 span，级别和分类、脱敏格式化、队列写入与轮转、panic 捕获分别维护。
 Windows 的 `windows_performance/` 保留独立原生进程健康采样；启动时仅回收通过名称、GUID、PID 和进程创建时间验证的孤儿会话，ETW 采集只由既有卡顿告警触发。短时 headless helper 不初始化桌面 runtime，设置时间、事件量、消费线程/整个 helper CPU 与报告体积限制；身份或清理不确定时不启新采集。日志区分线程调度驻留与实际 CPU 执行能力，明确未校正 DPC/ISR，不持久化原始系统事件，不改变绑核或业务线程策略。
+Windows 主窗口及子窗口在创建时登记 WebView2 浏览器 PID 和进程创建时间，窗口销毁时移除；原生分钟采样据此补充父子进程树，普通内存查询仅申请有限查询权限。登记/查询失败与截断明确记录，不以零内存替代未知值，也不依赖 renderer 心跳或管理员权限。
 Renderer 使用 `lib/diagnostic-log.ts` 经已有 IPC 写入本地日志，不直接访问文件。
 日志增加统一 category，保留原 scope 与标签 ID；所有级别共用 1,024 项有界队列和一个专用线程，接纳时为 WARN/ERROR 预留容量。满载或故障不创建逐条兜底任务、不在业务线程写盘；丢弃和写入失败按级别累计，由写盘线程限频汇总，正常退出进行有界排空。
 完整分类、限流、保留和故障边界见 [本地诊断日志](./quality/logging.md)。

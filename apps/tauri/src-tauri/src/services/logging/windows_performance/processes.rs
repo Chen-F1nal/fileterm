@@ -1,3 +1,4 @@
+use super::process_tree::{webview_tree, Process};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::size_of;
@@ -14,7 +15,7 @@ use windows_sys::Win32::System::ProcessStatus::{
 use windows_sys::Win32::System::Threading::{
     GetPriorityClass, GetProcessInformation, GetProcessTimes, OpenProcess, ProcessPowerThrottling,
     PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_STATE,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ,
+    PROCESS_QUERY_LIMITED_INFORMATION,
 };
 
 pub(super) struct OwnedHandle(pub HANDLE);
@@ -24,12 +25,6 @@ impl Drop for OwnedHandle {
             CloseHandle(self.0);
         }
     }
-}
-
-struct Process {
-    pid: u32,
-    parent: u32,
-    webview: bool,
 }
 
 fn process_list() -> Result<Vec<Process>, u32> {
@@ -69,21 +64,6 @@ fn process_list() -> Result<Vec<Process>, u32> {
     Ok(items)
 }
 
-fn webview_tree(root: u32, items: &[Process]) -> BTreeSet<u32> {
-    let mut selected = BTreeSet::from([root]);
-    loop {
-        let before = selected.len();
-        for item in items {
-            if item.webview && selected.contains(&item.parent) {
-                selected.insert(item.pid);
-            }
-        }
-        if before == selected.len() {
-            return selected;
-        }
-    }
-}
-
 pub(super) fn diagnostic_processes(root: u32) -> Result<BTreeSet<u32>, u32> {
     let items = process_list()?;
     if !items
@@ -92,11 +72,30 @@ pub(super) fn diagnostic_processes(root: u32) -> Result<BTreeSet<u32>, u32> {
     {
         return Err(windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER);
     }
-    Ok(webview_tree(root, &items))
+    Ok(webview_tree(root, &items, &[]))
 }
 
 fn filetime(value: FILETIME) -> u64 {
     (u64::from(value.dwHighDateTime) << 32) | u64::from(value.dwLowDateTime)
+}
+
+pub(super) fn creation_time(pid: u32) -> Result<u64, u32> {
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return Err(unsafe { GetLastError() });
+    }
+    let handle = OwnedHandle(process);
+    let (mut created, mut exited, mut kernel, mut user) = (
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+    );
+    if unsafe { GetProcessTimes(handle.0, &mut created, &mut exited, &mut kernel, &mut user) } == 0
+    {
+        return Err(unsafe { GetLastError() });
+    }
+    Ok(filetime(created))
 }
 
 #[derive(Default)]
@@ -125,8 +124,7 @@ impl Sampler {
         } else {
             "webview2"
         };
-        let process =
-            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, 0, pid) };
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
         if process.is_null() {
             return json!({"pid": pid, "role": role, "openErrorCode": unsafe { GetLastError() }});
         }
@@ -147,6 +145,7 @@ impl Sampler {
             report["cpuPercentOneCore"] =
                 json!(cpu_percent(self.previous.get(&pid), creation, cpu, now));
             report["cpuTime100ns"] = json!(cpu);
+            report["creationTime100ns"] = json!(creation);
             self.previous.insert(pid, (creation, cpu, now));
         } else {
             report["cpuErrorCode"] = json!(unsafe { GetLastError() });
@@ -200,7 +199,8 @@ impl Sampler {
             Ok(items) => items,
             Err(error) => return json!({"snapshotErrorCode": error}),
         };
-        let selected = webview_tree(std::process::id(), &items);
+        let (browsers, registrations) = super::webview_processes::snapshot();
+        let selected = webview_tree(std::process::id(), &items, &browsers);
         self.previous.retain(|pid, _| selected.contains(pid));
         // Bound the log line and retained state even if WebView process count grows abnormally.
         let sampled: BTreeSet<_> = std::iter::once(std::process::id())
@@ -213,10 +213,20 @@ impl Sampler {
             .take(32)
             .collect();
         self.previous.retain(|pid, _| sampled.contains(pid));
+        let samples: Vec<_> = sampled.iter().map(|pid| self.process(*pid)).collect();
+        let memory_read_count = samples
+            .iter()
+            .filter(|sample| sample.get("privateBytes").is_some())
+            .count();
         json!({
+            "discoveryMethod": "parent-tree+webview2-browser-id",
+            "webview2Count": selected.len().saturating_sub(1),
+            "browserRegistrations": registrations,
+            "memoryReadCount": memory_read_count,
+            "accessMode": "query-limited",
             "count": selected.len(),
             "truncated": selected.len() > sampled.len(),
-            "samples": sampled.into_iter().map(|pid| self.process(pid)).collect::<Vec<_>>()
+            "samples": samples
         })
     }
 }
@@ -224,38 +234,6 @@ impl Sampler {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn process_selection_excludes_other_apps_and_shell_descendants() {
-        let items = [
-            Process {
-                pid: 2,
-                parent: 1,
-                webview: true,
-            },
-            Process {
-                pid: 3,
-                parent: 2,
-                webview: true,
-            },
-            Process {
-                pid: 4,
-                parent: 99,
-                webview: true,
-            },
-            Process {
-                pid: 5,
-                parent: 1,
-                webview: false,
-            },
-            Process {
-                pid: 6,
-                parent: 5,
-                webview: true,
-            },
-        ];
-        assert_eq!(webview_tree(1, &items), BTreeSet::from([1, 2, 3]));
-    }
 
     #[test]
     fn cpu_delta_handles_first_sample_pid_reuse_and_single_core_percentage() {
@@ -268,6 +246,14 @@ mod tests {
             cpu_percent(Some(&previous), 42, 610_000_000, now),
             Some(100.0)
         );
+    }
+
+    #[test]
+    fn inaccessible_process_memory_is_not_reported_as_zero() {
+        let report = Sampler::default().process(u32::MAX);
+        assert!(report.get("openErrorCode").is_some());
+        assert!(report.get("privateBytes").is_none());
+        assert!(report.get("workingSetBytes").is_none());
     }
 
     #[test]

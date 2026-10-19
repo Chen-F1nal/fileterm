@@ -123,10 +123,26 @@ Windows 构建在日志初始化后启动一个独立原生采样线程，立即
   Windows CPU Sets 报告的效率等级、各等级逻辑处理器数和物理核心数。失败记录 `errorCode`；
   多效率等级仅说明系统报告了异构拓扑，不把等级直接标成 Intel P/E 核，也不代表实际线程调度。
 - `power` 记录电源连接和节电状态原始值；`acLineStatus` 的 0/1/255 对应离线/在线/未知。
-- `processes.samples` 只选本 FileTerm 和它的 WebView2 子进程树，记录 PID、角色、累计 CPU 时间、
+- 主窗口与子窗口在创建时经 WebView2 `BrowserProcessId` 登记浏览器进程，窗口销毁时移除；
+  采样用浏览器 PID 补充父子树，避免浏览器由已有环境托管时只找到 FileTerm。每次校验创建
+  时间，防止退出后 PID 复用。登记不轮询 UI，不依赖 renderer IPC；若浏览器已退出或身份
+  查询失败则明确报告，不扫描系统里所有同名 WebView2 进程。
+- `processes.samples` 只选本 FileTerm 和上述已确认的 WebView2 进程树，记录 PID、角色、累计 CPU 时间、
   `cpuPercentOneCore`、工作集字节、private committed bytes、优先级及 power throttling 原始 masks。
   CPU 百分比按两次成功采样间隔计算，100 表示占满一个逻辑处理器；多线程可超过 100，
   不是任务管理器按整机容量归一化的数值。首次采样或 PID 被复用时为 `null`。
+- 普通内存/CPU/策略采集只申请 `PROCESS_QUERY_LIMITED_INFORMATION`，不申请 `PROCESS_VM_READ`
+  或调试权限，也不尝试提权。微软的 [GetProcessMemoryInfo 接口要求](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-getprocessmemoryinfo)
+  支持有限查询权限。域策略仍可能拒绝访问，拒绝时保留错误码，不用 0 代替未知内存。
+- `processes` 增加 `discoveryMethod`、`webview2Count`、`memoryReadCount` 与 `accessMode`。
+  `browserRegistrations` 说明登记状态：`awaiting-webview` / `available` / `partial` / `registry-busy`；
+  每窗详细记录可显示 `pending` / `browser-replaced` / `unavailable` 和失败阶段/错误码。
+  最多展开 16 个窗口，`windowCount` / `omittedWindows` 保留数量；`memoryReadCount` 是成功
+  读到内存的进程数量，必须结合 `count`、`truncated` 和登记状态判断覆盖情况。启动最早一条
+  记录可能尚无窗口登记，`webview2Count=0` 不证明 WebView2 没有内存占用。
+- 同一用户数据目录可能复用浏览器进程。PID 在单条记录内去重；不同 FileTerm 实例若共用
+  同一浏览器，可能列出相同 PID，不能跨实例相加后当作各自独占内存。CPU 百分比与工作集
+  都是进程级统计，工作集含共享页面。
 - 最多采样 32 个进程，`count` 保留实际匹配数量，超出时 `truncated=true`。退出、权限不足或 API
   不支持会记录对应 `*ErrorCode`，不作为 0 CPU/0 内存；退出进程的采样状态会清理，句柄及时关闭。
 

@@ -10,6 +10,9 @@ mod panic;
 mod windows_performance;
 mod writer;
 
+#[cfg(target_os = "windows")]
+pub(crate) use windows_performance::webview_processes::track as track_webview_processes;
+
 pub use category::LogCategory;
 pub use level::LogLevel;
 pub use panic::install_panic_hook;

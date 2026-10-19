@@ -126,7 +126,10 @@ pub fn open_child_window(app: &AppHandle, input: OpenWindowInput) -> Result<(), 
         crate::app_icon::set_window_icon(&window, &variant).map_err(AppError::Window)?;
     }
     #[cfg(target_os = "windows")]
-    prefer_windows_native_rounded_corners(&window);
+    {
+        prefer_windows_native_rounded_corners(&window);
+        crate::services::logging::track_webview_processes(&window);
+    }
     crate::services::logging::info(
         app,
         "window",
