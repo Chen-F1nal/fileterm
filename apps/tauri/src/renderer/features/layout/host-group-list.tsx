@@ -19,6 +19,13 @@ export function hostGroupLabel(group: HostGroup) {
   return group.title || t.untitledTab
 }
 
+function hostStatusLabel(status: ReturnType<typeof tabStatusClass>) {
+  if (status === 'connected') return t.hostStatusConnected
+  if (status === 'connecting') return t.hostStatusConnecting
+  if (status === 'disconnected') return t.hostStatusDisconnected
+  return t.hostStatusIdle
+}
+
 /** Machine list: picking a host switches the tab bar to that host's tabs. */
 export function HostGroupList({
   navigation,
@@ -39,13 +46,17 @@ export function HostGroupList({
           const label = hostGroupLabel(group)
           const isActive = group.key === navigation.activeGroupKey
           const tabCount = group.entries.length
+          const status = group.status ? tabStatusClass(group.status) : null
+          const statusLabel = status ? hostStatusLabel(status) : null
+          const countLabel = tabCount > 1 ? `${tabCount} ${t.hostRailTabCount}` : null
+          const accessibleLabel = [label, group.subtitle, statusLabel, countLabel].filter(Boolean).join(' · ')
           return (
             <li key={group.key}>
               <button
                 aria-current={isActive ? 'true' : undefined}
-                aria-label={collapsed ? label : undefined}
+                aria-label={accessibleLabel}
                 className={`host-group-item ${isActive ? 'is-active' : ''}`}
-                title={group.subtitle ? `${label}\n${group.subtitle}` : label}
+                title={accessibleLabel}
                 type="button"
                 onClick={() => navigation.onSelectGroup(group.key)}
               >
@@ -62,7 +73,7 @@ export function HostGroupList({
                   <StatusIndicator aria-hidden="true" status={tabStatusClass(group.status)} />
                 ) : null}
                 {!collapsed && tabCount > 1 ? (
-                  <span aria-label={`${tabCount} ${t.hostRailTabCount}`} className="host-group-count">
+                  <span aria-hidden="true" className="host-group-count">
                     {tabCount}
                   </span>
                 ) : null}

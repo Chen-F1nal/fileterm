@@ -98,11 +98,11 @@
 }
 
 :root[data-theme*='light'] .fs-sidebar {
-  border-right: 1px solid var(--border-light) !important;
+  border-right: 1px solid var(--border-light);
 }
 
 :root[data-theme*='light'] .sidebar-resizer {
-  right: -3px !important;
+  right: -3px;
   width: 6px !important;
   background: transparent !important;
   border: none !important;

@@ -149,6 +149,7 @@ export function SystemSidebar({
     <div className={`system-sidebar-layout ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="system-sidebar-controls">
         <SidebarToggle
+          className="system-sidebar-toggle"
           collapsed={collapsed}
           label={collapsed ? t.showSystemSidebar : t.hideSystemSidebar}
           onClick={() => {

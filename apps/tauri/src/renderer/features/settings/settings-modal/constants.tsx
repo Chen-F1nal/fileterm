@@ -56,7 +56,7 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
   { tab: 'connections', labelKey: 'connectionDefaults', materialIcon: 'settings_ethernet' },
   { tab: 'security', labelKey: 'securitySettings', appIcon: 'shield-check' },
   { tab: 'sync', labelKey: 'configSync', materialIcon: 'cloud_sync' },
-  { tab: 'updates', labelKey: 'appUpdates', materialIcon: 'system_update' },
+  { tab: 'updates', labelKey: 'appUpdates', materialIcon: 'system_update_alt' },
   { tab: 'tools', labelKey: 'managerToolsShortcut', materialIcon: 'apps' },
   { tab: 'system', labelKey: 'systemLogsInfo', materialIcon: 'info' },
   { tab: 'language', labelKey: 'languageSidebarLabel', materialIcon: 'translate' }

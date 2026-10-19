@@ -3,6 +3,7 @@ import type { LocalTerminalLaunchOptions, WorkspaceSnapshot, WorkspaceTab } from
 import { copyText, homeTabKey, insertTabKeyAfter, reorderTabKeys, sessionTabKey } from '../app/app-utils'
 import { t } from '../i18n'
 import type { TabContextTarget } from '../features/layout/tab-bar'
+import { markHomeTabTransition } from '../features/workspace/home-transition'
 import type { WorkspaceTabContextAction, WorkspaceTabsActionContext } from './workspace-tabs-types'
 import {
   formatSessionTabTitle,
@@ -110,6 +111,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
     const nextId = `home-${nextHomeTabNumber}`
     const nextKey = homeTabKey(nextId)
 
+    markHomeTabTransition(nextKey)
     setLocalTabs((current) => [...current, { id: nextId, kind: 'home', title: t.untitledTab }])
     setTabOrder((current) => [...current, nextKey])
     setNextHomeTabNumber((current) => current + 1)

@@ -254,9 +254,10 @@ export function TabBar({
             type="button"
             onClick={onToggleWorkspaceFocus}
           >
-            <span className="material-symbols-outlined">
-              {isWorkspaceFocusMode ? 'close_fullscreen' : 'open_in_full'}
-            </span>
+            <span
+              aria-hidden="true"
+              className={`window-tool-icon window-tool-icon--${isWorkspaceFocusMode ? 'close-fullscreen' : 'open-in-full'}`}
+            />
           </button>
           {showAiCopilotToggle ? (
             <button
@@ -268,11 +269,11 @@ export function TabBar({
               type="button"
               onClick={onToggleAiCopilot}
             >
-              <span className="material-symbols-outlined">auto_awesome</span>
+              <span aria-hidden="true" className="window-tool-icon window-tool-icon--auto-awesome" />
             </button>
           ) : null}
           <button aria-label={t.settings} title={t.settings} type="button" onClick={onOpenSettings}>
-            <span className="material-symbols-outlined">settings</span>
+            <span aria-hidden="true" className="window-tool-icon window-tool-icon--settings" />
           </button>
         </div>
       </div>

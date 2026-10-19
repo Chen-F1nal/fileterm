@@ -524,6 +524,17 @@
   animation-name: page-card-in-down;
 }
 
+/* Switching to or closing into an existing home tab keeps its content visible;
+ * the first launch and "+" tabs keep the original fly-in above. */
+.home-content-body.suppress-home-entrance .page-transition > .overview-page > *,
+.home-content-body.suppress-home-entrance .page-transition > .quick-links-page > *,
+.home-content-body.suppress-home-entrance .page-transition > .manager-inline > *,
+.workspace-stage-transition.is-transitioning
+  .workspace-content-stack__item.is-active
+  .home-content-body.suppress-home-entrance {
+  animation: none;
+}
+
 /* stagger direct child sections so cards cascade in */
 .page-transition > div > *:nth-child(1) {
   animation-delay: 0.02s;

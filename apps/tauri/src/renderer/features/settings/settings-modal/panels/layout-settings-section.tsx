@@ -63,6 +63,7 @@ export function LayoutSettingsSection() {
       <RadioCardGroup
         ariaLabel={t.tabBarLayout}
         className="tab-bar-layout-picker"
+        copyClassName="tab-bar-layout-copy"
         disabled={!desktopApi || isSavingTabBarLayout}
         name="tab-bar-layout"
         onChange={setTabBarLayoutPreference}
@@ -90,7 +91,11 @@ export function LayoutSettingsSection() {
         ]}
         value={tabBarLayout}
       />
-      {tabBarLayoutError ? <p className="modal-error">{tabBarLayoutError}</p> : null}
+      {tabBarLayoutError ? (
+        <p className="modal-error" role="alert">
+          {tabBarLayoutError}
+        </p>
+      ) : null}
       <div className="overview-preference-list">
         <label aria-busy={isSavingCompactTabBar} className="overview-preference-row" inert={isSavingCompactTabBar}>
           <span className="overview-preference-copy">
@@ -107,7 +112,11 @@ export function LayoutSettingsSection() {
           </span>
         </label>
       </div>
-      {compactTabBarError ? <p className="modal-error">{compactTabBarError}</p> : null}
+      {compactTabBarError ? (
+        <p className="modal-error" role="alert">
+          {compactTabBarError}
+        </p>
+      ) : null}
     </section>
   )
 }

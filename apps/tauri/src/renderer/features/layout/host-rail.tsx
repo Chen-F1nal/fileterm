@@ -26,6 +26,7 @@ export function HostRail({
       <div className="fs-host-rail-header">
         {!collapsed ? <h2 className="fs-host-rail-title">{t.hostRailTitle}</h2> : null}
         <SidebarToggle
+          className="host-rail-toggle"
           collapsed={collapsed}
           label={collapsed ? t.showHostRail : t.hideHostRail}
           onClick={onToggleCollapsed}

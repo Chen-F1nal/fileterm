@@ -17,6 +17,7 @@ import type {
 } from '@fileterm/core'
 import { useEffect, useState, type Dispatch, type DragEvent, type SetStateAction } from 'react'
 import type { SendScope, SessionSendTarget } from '../common/session-send-targets'
+import { peekHomeTabTransition } from './home-transition'
 import type { TabBarProps } from '../layout/tab-bar'
 import { SystemInfoWorkspace } from '../system/system-info-workspace'
 import { resolveMonitoringSource } from '../system/shared-monitoring'
@@ -149,6 +150,7 @@ export function WorkspaceStage({
   isSidebarCollapsed,
   isWorkspaceFocusMode,
   isWorkspaceActive = true,
+  suppressHomeEntrance = false,
   tabBarProps,
   isResizingSidebar,
   onResizeStart,
@@ -284,6 +286,7 @@ export function WorkspaceStage({
   isSidebarCollapsed: boolean
   isWorkspaceFocusMode: boolean
   isWorkspaceActive?: boolean
+  suppressHomeEntrance?: boolean
   tabBarProps: Omit<TabBarProps, 'homeBrandContent'>
   isResizingSidebar: boolean
   onResizeStart(): void
@@ -413,6 +416,7 @@ export function WorkspaceStage({
   return (
     <HomeWorkspace
       key={activeHomeTabId ?? 'home-root'}
+      suppressEntrance={suppressHomeEntrance}
       folders={folders}
       commandFolders={commandFolders}
       commandTemplates={commandTemplates}
@@ -570,6 +574,10 @@ export function KeepAliveWorkspaceStage({
   )
   const activeHomeId =
     showBaseWorkspace && stageProps.activeLocalTab?.kind !== 'system' ? stageProps.activeHomeTabId : null
+  const [initialHomeEntrancePending, setInitialHomeEntrancePending] = useState(true)
+  useEffect(() => {
+    if (activeHomeId && initialHomeEntrancePending) setInitialHomeEntrancePending(false)
+  }, [activeHomeId, initialHomeEntrancePending])
   const [visitedHomeIds, setVisitedHomeIds] = useState<string[]>([])
   useEffect(() => {
     const openHomeIds = stageProps.tabBarProps.orderedTabs.flatMap((entry) =>
@@ -585,6 +593,7 @@ export function KeepAliveWorkspaceStage({
     .filter((id) => id === activeHomeId || visitedHomeIds.includes(id))
     .map((id) => {
       const isActive = id === activeHomeId
+      const shouldAnimateEntrance = isActive && (initialHomeEntrancePending || peekHomeTabTransition(`home:${id}`))
       return (
         <div
           key={`home:${id}`}
@@ -598,6 +607,7 @@ export function KeepAliveWorkspaceStage({
             activeLocalTab={{ kind: 'home' }}
             activeHomeTabId={id}
             isWorkspaceActive={isActive}
+            suppressHomeEntrance={isActive && !shouldAnimateEntrance}
           />
         </div>
       )

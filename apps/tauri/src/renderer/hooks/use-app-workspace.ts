@@ -12,6 +12,7 @@ import type {
 import { DEFAULT_COMMAND_LIST_WIDTH, DEFAULT_FILE_PANEL_RATIO, retainOpenTabUiState } from '../app/app-shell-utils'
 import type { ErrorDetails } from '../app/app-error-utils'
 import { useWorkspaceTabs } from './use-workspace-tabs'
+import { consumeHomeTabTransition } from '../features/workspace/home-transition'
 import type { UseWorkspaceTabsOptions } from './workspace-tabs-types'
 import { useWorkspaceModals } from './use-workspace-modals'
 import { useFileEditor } from './use-file-editor'
@@ -140,6 +141,7 @@ export function useAppWorkspace({
 }: AppWorkspaceOptions) {
   const [isWorkspaceTransitionActive, setIsWorkspaceTransitionActive] = useState(true)
   const [isWorkspaceSwitching, setIsWorkspaceSwitching] = useState(false)
+  const initialWorkspaceTransitionRef = useRef(true)
   const hasRenderedWorkspaceRef = useRef(false)
   const lastResourceMonitoringDiagnosticRef = useRef('')
 
@@ -635,6 +637,15 @@ export function useAppWorkspace({
   })
 
   useEffect(() => {
+    const isInitial = initialWorkspaceTransitionRef.current
+    initialWorkspaceTransitionRef.current = false
+    const isHome = activeWorkspaceOrderKey.startsWith('home:')
+    // Home tab switches and closes must not replay the stage fade. Only the
+    // initial view and "+"-created tabs are allowed to animate.
+    if (!isInitial && isHome && !consumeHomeTabTransition(activeWorkspaceOrderKey)) {
+      setIsWorkspaceTransitionActive(false)
+      return
+    }
     setIsWorkspaceTransitionActive(false)
     const frame = window.requestAnimationFrame(() => setIsWorkspaceTransitionActive(true))
     return () => window.cancelAnimationFrame(frame)

@@ -1,4 +1,5 @@
 .sidebar-toggle.ft-btn {
+  position: relative;
   flex: none;
   width: 20px;
   min-width: 20px;
@@ -14,6 +15,19 @@
 
 .sidebar-toggle.ft-btn:hover {
   box-shadow: var(--system-sidebar-toggle-hover-shadow);
+}
+
+/* The visual control is 20px; expand the pointer target to 24x24. */
+.sidebar-toggle.ft-btn::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 7px;
+}
+
+.sidebar-toggle.ft-btn:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
 }
 
 .sidebar-toggle-icon {

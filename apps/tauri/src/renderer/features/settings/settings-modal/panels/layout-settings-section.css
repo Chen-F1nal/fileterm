@@ -3,11 +3,11 @@
   max-width: 560px;
 }
 
-.tab-bar-layout-picker .radio-card-group__copy {
+.tab-bar-layout-copy {
   flex: 1;
 }
 
-.tab-bar-layout-picker .radio-card-group__copy strong {
+.tab-bar-layout-copy strong {
   display: grid;
   gap: 8px;
 }
