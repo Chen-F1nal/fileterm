@@ -18,7 +18,7 @@ const session = (profileId, phase, extra = {}) => ({
   profileId,
   connected: true,
   capabilities: { resourceMonitoring: true },
-  monitoring: { generation: 1, revision: 1, phase, ...extra },
+  monitoring: { generation: 1, revision: 1, phase, targetKey: profileId, ...extra },
   systemMetrics: { ip: `${profileId}-${phase}` }
 })
 
@@ -58,4 +58,33 @@ test('no active tab resolves to nothing', () => {
   const source = resolveMonitoringSource(null, {})
   assert.equal(source.session, null)
   assert.equal(source.peers.length, 0)
+})
+
+test('editing a profile to another target does not share samples or monitor controls', () => {
+  const sessions = {
+    old: session('same-profile', 'healthy', { targetKey: 'old-host' }),
+    current: session('same-profile', 'shared', { targetKey: 'new-host', sharedFromTabId: 'old' })
+  }
+  const source = resolveMonitoringSource('current', sessions)
+  assert.equal(source.tabId, 'current')
+  assert.deepEqual(
+    Array.from(source.peers, (peer) => peer.tabId),
+    ['current']
+  )
+})
+
+test('a failed former leader displays the samples of its healthy replacement', () => {
+  const sessions = { old: session('host', 'failed'), replacement: session('host', 'healthy') }
+  const source = resolveMonitoringSource('old', sessions)
+  assert.equal(source.tabId, 'replacement')
+  assert.equal(source.peers.length, 2)
+})
+
+test('followers resolve a healthy replacement instead of their failed former leader', () => {
+  const sessions = {
+    old: session('host', 'failed'),
+    follower: session('host', 'shared', { sharedFromTabId: 'old' }),
+    replacement: session('host', 'healthy')
+  }
+  assert.equal(resolveMonitoringSource('follower', sessions).tabId, 'replacement')
 })

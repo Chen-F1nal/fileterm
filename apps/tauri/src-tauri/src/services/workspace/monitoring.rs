@@ -17,6 +17,9 @@ pub struct MonitoringState {
     /// Set in the `shared` phase: the tab whose collector serves this machine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_from_tab_id: Option<String>,
+    /// Captured connection target; profile edits cannot retarget a live session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_key: Option<String>,
 }
 
 #[derive(Clone)]
@@ -240,6 +243,7 @@ mod monitoring_control_tests {
             next_retry_at: Some(200),
             reason: None,
             shared_from_tab_id: None,
+            target_key: None,
         };
         let session = serde_json::from_value(serde_json::json!({
             "profileId":"profile", "aiSessionRevision":"0", "accessHost":"host",

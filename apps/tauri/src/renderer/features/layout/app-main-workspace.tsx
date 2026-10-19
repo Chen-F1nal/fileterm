@@ -10,15 +10,14 @@ import { KeepAliveWorkspaceStage } from '../workspace/workspace-stage'
 import { TabBar, type TabBarProps, type TabContextTarget } from './tab-bar'
 import type { AppViewModel } from './app-view-model'
 import { WindowMenubar } from './window-menubar'
-import { HostGroupList } from './host-group-list'
+import { HostRail } from './host-rail'
 import { useHostNavigation } from './use-host-navigation'
 import { DEFAULT_SIDEBAR_WIDTH, STATUS_MESSAGE_TIMEOUT_MS } from '../../app/app-shell-utils'
 import { t, setLocale } from '../../i18n'
 import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
 
-const HOST_RAIL_WIDTH = 208
-
 export function AppMainWorkspace({ model }: { model: AppViewModel }) {
+  const [isHostRailCollapsed, setIsHostRailCollapsed] = useState(false)
   const [dismissedInteractiveGatewayNoticeTabId, setDismissedInteractiveGatewayNoticeTabId] = useState<string | null>(
     null
   )
@@ -43,6 +42,8 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     filePanelRememberRatio,
     sidebarWidth,
     setSidebarWidth,
+    hostInfoWidth,
+    setHostInfoWidth,
     tabBarLayout,
     compactTabBar,
     aiCopilotWidth,
@@ -168,7 +169,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     updateConnectionOrder,
     openLogsDirectory
   } = data
-  const { startSidebarResize, startAiCopilotResize } = resize
+  const { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize } = resize
 
   const isInteractiveGatewayRoutePending =
     activeSession?.resourceMonitoringUnavailableReason === 'interactive-gateway-target-route-required'
@@ -196,17 +197,23 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   }, [activeTab?.id, interactiveGatewayNoticeTabId])
 
   const hasStatusMessage = Boolean(error || isInteractiveGatewayNoticeVisible)
-  const resolvedSidebarWidth = isSystemSidebarCollapsed ? 44 : sidebarWidth
+  const usesHostGroups = tabBarLayout === 'host-groups'
+  const resolvedSidebarWidth = isSystemSidebarCollapsed
+    ? 44
+    : usesHostGroups && !isHomeWorkspaceVisible
+      ? hostInfoWidth
+      : sidebarWidth
   const activeJumpHosts =
     activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
   const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined
   // Home and session titlebars share the expanded sidebar's live width.
   // A collapsed sidebar keeps enough titlebar space for the native window controls.
   // The host-groups layout puts the machine list on the left and machine info on the right.
-  const usesHostGroups = tabBarLayout === 'host-groups'
   const showHostRail = usesHostGroups && !isHomeWorkspaceVisible
   const brandWidth = showHostRail
-    ? HOST_RAIL_WIDTH
+    ? isHostRailCollapsed
+      ? DEFAULT_SIDEBAR_WIDTH
+      : sidebarWidth
     : isSystemSidebarCollapsed
       ? DEFAULT_SIDEBAR_WIDTH
       : resolvedSidebarWidth
@@ -269,7 +276,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         ...currentModes,
         [activeWorkspaceFocusKey]: nextFocusMode
       }))
-      if (!nextFocusMode) setSidebarWidth(214)
+      if (!nextFocusMode) (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)
     },
     orderedTabs,
     hostNavigation: usesHostGroups ? hostNavigation : undefined
@@ -278,12 +285,12 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   return (
     <>
       <div
-        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${compactTabBar ? 'is-compact-tabbar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${showHostRail ? 'has-host-rail' : ''} ${shouldShowSystemSidebar ? 'has-system-sidebar' : ''} ${isResizingSidebar ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
+        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${compactTabBar ? 'is-compact-tabbar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${showHostRail ? 'has-host-rail' : ''} ${shouldShowSystemSidebar ? 'has-system-sidebar' : ''} ${isResizingSidebar || isResizingHostRail ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
         style={
           {
             '--sidebar-width': `${resolvedSidebarWidth}px`,
             '--brand-width': `${brandWidth}px`,
-            '--host-rail-width': `${HOST_RAIL_WIDTH}px`,
+            '--host-rail-width': `${isHostRailCollapsed ? 44 : sidebarWidth}px`,
             '--ai-copilot-panel-width': `${aiCopilotWidth}px`
           } as CSSProperties
         }
@@ -314,10 +321,15 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         {!isHomeWorkspaceVisible && <TabBar {...tabBarProps} />}
 
         {showHostRail ? (
-          <aside aria-label={t.hostRailTitle} className="fs-host-rail">
-            <h2 className="fs-host-rail-title">{t.hostRailTitle}</h2>
-            <HostGroupList navigation={hostNavigation} />
-          </aside>
+          <HostRail
+            navigation={hostNavigation}
+            collapsed={isHostRailCollapsed}
+            width={sidebarWidth}
+            isResizing={isResizingHostRail}
+            onToggleCollapsed={() => setIsHostRailCollapsed((current) => !current)}
+            onResizeStart={startHostRailResize}
+            onWidthChange={setSidebarWidth}
+          />
         ) : null}
 
         {shouldShowSystemSidebar ? (
@@ -334,7 +346,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
             onMonitoringSnapshot={shell.applySnapshot}
             onOpenSystemInfo={openSystemInfo}
             onResizeStart={startSidebarResize}
-            onRestoreWidth={() => setSidebarWidth(214)}
+            onRestoreWidth={() => (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)}
             onToggleCollapsed={setIsSystemSidebarCollapsed}
           />
         ) : null}

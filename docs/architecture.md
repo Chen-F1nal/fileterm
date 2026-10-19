@@ -204,9 +204,9 @@ Renderer 只显示遮罩、倒计时和操作反馈，`app_retry_monitoring` 只
 监控断开与 `ssh-disconnected` 分别展示监控重试和现有 `reconnectTab` 会话重连入口。
 监控开关的手动关闭状态在同一标签 SSH 重连后保留。
 关闭标签、断开会话或显式禁用监控会取消任务。网络历史以 `breakBefore` 标记中断。
-同一连接配置的多个会话共用一条采集通道：`WorkspaceState.monitoring_leases` 按配置 id 发放租约，
+同一连接配置的多个会话共用一条采集通道：`WorkspaceState.monitoring_leases` 按会话捕获的配置 id、目标地址/端口、登录用户及配置的路由身份发放租约，
 持有者采集，其余会话进入 `shared` 阶段并以 `sharedFromTabId` 指向持有者；Renderer 据此显示持有者的样本，
-启停作用于同机全部会话。持有者停止、断开或关闭时释放租约，下一个会话接管采集。
+`MonitoringState.targetKey` 只包含非敏感目标身份的摘要，编辑保存配置不会把旧会话重定向到新目标；启停只作用于目标一致的会话。持有者停止、断开、关闭或耗尽重试进入终态失败时释放租约，下一个会话接管采集，renderer 显示健康接管者的指标。
 详细参数、启停交互和自动化验证见 [监控恢复、侧栏遮罩与启停控制](./plans/completed/monitoring-recovery-overlay.md)。
 
 ## 4.2 Renderer 桌面壳与布局边界
@@ -218,7 +218,7 @@ Renderer 只显示遮罩、倒计时和操作反馈，`app_retry_monitoring` 只
 桌面壳相关状态目前属于 renderer 本地 UI 状态，不进入 main service：
 
 - 顶部标签栏、工作区焦点模式与标签切换动效由 `features/layout/tab-bar.tsx`、`features/workspace/workspace-stage.tsx` 和 `app.tsx` 协作。
-- 标签页布局（`single-row` 单行，默认 / `host-groups` 二级标签页）是 Rust 持久化的 UI 偏好 `tabBarLayout`，非法值归一为默认的 `single-row`；renderer 经 `features/layout/use-tab-bar-layout.ts` 读取并跟随 `app:ui-preferences-changed` 更新，主机分组由 `features/layout/host-groups.ts` 与 `use-host-navigation.ts` 计算。紧凑标签栏 `compactTabBar`（默认 `false`）同为 Rust 持久化偏好，renderer 经 `use-compact-tab-bar.ts` 在 `.fs-shell` 上切换 `is-compact-tabbar`（36px / 48px），macOS 原生标题栏随偏好刷新同步基线。
+- 标签页布局（`single-row` 单行，默认 / `host-groups` 二级标签页）是 Rust 持久化的 UI 偏好 `tabBarLayout`，非法值归一为默认的 `single-row`；renderer 经 `features/layout/use-tab-bar-layout.ts` 读取并跟随 `app:ui-preferences-changed` 更新，主机分组由 `features/layout/host-groups.ts` 与 `use-host-navigation.ts` 计算。新建会话的首个快照会同步补齐可见标签，不等待排序持久化 effect；关闭活动标签优先选择同组右邻，其次左邻，再回退到其他组。左侧主机栏与主页共用宽度，复用默认宽度吸附、拖拽和双击复位，支持收起为图标栏，右侧监控栏独立调宽。紧凑标签栏 `compactTabBar`（默认 `false`）同为 Rust 持久化偏好，renderer 经 `use-compact-tab-bar.ts` 在 `.fs-shell` 上切换 `is-compact-tabbar`（36px / 48px），macOS 原生标题栏随偏好刷新同步基线。
 - SSH 工作区的文件面板高度、抽屉收起状态、终端悬浮输入条由 `features/workspace/session-workspace.tsx` 与 `features/terminal/terminal-dock.tsx` 处理。
 - 首页侧栏展开/收起、macOS 红绿灯避让和收起态左边界由 `features/workspace/home-workspace.tsx` 与 `styles/features/home.css` 处理。
 - 系统监控的展开态详情和收起态资源摘要都在 `features/system/system-sidebar.tsx` 展示，不把平台判断或采集逻辑放进 renderer。

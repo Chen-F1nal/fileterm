@@ -1009,6 +1009,8 @@ export interface ResourceMonitoringState {
   reason?: string
   /** In the `shared` phase: the tab whose collector serves the same machine. */
   sharedFromTabId?: string
+  /** Captured connection target, unchanged by edits to the saved profile. */
+  targetKey?: string
 }
 
 export interface SessionSnapshot {

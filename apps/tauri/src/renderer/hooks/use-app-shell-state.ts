@@ -176,6 +176,7 @@ export function useAppShellState({
   const resolvingActionApprovalIdsRef = useRef(new Set<string>())
 
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
+  const [hostInfoWidth, setHostInfoWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [aiCopilotWidth, setAiCopilotWidth] = useState(368)
   const [filePanelHeights, setFilePanelHeights] = useState<Record<string, number>>({})
   const [filePanelRatios, setFilePanelRatios] = useState<Record<string, number>>({})
@@ -537,6 +538,8 @@ export function useAppShellState({
     reportError: handleError,
     sidebarWidth,
     setSidebarWidth,
+    hostInfoWidth,
+    setHostInfoWidth,
     aiCopilotWidth,
     setAiCopilotWidth,
     filePanelHeights,

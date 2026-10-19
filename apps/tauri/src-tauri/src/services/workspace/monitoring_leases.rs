@@ -1,6 +1,5 @@
-/// One metrics channel per connection profile. Sessions opened from the same
-/// profile reach the same machine, so later sessions follow the leader's
-/// samples instead of opening their own collection channel.
+/// One metrics channel per captured connection target. Profile edits cannot
+/// make a new target follow the collector of an existing SSH session.
 pub struct MonitoringLeases {
     holders: StdMutex<HashMap<String, String>>,
     changed: watch::Sender<u64>,

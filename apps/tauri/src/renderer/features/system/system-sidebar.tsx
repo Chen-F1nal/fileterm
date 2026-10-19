@@ -2,6 +2,7 @@ import '../workspace/workspace-list-rows.css'
 import { useMonitoringDiagnostics } from './use-monitoring-diagnostics'
 import './system-sidebar-controls.css'
 import { MonitoringToggle } from './monitoring-toggle'
+import { SidebarToggle } from '../../components/common/sidebar-toggle/sidebar-toggle'
 import { MonitoringOverlay, monitoringIsObscured } from './monitoring-overlay'
 import type { MonitoringTarget } from './shared-monitoring'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -147,18 +148,14 @@ export function SystemSidebar({
   return (
     <div className={`system-sidebar-layout ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="system-sidebar-controls">
-        <button
-          aria-label={collapsed ? t.showSystemSidebar : t.hideSystemSidebar}
-          className={`system-sidebar-toggle ${collapsed ? 'is-collapsed' : ''}`}
+        <SidebarToggle
+          collapsed={collapsed}
+          label={collapsed ? t.showSystemSidebar : t.hideSystemSidebar}
           onClick={() => {
             logMonitoringAction('toggle-sidebar')
             onToggleCollapsed()
           }}
-          title={collapsed ? t.showSystemSidebar : t.hideSystemSidebar}
-          type="button"
-        >
-          <span className="system-sidebar-toggle-icon" aria-hidden="true" />
-        </button>
+        />
         <MonitoringToggle
           key={`toggle:${activeTabId}:${activeSession?.monitoring?.generation}`}
           onSnapshot={onMonitoringSnapshot}

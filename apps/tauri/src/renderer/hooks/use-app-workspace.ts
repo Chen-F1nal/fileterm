@@ -6,7 +6,8 @@ import type {
   McpAgentClientStatus,
   ResourceMonitoringMetric,
   SshConnectionDefaults,
-  WorkspaceSnapshot
+  WorkspaceSnapshot,
+  TabBarLayout
 } from '@fileterm/core'
 import { DEFAULT_COMMAND_LIST_WIDTH, DEFAULT_FILE_PANEL_RATIO, retainOpenTabUiState } from '../app/app-shell-utils'
 import type { ErrorDetails } from '../app/app-error-utils'
@@ -29,6 +30,7 @@ type ErrorReporter = (scope: string, error: unknown, details?: ErrorDetails) => 
 export type AppWorkspaceOptions = {
   desktopApi?: FileTermDesktopApi
   workspace: WorkspaceSnapshot
+  tabBarLayout: TabBarLayout
   isMainWorkspaceWindow: boolean
   isConnectionFormWindow: boolean
   isFileEditorWindow: boolean
@@ -84,6 +86,7 @@ export type AppWorkspaceOptions = {
 export function useAppWorkspace({
   desktopApi,
   workspace,
+  tabBarLayout,
   isMainWorkspaceWindow,
   isConnectionFormWindow,
   isFileEditorWindow,
@@ -194,6 +197,7 @@ export function useAppWorkspace({
   } = useWorkspaceTabs({
     desktopApi,
     workspace,
+    tabBarLayout,
     isMainWorkspaceWindow,
     hasLoadedInitialSnapshot,
     locale,

@@ -4,9 +4,15 @@ import { copyText, homeTabKey, insertTabKeyAfter, reorderTabKeys, sessionTabKey 
 import { t } from '../i18n'
 import type { TabContextTarget } from '../features/layout/tab-bar'
 import type { WorkspaceTabContextAction, WorkspaceTabsActionContext } from './workspace-tabs-types'
-import { formatSessionTabTitle, formatSystemInfoTabTitle, isTabActivelyConnected } from './workspace-tabs-utils'
+import {
+  formatSessionTabTitle,
+  formatSystemInfoTabTitle,
+  isTabActivelyConnected,
+  nextTabAfterClose
+} from './workspace-tabs-utils'
 
 type WorkspaceTabsContextActionContext = WorkspaceTabsActionContext & {
+  activateSessionTab(tabId: string): Promise<void>
   closeHomeTabs(homeTabIds: string[], preferredActiveHomeId: string | null, nextSessionTabs: WorkspaceTab[]): void
   closeSessionTabById(tabId: string): Promise<WorkspaceSnapshot | null>
   closePane(paneTabId: string): Promise<void>
@@ -31,6 +37,8 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
     setLocalTabs,
     activeLocalTabId,
     setActiveLocalTabId,
+    setPendingActiveTabId,
+    tabActivationRequestRef,
     nextHomeTabNumber,
     setNextHomeTabNumber,
     setTabOrder,
@@ -46,6 +54,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
     setDraggingTabKey,
     localTabsRef,
     closeHomeTabs,
+    activateSessionTab,
     closeSessionTabById,
     closePane,
     applySnapshot,
@@ -54,26 +63,16 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
   } = context
 
   const closeHomeTabById = (homeTabId: string) => {
-    setLocalTabs((current) => {
-      const remaining = current.filter((tab) => tab.id !== homeTabId)
-
-      if (remaining.length === 0 && visibleWorkspaceTabs.length === 0) {
-        setActiveLocalTabId('home-1')
-        setNextHomeTabNumber(2)
-        setTabOrder((currentOrder) => {
-          const filtered = currentOrder.filter((key) => key !== homeTabKey(homeTabId))
-          return filtered.includes('home:home-1') ? filtered : ['home:home-1', ...filtered]
-        })
-        return [{ id: 'home-1', kind: 'home', title: t.untitledTab }]
-      }
-
-      if (activeLocalTabId === homeTabId) {
-        setActiveLocalTabId(remaining.at(-1)?.id ?? null)
-      }
-
-      setTabOrder((currentOrder) => currentOrder.filter((key) => key !== homeTabKey(homeTabId)))
-      return remaining
-    })
+    const next =
+      activeLocalTabId === homeTabId
+        ? nextTabAfterClose(context.orderedTabs, homeTabKey(homeTabId), context.tabBarLayout === 'host-groups')
+        : null
+    closeHomeTabs(
+      [homeTabId],
+      activeLocalTabId === homeTabId ? (next?.kind === 'local' ? next.id : null) : activeLocalTabId,
+      visibleWorkspaceTabs
+    )
+    if (next?.kind === 'session') void activateSessionTab(next.tab.id)
   }
 
   const closeSessionTab = async (event: MouseEvent<HTMLElement>, tabId: string) => {
@@ -101,6 +100,8 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
   }
 
   const activateHomeTab = (homeTabId: string) => {
+    tabActivationRequestRef.current += 1
+    setPendingActiveTabId(null)
     onStatusMessage(null)
     setActiveLocalTabId(homeTabId)
   }
@@ -112,8 +113,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
     setLocalTabs((current) => [...current, { id: nextId, kind: 'home', title: t.untitledTab }])
     setTabOrder((current) => [...current, nextKey])
     setNextHomeTabNumber((current) => current + 1)
-    setActiveLocalTabId(nextId)
-    onStatusMessage(null)
+    activateHomeTab(nextId)
   }
 
   const openSystemInfo = () => {
@@ -123,8 +123,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
 
     const existing = localTabs.find((tab) => tab.kind === 'system' && tab.sessionTabId === activeTab.id)
     if (existing) {
-      setActiveLocalTabId(existing.id)
-      onStatusMessage(null)
+      activateHomeTab(existing.id)
       return
     }
 
@@ -141,8 +140,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
       }
     ])
     setTabOrder((current) => insertTabKeyAfter(current, homeTabKey(nextId), activeOrderKey))
-    setActiveLocalTabId(nextId)
-    onStatusMessage(null)
+    activateHomeTab(nextId)
   }
 
   const closeHomeTab = (event: MouseEvent<HTMLElement>, homeTabId: string) => {
@@ -350,30 +348,38 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
       return
     }
 
+    if (action === 'close') {
+      if (target.kind === 'local') closeHomeTabById(target.id)
+      else {
+        try {
+          onBusyChange(true)
+          await closeSessionTabById(target.id)
+        } catch (error) {
+          setClosingSessionTabIds((current) => current.filter((id) => id !== target.id))
+          onError('关闭标签页', error)
+        } finally {
+          onBusyChange(false)
+        }
+      }
+      return
+    }
+
     const sessionTabsToClose =
       action === 'closeAll'
         ? visibleWorkspaceTabs.map((tab) => tab.id)
-        : action === 'close'
-          ? target.kind === 'session'
-            ? [target.id]
-            : []
-          : target.kind === 'session'
-            ? visibleWorkspaceTabs.filter((tab) => tab.id !== target.id).map((tab) => tab.id)
-            : visibleWorkspaceTabs.map((tab) => tab.id)
+        : target.kind === 'session'
+          ? visibleWorkspaceTabs.filter((tab) => tab.id !== target.id).map((tab) => tab.id)
+          : visibleWorkspaceTabs.map((tab) => tab.id)
 
     const homeTabsToClose =
       action === 'closeAll'
         ? localTabs.map((tab) => tab.id)
-        : action === 'close'
-          ? target.kind === 'local'
-            ? [target.id]
-            : []
-          : target.kind === 'local'
-            ? localTabs.filter((tab) => tab.id !== target.id).map((tab) => tab.id)
-            : localTabs.map((tab) => tab.id)
+        : target.kind === 'local'
+          ? localTabs.filter((tab) => tab.id !== target.id).map((tab) => tab.id)
+          : localTabs.map((tab) => tab.id)
 
     const remainingSessionTabs = visibleWorkspaceTabs.filter((tab) => !sessionTabsToClose.includes(tab.id))
-    const preferredActiveHomeId = target.kind === 'local' && action !== 'close' ? target.id : null
+    const preferredActiveHomeId = target.kind === 'local' ? target.id : null
     closeHomeTabs(homeTabsToClose, preferredActiveHomeId, remainingSessionTabs)
 
     if (!sessionTabsToClose.length) {

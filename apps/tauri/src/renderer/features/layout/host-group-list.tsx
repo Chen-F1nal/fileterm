@@ -43,6 +43,7 @@ export function HostGroupList({
             <li key={group.key}>
               <button
                 aria-current={isActive ? 'true' : undefined}
+                aria-label={collapsed ? label : undefined}
                 className={`host-group-item ${isActive ? 'is-active' : ''}`}
                 title={group.subtitle ? `${label}\n${group.subtitle}` : label}
                 type="button"

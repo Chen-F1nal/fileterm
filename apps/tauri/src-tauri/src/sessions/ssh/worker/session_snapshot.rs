@@ -111,6 +111,7 @@ let state = startup.state;
                     revision: 0, phase: if monitoring_stopped { "stopped" } else { "starting" }.into(), attempt: 0, max_attempts: 5,
                     interval_seconds: resource_monitoring_interval_seconds(profile),
                     last_sample_at: None, next_retry_at: None, reason: None, shared_from_tab_id: None,
+                    target_key: monitoring_target_key(profile, host, port, username),
                 }
             }),
             system_metrics: None,

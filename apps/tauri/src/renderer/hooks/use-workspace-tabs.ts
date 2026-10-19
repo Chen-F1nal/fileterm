@@ -21,6 +21,7 @@ import { createWorkspaceTabsContextActions } from './workspace-tabs-context-acti
 import { createWorkspaceTabsPaneActions } from './workspace-tabs-pane-actions'
 import {
   areStringArraysEqual,
+  buildOrderedTabs,
   collectPaneLeafTabIds,
   createDefaultTerminalDockSendState,
   createInitialMainTabUiState,
@@ -38,6 +39,7 @@ const MAIN_TAB_UI_STATE_KEY = 'main.tab-ui'
 export function useWorkspaceTabs({
   desktopApi,
   workspace: syncedWorkspace,
+  tabBarLayout,
   isMainWorkspaceWindow,
   hasLoadedInitialSnapshot,
   locale,
@@ -76,6 +78,7 @@ export function useWorkspaceTabs({
     () => initialMainTabUiState.systemSidebarCollapsedByTabId
   )
 
+  const tabActivationRequestRef = useRef(0)
   const localTabsRef = useRef(localTabs)
   const pendingHomeReplacementKeyRef = useRef<string | null>(null)
   const pendingProfileOpenIdRef = useRef<string | null>(null)
@@ -446,29 +449,7 @@ export function useWorkspaceTabs({
   }, [activeWorkspaceOrderKey, workspaceNavDirection])
 
   const orderedTabs = useMemo<OrderedTabEntry[]>(
-    () =>
-      uniqueStrings(tabOrder)
-        .map((key) => {
-          if (key.startsWith('home:')) {
-            const id = key.slice('home:'.length)
-            const localTab = localTabs.find((tab) => tab.id === id)
-            return localTab
-              ? {
-                  key,
-                  kind: 'local' as const,
-                  id: localTab.id,
-                  title: localTab.title,
-                  tabKind: localTab.kind,
-                  sessionTabId: localTab.kind === 'system' ? localTab.sessionTabId : undefined
-                }
-              : null
-          }
-
-          const id = key.slice('session:'.length)
-          const sessionTab = visibleWorkspaceTabs.find((tab) => tab.id === id)
-          return sessionTab ? { key, kind: 'session' as const, tab: sessionTab } : null
-        })
-        .filter((item): item is OrderedTabEntry => item !== null),
+    () => buildOrderedTabs(tabOrder, localTabs, visibleWorkspaceTabs),
     [localTabs, tabOrder, visibleWorkspaceTabs]
   )
 
@@ -538,6 +519,8 @@ export function useWorkspaceTabs({
   const sessionActionContext: WorkspaceTabsActionContext = {
     desktopApi,
     workspace,
+    tabBarLayout,
+    orderedTabs,
     isMainWorkspaceWindow,
     hasLoadedInitialSnapshot,
     isBusy,
@@ -556,6 +539,7 @@ export function useWorkspaceTabs({
     activeLocalTabId,
     setActiveLocalTabId,
     setPendingActiveTabId,
+    tabActivationRequestRef,
     nextHomeTabNumber,
     setNextHomeTabNumber,
     tabOrder,
@@ -614,6 +598,7 @@ export function useWorkspaceTabs({
   const { activatePane, closePane, focusAdjacentPane, setPaneWeights, splitCurrentPane, splitPane } = paneActions
   const contextActions = createWorkspaceTabsContextActions({
     ...sessionActionContext,
+    activateSessionTab,
     ...paneActions,
     closeHomeTabs,
     closeSessionTabById,

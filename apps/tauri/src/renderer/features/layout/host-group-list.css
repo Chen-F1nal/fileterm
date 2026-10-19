@@ -158,3 +158,25 @@
 .home-sidebar-hosts {
   flex: 1 1 auto;
 }
+
+.fs-host-rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding-right: 16px;
+}
+
+.fs-host-rail-header .fs-host-rail-title {
+  padding-block: 0;
+}
+
+.fs-host-rail.is-collapsed .fs-host-rail-header {
+  justify-content: center;
+  padding-right: 0;
+}
+
+.fs-host-rail .sidebar-resizer:focus-visible {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: -2px;
+}
