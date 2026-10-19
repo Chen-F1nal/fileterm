@@ -51,6 +51,22 @@ test('the first new-session snapshot keeps the host tab bar populated before ord
   )
 })
 
+test('a pending home replacement defers the new session tab until tabOrder is rewritten', () => {
+  const home = [{ id: 'home-1', kind: 'home', title: 'New Tab' }]
+  const deferred = buildOrderedTabs(['home:home-1'], home, tabs, { deferMissingSessionTabs: true })
+  assert.deepEqual(
+    Array.from(deferred, (entry) => entry.key),
+    ['home:home-1']
+  )
+  const replaced = buildOrderedTabs(['session:new-session'], [], [...tabs, { ...tabs[0], id: 'new-session' }], {
+    deferMissingSessionTabs: true
+  })
+  assert.deepEqual(
+    Array.from(replaced, (entry) => entry.key),
+    ['session:new-session']
+  )
+})
+
 test('closing selects the right neighbour, then the left, using dragged and grouped order', () => {
   const entries = buildOrderedTabs(['session:c', 'session:a', 'session:b', 'session:d'], [], tabs)
   assert.equal(nextTabAfterClose(entries, 'session:a', false).tab.id, 'b')

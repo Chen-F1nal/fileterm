@@ -161,8 +161,8 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
           return [...next.slice(0, replacementIndex), nextSessionKey, ...next.slice(replacementIndex)]
         })
         setLocalTabs((current) => current.filter((tab) => tab.id !== activeHomeId))
-        pendingHomeReplacementKeyRef.current = null
       }
+      pendingHomeReplacementKeyRef.current = null
       setActiveLocalTabId(null)
     } catch (error) {
       pendingHomeReplacementKeyRef.current = null

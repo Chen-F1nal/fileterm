@@ -48,7 +48,8 @@ export function uniqueStrings(values: string[]) {
 export function buildOrderedTabs(
   tabOrder: string[],
   localTabs: LocalTab[],
-  sessionTabs: WorkspaceTab[]
+  sessionTabs: WorkspaceTab[],
+  options?: { deferMissingSessionTabs?: boolean }
 ): OrderedTabEntry[] {
   const entries: OrderedTabEntry[] = [
     ...localTabs.map((tab) => ({
@@ -62,7 +63,10 @@ export function buildOrderedTabs(
     ...sessionTabs.map((tab) => ({ key: `session:${tab.id}`, kind: 'session' as const, tab }))
   ]
   const byKey = new Map(entries.map((entry) => [entry.key, entry]))
-  return uniqueStrings([...tabOrder, ...byKey.keys()]).flatMap((key) => {
+  const keys = options?.deferMissingSessionTabs
+    ? uniqueStrings(tabOrder)
+    : uniqueStrings([...tabOrder, ...byKey.keys()])
+  return keys.flatMap((key) => {
     const entry = byKey.get(key)
     return entry ? [entry] : []
   })

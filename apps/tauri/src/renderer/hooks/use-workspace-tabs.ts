@@ -449,7 +449,13 @@ export function useWorkspaceTabs({
   }, [activeWorkspaceOrderKey, workspaceNavDirection])
 
   const orderedTabs = useMemo<OrderedTabEntry[]>(
-    () => buildOrderedTabs(tabOrder, localTabs, visibleWorkspaceTabs),
+    () =>
+      buildOrderedTabs(tabOrder, localTabs, visibleWorkspaceTabs, {
+        // While a home tab is being replaced, the new session key is written
+        // into tabOrder in the same commit. Do not append it before that, or
+        // the tab bar briefly shows both the old home tab and the new session.
+        deferMissingSessionTabs: Boolean(pendingHomeReplacementKeyRef.current)
+      }),
     [localTabs, tabOrder, visibleWorkspaceTabs]
   )
 
