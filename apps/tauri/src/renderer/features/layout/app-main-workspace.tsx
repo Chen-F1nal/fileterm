@@ -4,6 +4,7 @@ import { DEFAULT_UI_ZOOM_PERCENT, MAX_UI_ZOOM_PERCENT, MIN_UI_ZOOM_PERCENT, UI_Z
 import { AiCopilotPanel } from '../ai/ai-copilot-panel'
 import { CloseButton } from '../common/close-button'
 import { SystemSidebarShell } from '../system/system-sidebar-shell'
+import { resolveMonitoringSource } from '../system/shared-monitoring'
 import { TransferCenterHost } from '../transfers/transfer-center-host'
 import { KeepAliveWorkspaceStage } from '../workspace/workspace-stage'
 import { TabBar, type TabBarProps, type TabContextTarget } from './tab-bar'
@@ -221,6 +222,8 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     onActivateSession: activateSession,
     onAddHomeTab: addHomeTab
   })
+  // Sessions on one machine share a collector, so machine info shows the collecting tab's samples.
+  const monitoringSource = resolveMonitoringSource(activeTab?.id ?? null, workspace.sessions)
   const activeHostGroup = hostNavigation.groups.find((group) => group.key === hostNavigation.activeGroupKey)
   // "+" opens another tab on the active machine.
   const addTabToActiveHost = () => {
@@ -320,8 +323,9 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         {shouldShowSystemSidebar ? (
           <SystemSidebarShell
             activeProfile={activeProfile}
-            activeSession={activeSession}
-            activeTabId={activeTab?.id ?? null}
+            activeSession={monitoringSource.session}
+            activeTabId={monitoringSource.tabId}
+            monitoringPeers={monitoringSource.peers}
             collapsed={isSystemSidebarCollapsed}
             connectionStatus={activeTab?.status ?? null}
             showResourceMeters={isResourceMonitoringAvailable}

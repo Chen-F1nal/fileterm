@@ -3,6 +3,7 @@ import { useMonitoringDiagnostics } from './use-monitoring-diagnostics'
 import './system-sidebar-controls.css'
 import { MonitoringToggle } from './monitoring-toggle'
 import { MonitoringOverlay, monitoringIsObscured } from './monitoring-overlay'
+import type { MonitoringTarget } from './shared-monitoring'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   ConnectionProfile,
@@ -27,6 +28,7 @@ export function SystemSidebar({
   activeProfile,
   activeSession,
   activeTabId,
+  monitoringPeers,
   collapsed,
   connectionStatus,
   showResourceMeters,
@@ -38,6 +40,7 @@ export function SystemSidebar({
   activeProfile: ConnectionProfile | null
   activeSession: SessionSnapshot | null
   activeTabId: string | null
+  monitoringPeers?: MonitoringTarget[]
   collapsed: boolean
   connectionStatus: TabStatus | null
   showResourceMeters: boolean
@@ -159,6 +162,7 @@ export function SystemSidebar({
         <MonitoringToggle
           key={`toggle:${activeTabId}:${activeSession?.monitoring?.generation}`}
           onSnapshot={onMonitoringSnapshot}
+          peers={monitoringPeers}
           session={activeSession}
           tabId={activeTabId}
         />

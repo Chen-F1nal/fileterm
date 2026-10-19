@@ -991,13 +991,24 @@ export interface ResourceMonitoringState {
   generation: number
   revision: number
   phase:
-    'starting' | 'healthy' | 'paused' | 'waiting' | 'recovering' | 'failed' | 'stopped' | 'disconnected' | 'unsupported'
+    | 'starting'
+    | 'healthy'
+    | 'paused'
+    | 'waiting'
+    | 'recovering'
+    | 'failed'
+    | 'stopped'
+    | 'disconnected'
+    | 'unsupported'
+    | 'shared'
   attempt: number
   maxAttempts: number
   intervalSeconds: ResourceMonitoringIntervalSeconds
   lastSampleAt?: number
   nextRetryAt?: number
   reason?: string
+  /** In the `shared` phase: the tab whose collector serves the same machine. */
+  sharedFromTabId?: string
 }
 
 export interface SessionSnapshot {

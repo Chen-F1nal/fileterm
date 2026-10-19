@@ -15,6 +15,8 @@ struct MetricsRuntime {
     channel_open_gate: Arc<tokio::sync::Semaphore>,
     connection_cancellation: CancellationToken,
     status: crate::services::workspace::MonitoringState,
+    /// Sessions with the same key share one collection channel.
+    share_key: Option<String>,
     policy: MetricsPolicy,
     health: MetricsHealth,
     started_at: tokio::time::Instant,
@@ -131,6 +133,9 @@ impl MetricsRuntime {
             && !matches!(self.status.phase.as_str(), "stopped" | "disconnected")
         {
             return false;
+        }
+        if self.status.phase != "shared" {
+            self.status.shared_from_tab_id = None;
         }
         self.status.revision += 1;
         if session

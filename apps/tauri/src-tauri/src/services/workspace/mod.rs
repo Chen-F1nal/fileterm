@@ -28,6 +28,7 @@ pub struct LocalTerminalRuntimeGate {
 }
 
 include!("monitoring.rs");
+include!("monitoring_leases.rs");
 include!("model.rs");
 include!("profiles.rs");
 include!("state.rs");

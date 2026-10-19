@@ -204,6 +204,9 @@ Renderer 只显示遮罩、倒计时和操作反馈，`app_retry_monitoring` 只
 监控断开与 `ssh-disconnected` 分别展示监控重试和现有 `reconnectTab` 会话重连入口。
 监控开关的手动关闭状态在同一标签 SSH 重连后保留。
 关闭标签、断开会话或显式禁用监控会取消任务。网络历史以 `breakBefore` 标记中断。
+同一连接配置的多个会话共用一条采集通道：`WorkspaceState.monitoring_leases` 按配置 id 发放租约，
+持有者采集，其余会话进入 `shared` 阶段并以 `sharedFromTabId` 指向持有者；Renderer 据此显示持有者的样本，
+启停作用于同机全部会话。持有者停止、断开或关闭时释放租约，下一个会话接管采集。
 详细参数、启停交互和自动化验证见 [监控恢复、侧栏遮罩与启停控制](./plans/completed/monitoring-recovery-overlay.md)。
 
 ## 4.2 Renderer 桌面壳与布局边界

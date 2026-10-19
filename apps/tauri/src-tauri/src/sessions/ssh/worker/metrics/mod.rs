@@ -77,6 +77,12 @@ async fn spawn_metrics_collector(
         channel_open_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         connection_cancellation: startup.cancellation.clone(),
         status,
+        share_key: startup
+            .profile
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string),
         policy: MetricsPolicy::new(interval),
         health: MetricsHealth::default(),
         started_at: tokio::time::Instant::now(),
@@ -94,6 +100,10 @@ impl MetricsRuntime {
             if self.attempt_cancellation.is_cancelled() || self.handle.is_closed() {
                 break;
             }
+            // Held through this attempt's recovery so followers keep waiting.
+            let Some(_lease) = self.acquire_monitoring_lease().await else {
+                break;
+            };
             let prepared = self.prepare().await;
             let reason = match prepared {
                 Ok(prepared) => {
@@ -155,5 +165,54 @@ impl MetricsRuntime {
 
     async fn prepare(&mut self) -> Result<PreparedMetrics, ()> {
         prepare_metrics_channel(self).await
+    }
+
+    /// Followers publish `shared` and wait until the machine's leader releases
+    /// its lease. Returns None when this attempt ends while waiting.
+    async fn acquire_monitoring_lease(
+        &mut self,
+    ) -> Option<Option<crate::services::workspace::MonitoringLease>> {
+        let Some(key) = self.share_key.clone() else {
+            return Some(None);
+        };
+        let leases = self
+            .app
+            .state::<crate::services::workspace::WorkspaceState>()
+            .monitoring_leases
+            .clone();
+        let mut released = leases.subscribe();
+        loop {
+            match leases.try_acquire(&key, &self.tab_id) {
+                Ok(lease) => {
+                    if self.status.phase == "shared" {
+                        self.status.phase = "starting".into();
+                        if !self.publish(None).await {
+                            return None;
+                        }
+                    }
+                    return Some(Some(lease));
+                }
+                Err(holder) => {
+                    if self.status.phase != "shared"
+                        || self.status.shared_from_tab_id.as_deref() != Some(holder.as_str())
+                    {
+                        self.status.phase = "shared".into();
+                        self.status.shared_from_tab_id = Some(holder);
+                        self.status.next_retry_at = None;
+                        self.status.reason = None;
+                        self.gap = true;
+                        self.health.interrupt();
+                        if !self.publish(None).await {
+                            return None;
+                        }
+                    }
+                }
+            }
+            tokio::select! {
+                biased;
+                _ = self.attempt_cancellation.cancelled() => return None,
+                result = released.changed() => if result.is_err() { return None; },
+            }
+        }
     }
 }

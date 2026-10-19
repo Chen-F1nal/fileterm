@@ -19,6 +19,7 @@ import { useEffect, useState, type Dispatch, type DragEvent, type SetStateAction
 import type { SendScope, SessionSendTarget } from '../common/session-send-targets'
 import type { TabBarProps } from '../layout/tab-bar'
 import { SystemInfoWorkspace } from '../system/system-info-workspace'
+import { resolveMonitoringSource } from '../system/shared-monitoring'
 import type { ThemeMode } from '../../app/theme-config'
 import { HomeWorkspace } from './home-workspace'
 import { LocalTerminalWorkspace } from './local-terminal-workspace'
@@ -300,7 +301,7 @@ export function WorkspaceStage({
     return (
       <SystemInfoWorkspace
         activeProfile={activeProfile}
-        activeSession={activeSession}
+        activeSession={resolveMonitoringSource(activeTab?.id ?? null, sessions).session ?? activeSession}
         connectionStatus={activeTab?.status ?? null}
       />
     )
