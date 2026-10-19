@@ -383,6 +383,7 @@ pub async fn app_close_tab(app: AppHandle, tab_id: String) -> Result<serde_json:
             }
         }
         state.remove_ai_session_revision(&tab_id).await;
+        state.forget_terminal_output_tab(&tab_id);
     } else {
         // 普通关闭（可能是独立 tab 或分屏 root）
         let all_ids_to_close = if pane_leaf_ids.is_empty() {
@@ -421,6 +422,7 @@ pub async fn app_close_tab(app: AppHandle, tab_id: String) -> Result<serde_json:
         }
         for id in &all_ids_to_close {
             state.remove_ai_session_revision(id).await;
+            state.forget_terminal_output_tab(id);
         }
     }
 
