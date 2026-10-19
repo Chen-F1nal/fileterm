@@ -75,10 +75,23 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 | ------------------------------------------------ | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `renderer-health` / `renderer:performance`       | DEBUG；可见页面每分钟                                                                | `uptimeMs`、可用时的 `usedJSHeapBytes` / `totalJSHeapBytes`、`ipcCallbackCount`、`terminalCount`、`domNodeCount`、本分钟 `maxEventLoopGapMs`；支持 Long Tasks API 时包含任务数、总时长和最大时长；应用版本与平台 | 隐藏页面不采样；JS heap 不代表 WebView 进程内存。可选字段可能不存在                  |
 | `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `tokioAliveTasks`、`tokioGlobalQueueDepth`、`sessions`、`workers`、`workerQueuedCommands`、`sessionLogWriters`                                                                                                   | 只记录数量；使用非等待锁，锁忙时相应值为 `null`。全局就绪队列不包含所有 IO 等待任务  |
-| `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `transferTasks`、`transferRuns`、`transferProgressSamples`、`terminalOutput.windows`、`terminalOutput.inFlight`、`terminalOutput.queuedBatches`                                                                  | 只记录数量；锁忙时相应值为 `null`，不是累计历史数或内存字节数                        |
+| `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `transferTasks`、`transferRuns`、`transferProgressSamples`、`terminalOutput.windows`、`terminalOutput.inFlight`、`terminalOutput.queuedBatches`、`terminalOutput.queuedBytes`、`terminalOutput.queuedTabs`       | 只记录数量；锁忙时相应值为 `null`，不是累计历史数或内存字节数                        |
 | `event-loop-gap` / `renderer:performance`        | WARN；可见页面的 1 秒心跳间隔达到 4 秒，最多每 30 秒一次                             | `elapsedMs`、页面是否聚焦、应用版本与平台                                                                                                                                                                        | 在 renderer 恢复后才能记录；不能单独证明键盘输入或按钮响应耗时                       |
 | `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
-| `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口标识与累计跳过字节数                                                                                                                                | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
+| `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口/标签标识、累计跳过字节数与 `since_last_ack_ms`                                                                                                     | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
+
+`terminal:output` 的 `since_last_ack_ms` 是最近一次有效确认（窗口、通道与批次均匹配）
+距今的毫秒数，尚无确认时为 `none`。数值很小表示最近仍有确认进度；数值很大也可能
+来自此前长时间无输出，不能单独认定 renderer 停止消费。队列饱和还可能来自短小消息
+连续入队或转发任务暂未获得调度；需结合同一时间的 `appForeground`、`maxEventLoopGapMs`
+与解析耗时判断，不能仅凭跳过标记区分输出突发、隐藏/挂起或可见页面阻塞。
+
+`skipped_display_bytes` 在各窗口内按标签累计，恢复提示也只附在该标签下一批可发送的
+输出前，其他标签的输出不会清除它。关闭标签或窗口会清理对应计数。
+待发送上限为每标签 8 批、每窗口 128 批，单批至多 16 KiB；`queuedBytes` 是待发送正文
+的 UTF-8 字节数，`queuedTabs` 是待发送标签数，两者不包含已发待确认的批次。
+这两个字段按各窗口求和，同一标签在两个窗口等待发送时会计算两份。
+队列锁忙时这三个待发送字段一起为 `null`，不等待业务锁。
 
 这些性能记录不包含终端文本、终端输入或传输文件内容。普通 `app.log` 还包含各功能主动写入的运行与错误事件；启用的终端会话 transcript 单独保存在 `session-logs/`，其内容策略见“范围”。
 

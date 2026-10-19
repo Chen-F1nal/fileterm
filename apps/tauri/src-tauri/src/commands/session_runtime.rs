@@ -558,6 +558,7 @@ async fn cleanup_unattached_session(
         .await
         .retain(|root_id, active_tab_id| root_id != tab_id && active_tab_id != tab_id);
     state.remove_ai_session_revision(tab_id).await;
+    state.forget_terminal_output_tab(tab_id);
 }
 
 pub async fn shutdown_session_workers(app: &AppHandle) {

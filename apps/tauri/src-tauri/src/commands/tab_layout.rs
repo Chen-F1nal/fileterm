@@ -405,6 +405,7 @@ pub async fn app_close_pane(
 
     state.sessions.write().await.remove(&pane_tab_id);
     state.remove_ai_session_revision(&pane_tab_id).await;
+    state.forget_terminal_output_tab(&pane_tab_id);
 
     {
         let mut active_tab = state.active_tab_id.write().await;
