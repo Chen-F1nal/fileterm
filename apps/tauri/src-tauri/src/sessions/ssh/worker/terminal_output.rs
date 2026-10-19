@@ -9,12 +9,7 @@ fn spawn_terminal_output_pump(app: &AppHandle, tab_id: &str) -> TerminalOutputPu
     let pump_tab_id = tab_id.to_string();
     tokio::spawn(async move {
         while let Some(chunk) = terminal_output_rx.recv().await {
-            crate::sessions::terminal::emit_flow_controlled_terminal_data(
-                &pump_app,
-                &pump_tab_id,
-                &chunk,
-            )
-            .await;
+            crate::sessions::terminal::emit_terminal_data(&pump_app, &pump_tab_id, &chunk).await;
         }
         let state = pump_app.state::<crate::services::workspace::WorkspaceState>();
         if !state.sessions.read().await.contains_key(&pump_tab_id) {

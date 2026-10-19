@@ -55,13 +55,7 @@ fn truncate_transcript(value: &mut String) {
 
 pub async fn emit_terminal_data(app: &AppHandle, tab_id: &str, chunk: &str) {
     record_terminal_output(app, tab_id, chunk).await;
-    // Serial/Telnet share input and output in one worker; display credit must not stop device IO.
-    app.state::<crate::services::workspace::WorkspaceState>()
-        .publish_uncontrolled_terminal_output(tab_id, chunk);
-}
-
-pub async fn emit_flow_controlled_terminal_data(app: &AppHandle, tab_id: &str, chunk: &str) {
-    record_terminal_output(app, tab_id, chunk).await;
+    // Non-blocking window queues also keep Serial/Telnet IO independent of display credit.
     app.state::<crate::services::workspace::WorkspaceState>()
         .publish_terminal_output(tab_id, chunk);
 }

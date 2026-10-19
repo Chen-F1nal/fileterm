@@ -24,21 +24,24 @@ fn sanitize_fragment(value: &str, max_bytes: usize) -> String {
     let mut sanitized = String::with_capacity(value.len().min(max_bytes));
     let mut used = 0usize;
     for character in value.chars() {
+        let mut utf8 = [0; 4];
+        let control;
         let escaped = match character {
-            '\n' => "\\n".to_string(),
-            '\r' => "\\r".to_string(),
-            '\t' => "\\t".to_string(),
+            '\n' => "\\n",
+            '\r' => "\\r",
+            '\t' => "\\t",
             character if character.is_control() => {
-                format!("\\u{{{:04x}}}", character as u32)
+                control = format!("\\u{{{:04x}}}", character as u32);
+                &control
             }
-            character => character.to_string(),
+            character => character.encode_utf8(&mut utf8),
         };
         if used.saturating_add(escaped.len()) > max_bytes {
             sanitized.push_str("…[truncated]");
             break;
         }
         used += escaped.len();
-        sanitized.push_str(&escaped);
+        sanitized.push_str(escaped);
     }
     sanitized
 }
@@ -73,7 +76,27 @@ pub(super) fn build_line(
 
 #[cfg(test)]
 mod tests {
-    use super::redact;
+    use super::{redact, sanitize_fragment};
+
+    #[test]
+    fn sanitization_preserves_unicode_and_control_escaping_at_byte_limits() {
+        assert_eq!(
+            sanitize_fragment("中🔒\n\r\t\0\x1b\u{85}", 64),
+            "中🔒\\n\\r\\t\\u{0000}\\u{001b}\\u{0085}"
+        );
+        for (input, limit, expected) in [
+            ("中🔒", 7, "中🔒"),
+            ("中🔒", 6, "中…[truncated]"),
+            ("\n", 2, "\\n"),
+            ("\n", 1, "…[truncated]"),
+            ("\0", 8, "\\u{0000}"),
+            ("\0", 7, "…[truncated]"),
+            ("a", 0, "…[truncated]"),
+            ("", 0, ""),
+        ] {
+            assert_eq!(sanitize_fragment(input, limit), expected);
+        }
+    }
 
     #[test]
     fn strips_common_secret_labels() {

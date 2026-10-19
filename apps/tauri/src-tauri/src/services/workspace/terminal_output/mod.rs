@@ -232,25 +232,6 @@ impl WorkspaceState {
         }
     }
 
-    pub fn publish_uncontrolled_terminal_output(&self, tab_id: &str, chunk: &str) {
-        let channels: Vec<_> = match self.terminal_output_channels.lock() {
-            Ok(channels) => channels.values().cloned().collect(),
-            Err(_) => return,
-        };
-        for subscription in channels {
-            if subscription
-                .channel
-                .send(serde_json::json!({ "tabId": tab_id, "chunk": chunk }))
-                .is_err()
-            {
-                subscription.close();
-            }
-        }
-        if let Ok(mut channels) = self.terminal_output_channels.lock() {
-            channels.retain(|_, current| !current.credit.is_closed());
-        }
-    }
-
     pub fn publish_terminal_output(&self, tab_id: &str, chunk: &str) {
         let channels: Vec<_> = match self.terminal_output_channels.lock() {
             Ok(channels) => channels.values().cloned().collect(),

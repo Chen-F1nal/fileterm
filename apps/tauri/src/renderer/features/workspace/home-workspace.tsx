@@ -149,12 +149,6 @@ export function HomeWorkspace({
   const contentBodyRef = useRef<HTMLDivElement | null>(null)
   const [navDirection, setNavDirection] = useState<'down' | 'up'>('down')
   const [suppressEntrance, setSuppressEntrance] = useState(Boolean(suppressEntranceProp))
-  useEffect(() => {
-    if (!suppressEntrance) return
-    // Only the initial mount of a switched/closed-into tab is suppressed.
-    const timeout = window.setTimeout(() => setSuppressEntrance(false), 800)
-    return () => window.clearTimeout(timeout)
-  }, [suppressEntrance])
   const [activeConnectionFolderName, setActiveConnectionFolderName] = useState('')
   const [activeCommandFolderName, setActiveCommandFolderName] = useState('')
   const [activeSshKeyFolderName, setActiveSshKeyFolderName] = useState(t.allKeys)
@@ -183,6 +177,7 @@ export function HomeWorkspace({
   }
   const selectTab = (tab: typeof activeTab) => {
     if (tab === activeTab) return
+    setSuppressEntrance(false)
     setNavDirection((tabOrder[tab] ?? 0) >= (tabOrder[activeTab] ?? 0) ? 'down' : 'up')
     setActiveTab(tab)
   }

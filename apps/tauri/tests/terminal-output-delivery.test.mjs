@@ -78,7 +78,7 @@ test('ten terminal listeners receive 20000 ordered batches without retained pars
   assert.deepEqual(counts, Array(10).fill(2000))
 })
 
-test('serial and telnet deliveries keep their existing non-credit path', async () => {
+test('untracked deliveries do not request native credit', async () => {
   let completed = 0
   const listeners = new Set([
     async () => {

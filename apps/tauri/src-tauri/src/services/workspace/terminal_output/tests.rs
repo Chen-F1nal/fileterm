@@ -467,22 +467,77 @@ async fn slow_window_does_not_block_other_window() {
 
 #[tokio::test]
 async fn shared_device_workers_do_not_wait_for_display_credit() {
-    let state = WorkspaceState::default();
-    let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let received = Arc::clone(&count);
-    state.register_terminal_output_channel(
-        "main",
-        Channel::new(move |body| {
-            let payload: serde_json::Value = body.deserialize().unwrap();
-            assert!(payload.get("deliveryId").is_none());
-            received.fetch_add(1, Ordering::Relaxed);
+    for protocol in ["serial", "telnet"] {
+        let state = WorkspaceState::default();
+        let messages = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
+        let received = Arc::clone(&messages);
+        let channel = Channel::new(move |body| {
+            received.lock().unwrap().push(body.deserialize().unwrap());
             Ok(())
-        }),
-    );
-    for _ in 0..100 {
-        state.publish_uncontrolled_terminal_output("serial", "device response");
+        });
+        let channel_id = channel.id();
+        state.register_terminal_output_channel("main", channel);
+        let chunk = "x".repeat(BATCH_BYTES);
+        for _ in 0..100 {
+            state.publish_terminal_output(protocol, &chunk);
+        }
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while messages.lock().unwrap().len() < IN_FLIGHT_BATCHES {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(messages.lock().unwrap().len(), IN_FLIGHT_BATCHES);
+        let health = state.terminal_output_health().unwrap();
+        assert_eq!(health["inFlight"], IN_FLIGHT_BATCHES);
+        assert!(health["queuedBatches"].as_u64().unwrap() <= PENDING_BATCHES_PER_TAB as u64);
+        assert!(
+            health["queuedBytes"].as_u64().unwrap()
+                <= (PENDING_BATCHES_PER_TAB * BATCH_BYTES) as u64
+        );
+
+        state.ack_terminal_output("main", channel_id, 0);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while state.terminal_output_health().unwrap()["queuedBatches"]
+                .as_u64()
+                .unwrap_or(PENDING_BATCHES as u64)
+                >= PENDING_BATCHES_PER_TAB as u64
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        state.publish_terminal_output(protocol, "latest response");
+        tokio::time::timeout(Duration::from_secs(2), async {
+            let mut acknowledged = 0;
+            loop {
+                let deliveries = messages.lock().unwrap().clone();
+                for payload in &deliveries[acknowledged..] {
+                    state.ack_terminal_output(
+                        "main",
+                        channel_id,
+                        payload["deliveryId"].as_u64().unwrap(),
+                    );
+                }
+                acknowledged = deliveries.len();
+                if let Some(latest) = deliveries
+                    .last()
+                    .filter(|p| p["chunk"] == "latest response")
+                {
+                    assert!(latest["skippedBytesBefore"].as_u64().unwrap() > 0);
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        for subscription in state.terminal_output_channels.lock().unwrap().values() {
+            subscription.close();
+        }
     }
-    assert_eq!(count.load(Ordering::Relaxed), 100);
 }
 
 #[tokio::test]
