@@ -60,9 +60,11 @@ test('closing selects the right neighbour, then the left, using dragged and grou
   assert.equal(nextTabAfterClose(mixed, 'session:a', false).tab.id, 'b')
 })
 
-function fixture(api, activeLocalTabId = null) {
+function fixture(api, activeLocalTabId = null, homeTabId = null) {
+  const homeTabs = homeTabId ? [{ id: homeTabId, kind: 'home', title: 'New Tab' }] : []
   const state = {
     activeLocalTabId,
+    localTabs: homeTabs,
     pending: null,
     closing: [],
     order: tabs.map((tab) => `session:${tab.id}`),
@@ -76,20 +78,28 @@ function fixture(api, activeLocalTabId = null) {
     desktopApi: api,
     workspace: { tabs, activeTabId: 'b' },
     tabBarLayout: 'host-groups',
-    localTabs: [],
-    localTabsRef: { current: [] },
+    localTabs: homeTabs,
+    localTabsRef: { current: homeTabs },
     tabOrder: state.order,
     visibleWorkspaceTabs: tabs,
     visibleActiveSessionTabId: 'b',
     activeLocalTabId,
-    orderedTabs: buildOrderedTabs(state.order, [], tabs),
+    activeLocalTab: homeTabs[0] ?? null,
+    activeLocalTabIdForUi: homeTabId ?? activeLocalTabId,
+    isHomeWorkspaceVisible: Boolean(homeTabId),
+    isMainWorkspaceWindow: false,
+    pendingHomeReplacementKeyRef: { current: null },
+    orderedTabs: buildOrderedTabs(state.order, homeTabs, tabs),
     tabActivationRequestRef: { current: 0 },
     setActiveLocalTabId: set('activeLocalTabId'),
     setPendingActiveTabId: set('pending'),
     setClosingSessionTabIds: set('closing'),
     setTabOrder: set('order'),
+    setLocalTabs: set('localTabs'),
+    setNextHomeTabNumber: () => {},
     onSnapshot: (snapshot) => state.snapshots.push(snapshot),
     onBusyChange: () => {},
+    onStatusMessage: () => {},
     onError: (...args) => state.errors.push(args)
   }
   return { state, actions: createWorkspaceTabsSessionActions(context) }
@@ -146,4 +156,17 @@ test('all session close paths activate the neighbour before backend last-tab fal
   await actions.closeSessionTabById('b')
   assert.deepEqual(calls, ['activate:c', 'close:b'])
   assert.equal(state.snapshots.at(-1).activeTabId, 'c')
+})
+
+test('opening a connection replaces the active home tab instead of adding a tab', async () => {
+  const { state, actions } = fixture(
+    { openProfile: async () => ({ tabs, activeTabId: 'new-session' }) },
+    'home-1',
+    'home-1'
+  )
+  state.order.unshift('home:home-1')
+  await actions.openProfile('profile')
+  assert.deepEqual(state.localTabs, [])
+  assert.equal(state.order[0], 'session:new-session')
+  assert.equal(state.activeLocalTabId, null)
 })

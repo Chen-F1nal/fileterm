@@ -1,5 +1,14 @@
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import type {
   FileContentSnapshot,
   FileTermDesktopApi,
@@ -12,7 +21,7 @@ import type {
 import { DEFAULT_COMMAND_LIST_WIDTH, DEFAULT_FILE_PANEL_RATIO, retainOpenTabUiState } from '../app/app-shell-utils'
 import type { ErrorDetails } from '../app/app-error-utils'
 import { useWorkspaceTabs } from './use-workspace-tabs'
-import { consumeHomeTabTransition } from '../features/workspace/home-transition'
+import { consumeHomeTabTransition, peekHomeTabTransition } from '../features/workspace/home-transition'
 import type { UseWorkspaceTabsOptions } from './workspace-tabs-types'
 import { useWorkspaceModals } from './use-workspace-modals'
 import { useFileEditor } from './use-file-editor'
@@ -142,6 +151,7 @@ export function useAppWorkspace({
   const [isWorkspaceTransitionActive, setIsWorkspaceTransitionActive] = useState(true)
   const [isWorkspaceSwitching, setIsWorkspaceSwitching] = useState(false)
   const initialWorkspaceTransitionRef = useRef(true)
+  const allowedHomeTransitionKeyRef = useRef<string | null>(null)
   const hasRenderedWorkspaceRef = useRef(false)
   const lastResourceMonitoringDiagnosticRef = useRef('')
 
@@ -636,15 +646,36 @@ export function useAppWorkspace({
     onError
   })
 
+  useLayoutEffect(() => {
+    // Remove the previous stage fade before this render is painted. The
+    // regular effect below runs after paint and is too late for the first
+    // switch/close that follows an allowed entrance.
+    if (
+      !initialWorkspaceTransitionRef.current &&
+      activeWorkspaceOrderKey.startsWith('home:') &&
+      allowedHomeTransitionKeyRef.current !== activeWorkspaceOrderKey &&
+      !peekHomeTabTransition(activeWorkspaceOrderKey)
+    ) {
+      setIsWorkspaceTransitionActive(false)
+    }
+  }, [activeWorkspaceOrderKey])
   useEffect(() => {
     const isInitial = initialWorkspaceTransitionRef.current
     initialWorkspaceTransitionRef.current = false
     const isHome = activeWorkspaceOrderKey.startsWith('home:')
     // Home tab switches and closes must not replay the stage fade. Only the
     // initial view and "+"-created tabs are allowed to animate.
-    if (!isInitial && isHome && !consumeHomeTabTransition(activeWorkspaceOrderKey)) {
-      setIsWorkspaceTransitionActive(false)
-      return
+    if (isHome) {
+      if (isInitial) {
+        allowedHomeTransitionKeyRef.current = activeWorkspaceOrderKey
+      } else if (allowedHomeTransitionKeyRef.current !== activeWorkspaceOrderKey) {
+        if (!consumeHomeTabTransition(activeWorkspaceOrderKey)) {
+          allowedHomeTransitionKeyRef.current = null
+          setIsWorkspaceTransitionActive(false)
+          return
+        }
+        allowedHomeTransitionKeyRef.current = activeWorkspaceOrderKey
+      }
     }
     setIsWorkspaceTransitionActive(false)
     const frame = window.requestAnimationFrame(() => setIsWorkspaceTransitionActive(true))

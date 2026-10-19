@@ -607,7 +607,7 @@ export function KeepAliveWorkspaceStage({
             activeLocalTab={{ kind: 'home' }}
             activeHomeTabId={id}
             isWorkspaceActive={isActive}
-            suppressHomeEntrance={isActive && !shouldAnimateEntrance}
+            suppressHomeEntrance={!shouldAnimateEntrance}
           />
         </div>
       )
