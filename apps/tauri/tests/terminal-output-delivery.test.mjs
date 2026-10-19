@@ -40,6 +40,8 @@ test('delivery acknowledges only after all listeners parse and isolates failures
   await tick()
   assert.deepEqual(acknowledgements, [8])
   assert.equal(JSON.parse(diagnostics[0]).failed, true)
+  assert.equal(exports.getTerminalOutputProgress().parseFailures, 1)
+  assert.equal(exports.getTerminalOutputProgress().lastSuccessfulDeliveryId, undefined)
   assert.ok(!diagnostics[0].includes('private terminal output'))
   listeners.clear()
   deliver({ tabId: 'closed', chunk: '', deliveryId: 9 })
@@ -117,4 +119,44 @@ test('saturation markers are visible and counted without logging output text', a
   assert.ok(received[0].endsWith('private new frame'))
   assert.equal(JSON.parse(diagnostics[0]).skippedBytesBefore, 123)
   assert.ok(!diagnostics[0].includes('private new frame'))
+})
+
+test('progress distinguishes blocked parsing, pending ACKs and rejected ACKs without payloads', async () => {
+  let finishParsing
+  let rejectAck
+  const deliver = exports.createTerminalOutputDelivery(
+    new Set([
+      () =>
+        new Promise((resolve) => {
+          finishParsing = resolve
+        })
+    ]),
+    () =>
+      new Promise((_, reject) => {
+        rejectAck = reject
+      }),
+    () => {}
+  )
+  deliver({ tabId: 'secret-host', chunk: 'secret-output', deliveryId: 42 })
+  await tick()
+  let progress = exports.getTerminalOutputProgress()
+  assert.equal(progress.pendingBatches, 1)
+  assert.equal(progress.receivedBatches, 1)
+  assert.equal(progress.parsedBatches, 0)
+  assert.equal(progress.lastReceivedDeliveryId, 42)
+  assert.ok(!JSON.stringify(progress).includes('secret'))
+  finishParsing()
+  await tick()
+  progress = exports.getTerminalOutputProgress()
+  assert.equal(progress.pendingBatches, 0)
+  assert.equal(progress.parsedBatches, 1)
+  assert.equal(progress.pendingAcknowledgements, 1)
+  assert.equal(progress.lastParsedDeliveryId, 42)
+  assert.equal(progress.lastSuccessfulDeliveryId, 42)
+  rejectAck(new Error('offline'))
+  await tick()
+  progress = exports.getTerminalOutputProgress()
+  assert.equal(progress.pendingAcknowledgements, 0)
+  assert.equal(progress.ackFailures, 1)
+  assert.equal(progress.lastAcknowledgedDeliveryId, undefined)
 })

@@ -29,7 +29,7 @@ pub(crate) struct TerminalOutputSubscription {
     pending: Mutex<HashMap<u64, OwnedSemaphorePermit>>,
     last_warning: Mutex<Option<Instant>>,
     /// Last valid renderer acknowledgement; idle output can also make it stale.
-    last_ack: Mutex<Option<Instant>>,
+    last_ack: Mutex<Option<(Instant, u64)>>,
 }
 
 impl TerminalOutputSubscription {
@@ -70,8 +70,8 @@ impl TerminalOutputSubscription {
             crate::services::logging::warn_global(
                 "terminal:output",
                 format!(
-                    "window display queue saturated window={} tab={} skipped_display_bytes={} since_last_ack_ms={}",
-                    self.window_label, tab_id, skipped, since_last_ack
+                    "window display queue saturated window={} tab={} skipped_display_bytes={} since_last_ack_ms={} progress={}",
+                    self.window_label, tab_id, skipped, since_last_ack, self.progress()
                 ),
             );
         }
@@ -82,7 +82,24 @@ impl TerminalOutputSubscription {
         self.last_ack
             .lock()
             .ok()
-            .and_then(|last| last.map(|acknowledged| acknowledged.elapsed().as_millis()))
+            .and_then(|last| last.map(|(acknowledged, _)| acknowledged.elapsed().as_millis()))
+    }
+
+    // Try-lock snapshots stay available from native warnings when the page stops reporting.
+    fn progress(&self) -> serde_json::Value {
+        let pending = self.pending.try_lock().ok();
+        let output = self.output.try_lock().ok();
+        let last_ack = self.last_ack.try_lock().ok().and_then(|last| *last);
+        serde_json::json!({
+            "window": self.window_label,
+            "issuedBatches": self.next_delivery_id.load(Ordering::Relaxed),
+            "lastAcknowledgedDeliveryId": last_ack.map(|(_, id)| id),
+            "sinceLastAckMs": last_ack.map(|(at, _)| at.elapsed().as_millis()),
+            "inFlight": pending.as_ref().map(|items| items.len()),
+            "oldestPendingDeliveryId": pending.as_ref().and_then(|items| items.keys().min().copied()),
+            "queuedBatches": output.as_ref().map(|queue| queue.batches.len()),
+            "queuedBytes": output.as_ref().map(|queue| queue.batches.iter().map(|b| b.chunk.len()).sum::<usize>()),
+        })
     }
 
     fn should_warn(&self) -> bool {
@@ -109,8 +126,8 @@ impl TerminalOutputSubscription {
         let should_warn = started.elapsed() >= Duration::from_secs(1) && self.should_warn();
         if should_warn {
             crate::services::logging::warn_global("terminal:output", format!(
-                "renderer backpressure window={} tab={} wait_ms={} in_flight_limit={IN_FLIGHT_BATCHES}",
-                self.window_label, message.tab_id, started.elapsed().as_millis()
+                "renderer backpressure window={} tab={} wait_ms={} in_flight_limit={IN_FLIGHT_BATCHES} progress={}",
+                self.window_label, message.tab_id, started.elapsed().as_millis(), self.progress()
             ));
         }
         let delivery_id = self.next_delivery_id.fetch_add(1, Ordering::Relaxed);
@@ -165,6 +182,8 @@ impl WorkspaceState {
                 });
         Some(serde_json::json!({
             "windows": channels.len(),
+            "windowProgress": channels.values().take(16).map(|subscription| subscription.progress()).collect::<Vec<_>>(),
+            "omittedWindows": channels.len().saturating_sub(16),
             "inFlight": in_flight,
             "queuedBatches": queued.map(|value| value.0),
             "queuedBytes": queued.map(|value| value.1),
@@ -225,7 +244,7 @@ impl WorkspaceState {
                     .is_ok_and(|mut pending| pending.remove(&delivery_id).is_some());
                 if acknowledged {
                     if let Ok(mut last_ack) = subscription.last_ack.lock() {
-                        *last_ack = Some(Instant::now());
+                        *last_ack = Some((Instant::now(), delivery_id));
                     }
                 }
             }

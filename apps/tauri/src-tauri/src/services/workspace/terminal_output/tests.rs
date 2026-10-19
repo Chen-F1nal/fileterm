@@ -617,6 +617,11 @@ async fn only_matching_acknowledgements_record_renderer_progress() {
     .unwrap();
     let delivery_id = *subscription.pending.lock().unwrap().keys().next().unwrap();
 
+    let progress = subscription.progress();
+    assert_eq!(progress["issuedBatches"], 1);
+    assert_eq!(progress["inFlight"], 1);
+    assert_eq!(progress["oldestPendingDeliveryId"], delivery_id);
+    assert!(progress["lastAcknowledgedDeliveryId"].is_null());
     state.ack_terminal_output("other", channel_id, delivery_id);
     state.ack_terminal_output("main", channel_id, delivery_id + 1);
     assert_eq!(
@@ -627,6 +632,9 @@ async fn only_matching_acknowledgements_record_renderer_progress() {
 
     state.ack_terminal_output("main", channel_id, delivery_id);
     assert!(subscription.last_ack_age_ms().is_some_and(|age| age < 1000));
+    let progress = subscription.progress();
+    assert_eq!(progress["lastAcknowledgedDeliveryId"], delivery_id);
+    assert_eq!(progress["inFlight"], 0);
 
     subscription.close();
     state.terminal_output_channels.lock().unwrap().clear();

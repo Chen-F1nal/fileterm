@@ -80,6 +80,15 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 | `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
 | `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口/标签标识、累计跳过字节数与 `since_last_ack_ms`                                                                                                     | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
 
+当前排查分支（尚未发布，beta.9 不含以下新增字段）补充：
+
+- `renderer-health.terminalOutput`：当前窗口订阅的累计接收、解析结束、确认数量，解析/确认失败数，最近接收、解析结束、解析成功和确认的 delivery ID；以及待解析批数/字符数、待确认数、连续繁忙时长和距上次解析结束的时间。没有订阅时为 `null`；计数在重新订阅时重置，ID 不是按顺序完成的水位。解析结束包含失败，需结合 `parseFailures` 和 `lastSuccessfulDeliveryId`。不带原始正文或 tab 名称。
+- `renderer-health.interaction`：Event Timing 支持状态、采样数量、最大输入派发延迟和最大事件至下一次绘制耗时。只汇总 `keydown` / `click`，采集阈值为 16ms，浏览器耗时有精度取整；样本数量不是全部操作次数，耗时也不包含远端命令响应。API 不支持时标记 `supported=false`，省略耗时。
+- `renderer-progress-slow`：可见页面待解析且连续至少 5 秒无解析结束，或交互采样耗时达到 1 秒时，由既有每秒心跳触发 WARN，最多每 30 秒一次。带上述两份摘要，不新增定时器、逐批日志或逐次交互日志；`event-loop-gap` 与慢解析告警也携带输出进度。
+- 原生 `window display queue saturated` / `renderer backpressure` 的 `progress`，以及健康报告的 `native.terminalOutput.windowProgress`：窗口、已分配批次数、最近确认 ID/距确认时间、待确认批数及最早 ID、队列批数/字节数。原生告警不等待 renderer 心跳，仍沿用 30 秒限频；健康报告最多展开 16 个窗口，其余计入 `omittedWindows`。锁忙字段为 `null`，不能当作零。`issuedBatches` 是分配 ID 的计数，不保证通道发送成功。
+
+以上无需管理员权限，不记录按键值、输入内容或终端正文。页面彻底停住时，Event Timing 与 renderer 日志需恢复后才能上报；用已有原生过载告警交叉判断，不能把没有交互采样理解成响应正常。
+
 `renderer-health.maxEventLoopGapMs` 包含心跳定时器本身的 1,000ms 间隔，
 约 1,002ms 不能解释成阻塞了 1 秒；需要结合长任务和 `event-loop-gap` 判断。
 `renderer:performance` 的 `terminal log coloring disabled after failure` 表示当前终端的

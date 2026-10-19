@@ -11,6 +11,7 @@ const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'play
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
 const root = fileURLToPath(new URL('../../../../', import.meta.url)).replace(/\/$/, '')
 const browser = await engine.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH })
+let progressTimer
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1200 } })
   const cpuSlowdown = Number(process.env.FILETERM_CPU_SLOWDOWN || 1)
@@ -116,6 +117,17 @@ try {
       },
       () => {}
     )
+    window.sampleOutputProgress = () => ({
+      sent: window.sent,
+      acknowledged: window.acknowledged,
+      pendingCharacters: terminals.reduce((sum, state) => sum + state.pendingWriteRef.current.length, 0),
+      pendingCompletions: terminals.reduce((sum, state) => sum + state.pendingWriteCompletionsRef.current.length, 0),
+      pendingXterm: terminals.reduce(
+        (sum, state) => sum + state.terminalRef.current._core._writeBuffer._pendingData,
+        0
+      ),
+      domNodeCount: document.getElementsByTagName('*').length
+    })
     window.startLoad = (total) => {
       const pump = () => {
         while (window.sent < total && window.sent - window.acknowledged < 4) {
@@ -187,6 +199,23 @@ try {
       new Promise((_, reject) => setTimeout(() => reject(new Error('display credit did not recover')), 30000))
     ])
   )
+  const loadStarted = performance.now()
+  let reporting = false
+  progressTimer = setInterval(() => {
+    if (reporting) return
+    reporting = true
+    void page
+      .evaluate(() => window.sampleOutputProgress())
+      .then((progress) =>
+        console.log(
+          JSON.stringify({ event: 'progress', elapsedMs: Math.round(performance.now() - loadStarted), ...progress })
+        )
+      )
+      .catch(() => {})
+      .finally(() => {
+        reporting = false
+      })
+  }, 10000)
   await page.evaluate((total) => window.startLoad(total), total)
   const timings = []
   for (let index = 0; index < 10; index++) {
@@ -216,7 +245,10 @@ try {
   assert.equal(result.clicks, '10')
   assert.equal(result.input, '输入 9')
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ...result, inputAndClickMs: timings }))
+  console.log(
+    JSON.stringify({ ...result, elapsedMs: Math.round(performance.now() - loadStarted), inputAndClickMs: timings })
+  )
 } finally {
+  clearInterval(progressTimer)
   await browser.close()
 }
