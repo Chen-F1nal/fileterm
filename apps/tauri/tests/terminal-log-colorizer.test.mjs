@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 
 const exports = {}
+const diagnostics = []
 vm.runInNewContext(
   ts.transpileModule(
     readFileSync(new URL('../src/renderer/xterm-adapters/terminal-log-colorizer.ts', import.meta.url), 'utf8'),
@@ -12,7 +13,18 @@ vm.runInNewContext(
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }
   ).outputText,
-  { exports, Uint32Array, Uint8Array }
+  {
+    exports,
+    Uint32Array,
+    Uint8Array,
+    require: (name) => {
+      assert.equal(name, '../lib/diagnostic-log')
+      return {
+        DIAGNOSTIC_SCOPES: { performance: 'renderer:performance' },
+        writeDiagnosticLog: (...args) => diagnostics.push(args)
+      }
+    }
+  }
 )
 
 test('unchanged palettes avoid history scans while real changes recolor and dispose restores ANSI', () => {
@@ -74,4 +86,112 @@ test('unchanged palettes avoid history scans while real changes recolor and disp
   assert.equal(line._data[1], 0x03123456)
   colorizer.dispose()
   assert.equal(line._data[1], 0)
+})
+
+test('optional recoloring failures do not interrupt xterm parsing or its completion callback', () => {
+  const callbacks = []
+  let disposedMarkers = 0
+  let reads = 0
+  const buffer = {
+    type: 'normal',
+    baseY: 0,
+    cursorY: 0,
+    viewportY: 0,
+    length: 1,
+    getNullCell: () => ({}),
+    getLine: () => {
+      reads++
+      throw new Error('unavailable buffer line')
+    }
+  }
+  const terminal = {
+    buffer: { normal: buffer, active: buffer },
+    rows: 1,
+    write: (_text, callback) => callbacks.push(callback),
+    reset() {},
+    clear() {},
+    resize() {},
+    refresh() {},
+    registerMarker: () => ({
+      line: 0,
+      isDisposed: false,
+      dispose() {
+        disposedMarkers++
+      }
+    })
+  }
+  const colorizer = new exports.TerminalLogColorizer(
+    terminal,
+    Object.fromEntries(
+      [
+        'timestamp',
+        'service',
+        'error',
+        'warning',
+        'success',
+        'info',
+        'debug',
+        'address',
+        'number',
+        'permission',
+        'flag'
+      ].map((key) => [key, '#abc'])
+    )
+  )
+  let parsed = 0
+  terminal.write('frame', () => parsed++)
+  assert.doesNotThrow(() => callbacks.shift()())
+  assert.equal(parsed, 1)
+  assert.equal(disposedMarkers, 1)
+  terminal.write('next frame', () => parsed++)
+  assert.doesNotThrow(() => callbacks.shift()())
+  assert.equal(parsed, 2)
+  assert.doesNotThrow(() => {
+    terminal.reset()
+    terminal.clear()
+    terminal.resize(80, 24)
+    colorizer.dispose()
+  })
+  assert.equal(reads, 1, 'disabled coloring must also stay bypassed during resize and cleanup')
+  assert.equal(diagnostics.length, 1, 'report once without flooding diagnostics')
+  assert.ok(!JSON.stringify(diagnostics).includes('frame'))
+})
+
+test('xterm enqueue rejection releases the colorizer marker before propagating the failure', () => {
+  let disposedMarkers = 0
+  const buffer = { type: 'normal', getNullCell: () => ({}) }
+  const terminal = {
+    buffer: { normal: buffer, active: buffer },
+    write: () => {
+      throw new Error('write data discarded')
+    },
+    reset() {},
+    clear() {},
+    resize() {},
+    registerMarker: () => ({
+      dispose() {
+        disposedMarkers++
+      }
+    })
+  }
+  new exports.TerminalLogColorizer(
+    terminal,
+    Object.fromEntries(
+      [
+        'timestamp',
+        'service',
+        'error',
+        'warning',
+        'success',
+        'info',
+        'debug',
+        'address',
+        'number',
+        'permission',
+        'flag'
+      ].map((key) => [key, '#abc'])
+    )
+  )
+  assert.throws(() => terminal.write('frame'), /write data discarded/)
+  assert.equal(disposedMarkers, 1)
 })

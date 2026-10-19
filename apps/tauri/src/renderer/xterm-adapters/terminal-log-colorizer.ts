@@ -1,4 +1,5 @@
 import type { IBufferCell, IBufferLine, IDisposable, ITheme, Terminal } from '@xterm/xterm'
+import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 
 export type TerminalLogColorPalette = Readonly<{
   timestamp: string
@@ -213,6 +214,7 @@ export class TerminalLogColorizer implements IDisposable {
   private paletteKey = ''
   private readonly cell: IBufferCell
   private disposed = false
+  private failed = false
   private readonly terminal: Terminal
 
   constructor(terminal: Terminal, palette: TerminalLogColorPalette) {
@@ -242,7 +244,7 @@ export class TerminalLogColorizer implements IDisposable {
       return [{ priority, rgb, pattern: new RegExp(definition.pattern, 'gi') }]
     })
     this.rules = nextRules
-    if (recolor && !this.disposed) {
+    if (recolor && !this.disposed && !this.failed) {
       this.recolorAll()
     }
   }
@@ -252,7 +254,7 @@ export class TerminalLogColorizer implements IDisposable {
       return
     }
     this.disposed = true
-    this.restoreBuffer()
+    if (!this.failed) this.restoreBuffer()
     this.terminal.write = this.originalWrite
     this.terminal.reset = this.originalReset
     this.terminal.clear = this.originalClear
@@ -260,31 +262,44 @@ export class TerminalLogColorizer implements IDisposable {
   }
 
   private readonly write: Terminal['write'] = (data, callback) => {
-    if (this.disposed) {
+    if (this.disposed || this.failed) {
       this.originalWrite(data, callback)
       return
     }
 
     const startedInNormalBuffer = this.terminal.buffer.active.type === 'normal'
     const marker = startedInNormalBuffer ? this.terminal.registerMarker(0) : undefined
-    this.originalWrite(data, () => {
-      const active = this.terminal.buffer.active
-      if (active.type === 'normal') {
-        const endY = active.baseY + active.cursorY
-        const markerY = marker && !marker.isDisposed ? marker.line : Math.max(0, endY - MAX_RECOLOR_LINES_PER_WRITE)
-        this.recolorRange(markerY, endY, true)
-      }
+    try {
+      this.originalWrite(data, () => {
+        try {
+          const active = this.terminal.buffer.active
+          if (!this.disposed && !this.failed && active.type === 'normal') {
+            const endY = active.baseY + active.cursorY
+            const markerY = marker && !marker.isDisposed ? marker.line : Math.max(0, endY - MAX_RECOLOR_LINES_PER_WRITE)
+            this.recolorRange(markerY, endY, true)
+          }
+        } catch {
+          // Optional colors must never interrupt xterm's parser or retain display credit.
+          this.failed = true
+          writeDiagnosticLog('WARN', DIAGNOSTIC_SCOPES.performance, 'terminal log coloring disabled after failure')
+        } finally {
+          marker?.dispose()
+          callback?.()
+        }
+      })
+    } catch (error) {
       marker?.dispose()
-      callback?.()
-    })
+      throw error
+    }
   }
 
   private readonly reset: Terminal['reset'] = () => {
-    this.clearStoredOriginals()
+    if (!this.failed) this.clearStoredOriginals()
     return this.originalReset()
   }
 
   private readonly clear: Terminal['clear'] = () => {
+    if (this.failed) return this.originalClear()
     this.restoreBuffer()
     this.clearStoredOriginals()
     const result = this.originalClear()
@@ -295,6 +310,7 @@ export class TerminalLogColorizer implements IDisposable {
   }
 
   private readonly resize: Terminal['resize'] = (cols, rows) => {
+    if (this.failed) return this.originalResize(cols, rows)
     // A file-panel toggle changes the terminal height and therefore its row
     // count while keeping the column count stable. xterm preserves the
     // existing BufferLine cell data for row-only resizes, so restoring every

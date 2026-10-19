@@ -80,6 +80,12 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 | `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
 | `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口/标签标识、累计跳过字节数与 `since_last_ack_ms`                                                                                                     | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
 
+`renderer-health.maxEventLoopGapMs` 包含心跳定时器本身的 1,000ms 间隔，
+约 1,002ms 不能解释成阻塞了 1 秒；需要结合长任务和 `event-loop-gap` 判断。
+`renderer:performance` 的 `terminal log coloring disabled after failure` 表示当前终端的
+可选语义着色在写入后处理时异常，后续写入绕过该着色，解析完成与 ACK 继续。
+该提示每个终端实例至多一次，不记录输出正文。
+
 `terminal:output` 的 `since_last_ack_ms` 是最近一次有效确认（窗口、通道与批次均匹配）
 距今的毫秒数，尚无确认时为 `none`。数值很小表示最近仍有确认进度；数值很大也可能
 来自此前长时间无输出，不能单独认定 renderer 停止消费。队列饱和还可能来自短小消息

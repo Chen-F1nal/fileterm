@@ -67,7 +67,9 @@ export function useTerminalView({
   const bootTextRef = useRef(hydratedBootText)
   const renderedTranscriptRef = useRef('')
   const pendingWriteRef = useRef('')
-  const pendingWriteCompletionsRef = useRef<Array<{ remaining: number; resolve(): void }>>([])
+  const pendingWriteCompletionsRef = useRef<
+    Array<{ remaining: number; resolve(): void; reject(error: unknown): void }>
+  >([])
   const resizeTimerRef = useRef<number | null>(null)
   const resizeSettleTimerRef = useRef<number | null>(null)
   const pendingResizeForceRef = useRef(false)
