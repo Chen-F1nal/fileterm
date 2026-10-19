@@ -111,7 +111,7 @@ struct SshSessionContext {
     connected_at: Instant,
     metrics_shutdown: CancellationToken,
     shell_setup_script: Option<&'static str>,
-    terminal_write_tx: mpsc::UnboundedSender<Vec<u8>>,
+    terminal_write_tx: mpsc::UnboundedSender<TerminalInput<Vec<u8>>>,
 }
 
 /// Immutable resources shared by the SSH startup phases.

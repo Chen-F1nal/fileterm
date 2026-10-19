@@ -10,6 +10,7 @@
 //  4. Move from a manual `set_blocking(true/false)` juggle to a native
 //     tokio task per session.
 
+use crate::sessions::terminal_input::TerminalInput;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -554,19 +555,23 @@ async fn verify_sftp_transfer_sha256(
 
 async fn write_shell_data(
     writer: &SshShellWriteHalf,
-    data: impl Into<Vec<u8>>,
+    data: impl Into<TerminalInput<Vec<u8>>>,
 ) -> Result<(), String> {
-    timeout(TERMINAL_WRITE_TIMEOUT, writer.data_bytes(data.into()))
+    let mut input = data.into();
+    let bytes = std::mem::take(&mut input.data);
+    let result = timeout(TERMINAL_WRITE_TIMEOUT, writer.data_bytes(bytes))
         .await
         .map_err(|_| "SSH terminal write timed out".to_string())?
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string());
+    drop(input);
+    result
 }
 
 // Input-loop yielding must not turn an already queued burst into one SSH write per fragment.
 fn coalesce_terminal_writes(
-    mut first: Vec<u8>,
-    receiver: &mut mpsc::UnboundedReceiver<Vec<u8>>,
-) -> Vec<u8> {
+    mut first: TerminalInput<Vec<u8>>,
+    receiver: &mut mpsc::UnboundedReceiver<TerminalInput<Vec<u8>>>,
+) -> TerminalInput<Vec<u8>> {
     for _ in 1..TERMINAL_INPUT_COALESCE_MESSAGES {
         if first.len() >= TERMINAL_INPUT_COALESCE_BYTES {
             break;
@@ -574,7 +579,7 @@ fn coalesce_terminal_writes(
         let Ok(next) = receiver.try_recv() else {
             break;
         };
-        first.extend_from_slice(&next);
+        first.append(next);
     }
     first
 }
@@ -598,8 +603,8 @@ fn should_buffer_terminal_input_during_shell_setup(
 }
 
 fn flush_deferred_terminal_input(
-    pending: &mut Vec<Vec<u8>>,
-    terminal_write_tx: &mpsc::UnboundedSender<Vec<u8>>,
+    pending: &mut Vec<TerminalInput<Vec<u8>>>,
+    terminal_write_tx: &mpsc::UnboundedSender<TerminalInput<Vec<u8>>>,
 ) -> Result<(), String> {
     for data in pending.drain(..) {
         terminal_write_tx

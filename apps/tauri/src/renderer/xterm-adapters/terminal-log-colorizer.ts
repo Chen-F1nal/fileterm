@@ -300,7 +300,6 @@ export class TerminalLogColorizer implements IDisposable {
 
   private readonly clear: Terminal['clear'] = () => {
     if (this.failed) return this.originalClear()
-    this.restoreBuffer()
     this.clearStoredOriginals()
     const result = this.originalClear()
     if (this.terminal.buffer.active.type === 'normal') {
@@ -341,59 +340,66 @@ export class TerminalLogColorizer implements IDisposable {
       return
     }
 
+    let changedFirst = Infinity
+    let changedLast = -1
     for (let y = first; y <= last; y += 1) {
-      this.recolorLine(y)
+      if (this.recolorLine(y)) {
+        changedFirst = Math.min(changedFirst, y)
+        changedLast = y
+      }
     }
 
     if (refresh && this.terminal.buffer.active.type === 'normal') {
       const viewportY = this.terminal.buffer.active.viewportY
-      const startRow = Math.max(0, first - viewportY)
-      const endRow = Math.min(this.terminal.rows - 1, last - viewportY)
+      const startRow = Math.max(0, changedFirst - viewportY)
+      const endRow = Math.min(this.terminal.rows - 1, changedLast - viewportY)
       if (startRow <= endRow) {
         this.terminal.refresh(startRow, endRow)
       }
     }
   }
 
-  private recolorLine(y: number): void {
+  private recolorLine(y: number): boolean {
     const line = this.terminal.buffer.normal.getLine(y)
     const internal = getInternalLine(line)
     if (!line || !internal) {
-      return
+      return false
     }
 
-    this.restorePhysicalLine(internal)
-    const mapped = this.readLine(line)
-    const matches = collectMatches(mapped.text, this.rules)
-    for (const match of matches) {
-      const startColumn = mapped.columns[match.start]
-      const endColumn = mapped.columns[match.end - 1]
-      if (startColumn === undefined || endColumn === undefined) {
-        continue
-      }
-      this.colorPhysicalRange(internal, startColumn, endColumn + 1, match.rgb)
+    // Most agent output is plain text: only build a per-cell map for actual matches.
+    const matches = collectMatches(line.translateToString(true), this.rules)
+    if (matches.length === 0) return this.restorePhysicalLine(internal)
+    const columns = this.readColumns(line)
+    const ranges = matches.flatMap((match) => {
+      const start = columns[match.start]
+      const end = columns[match.end - 1]
+      return start === undefined || end === undefined ? [] : [{ start, end: end + 1, rgb: match.rgb }]
+    })
+    // Retain colors that still apply; restoring them first would force another DOM redraw.
+    let changed = this.restorePhysicalLine(internal, ranges)
+    for (const range of ranges) {
+      changed = this.colorPhysicalRange(internal, range.start, range.end, range.rgb) || changed
     }
+    return changed
   }
 
-  private readLine(line: IBufferLine): { text: string; columns: number[] } {
-    let text = ''
+  private readColumns(line: IBufferLine): number[] {
     const columns: number[] = []
     for (let column = 0; column < line.length; column += 1) {
-      const chars = line.getCell(column, this.cell)?.getChars() ?? ''
-      if (!chars) {
-        continue
-      }
-      text += chars
+      const cell = line.getCell(column, this.cell)
+      if (!cell || cell.getWidth() === 0) continue
+      const chars = cell.getChars() || ' '
       for (let offset = 0; offset < chars.length; offset += 1) {
         columns.push(column)
       }
     }
-    return { text, columns }
+    return columns
   }
 
-  private colorPhysicalRange(line: InternalBufferLine, start: number, end: number, rgb: number): void {
+  private colorPhysicalRange(line: InternalBufferLine, start: number, end: number, rgb: number): boolean {
     const originals = this.ensureOriginals(line)
     const last = Math.min(line.length, end)
+    let changed = false
     for (let column = Math.max(0, start); column < last; column += 1) {
       const dataIndex = column * CELL_INDICES
       if (dataIndex + CELL_FOREGROUND >= line._data.length) {
@@ -406,17 +412,29 @@ export class TerminalLogColorizer implements IDisposable {
         originals.content[column] = content
         originals.mask[column] = 1
       }
-      line._data[dataIndex + CELL_FOREGROUND] = withRgbForeground(originals.foreground[column], rgb)
+      const next = withRgbForeground(originals.foreground[column], rgb)
+      if (foreground !== next) {
+        line._data[dataIndex + CELL_FOREGROUND] = next
+        changed = true
+      }
     }
+    return changed
   }
 
-  private restorePhysicalLine(line: InternalBufferLine): void {
+  private restorePhysicalLine(
+    line: InternalBufferLine,
+    retained: readonly { start: number; end: number }[] = []
+  ): boolean {
     const originals = this.originals.get(line)
     if (!originals) {
-      return
+      return false
     }
 
+    let changed = false
+    let range = 0
     for (let column = 0; column < line.length; column += 1) {
+      while (range < retained.length && column >= retained[range].end) range++
+      if (range < retained.length && column >= retained[range].start) continue
       if (!originals.mask[column]) {
         continue
       }
@@ -427,10 +445,12 @@ export class TerminalLogColorizer implements IDisposable {
       }
       const content = line._data[dataIndex + CELL_CONTENT]
       if (originals.content[column] === content) {
+        changed ||= line._data[dataIndex + CELL_FOREGROUND] !== originals.foreground[column]
         line._data[dataIndex + CELL_FOREGROUND] = originals.foreground[column]
       }
       originals.mask[column] = 0
     }
+    return changed
   }
 
   private restoreBuffer(): void {

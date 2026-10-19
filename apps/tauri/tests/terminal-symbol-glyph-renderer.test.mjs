@@ -4,10 +4,11 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-function fixture(text) {
+function fixture(text, fitted = false) {
   let layoutReads = 0
   class Element {
     textContent = text
+    children = [{ textContent: text, classList: { contains: () => fitted } }]
   }
   const rows = {
     children: [new Element()],
@@ -61,4 +62,8 @@ test('graphical-only rows do not force layout in the font-symbol adapter', () =>
 
 test('fallback symbols and CJK punctuation still enter the fitting path', () => {
   for (const text of ['✻', '┃中文:┃', '┃✓┃', '中文，。']) assert.equal(fixture(text), 1, text)
+})
+
+test('already fitted rows skip geometry on repeated render notifications', () => {
+  for (const text of ['✻', '中文，。', '┃✓┃']) assert.equal(fixture(text, true), 0, text)
 })

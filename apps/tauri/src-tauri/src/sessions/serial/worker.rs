@@ -269,6 +269,7 @@ async fn run_serial_worker(
     let mut hex_input_buffer = String::new();
     let mut hex_input_pending_lf = false;
     let mut line_input_buffer = String::new();
+    let mut pending_input_budget = Vec::new();
     let mut line_input_pending_lf = false;
     let mut text_decoder = SerialTextDecoder::new(&encoding);
 
@@ -297,7 +298,7 @@ async fn run_serial_worker(
                             )
                         } else {
                             vec![SerialInputChunk::Line {
-                                value: data,
+                                value: data.to_string(),
                                 terminator: String::new(),
                             }]
                         };
@@ -437,6 +438,14 @@ async fn run_serial_worker(
                                 };
                                 emit_terminal_data(app, tab_id, &echoed).await;
                             }
+                        }
+                        // In line/hex mode the parser retains unfinished input between commands.
+                        if line_input_buffer.is_empty() && hex_input_buffer.is_empty() {
+                            pending_input_budget = Vec::new();
+                            line_input_buffer = String::new();
+                            hex_input_buffer = String::new();
+                        } else {
+                            pending_input_budget.push(data);
                         }
                     }
                     Some(WorkerCmd::SerialControl {

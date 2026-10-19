@@ -6,7 +6,7 @@ async fn run_worker_event_loop(
     context: SshSessionContext,
     mut shell_reader: russh::ChannelReadHalf,
     cmd_rx: &mut mpsc::Receiver<WorkerCmd>,
-    terminal_input_rx: &mut mpsc::UnboundedReceiver<String>,
+    terminal_input_rx: &mut mpsc::UnboundedReceiver<TerminalInput<String>>,
     mut auxiliary_rx: oneshot::Receiver<SshAuxiliaryReady>,
 ) -> Result<SshWorkerExit, String> {
     let app = &context.app;
@@ -55,7 +55,7 @@ async fn run_worker_event_loop(
     // identified or while the internal setup command is executing. Otherwise
     // the shell echoes a literal `#` into the same stream that the prompt
     // heuristic inspects and the setup command races with that input.
-    let mut deferred_terminal_input: Vec<Vec<u8>> = Vec::new();
+    let mut deferred_terminal_input: Vec<TerminalInput<Vec<u8>>> = Vec::new();
 
     let mut terminal_output_tx = spawn_terminal_output_pump(app, tab_id);
 

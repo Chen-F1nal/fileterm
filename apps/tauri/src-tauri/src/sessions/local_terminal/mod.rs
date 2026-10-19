@@ -2,6 +2,7 @@ use crate::{
     services::{workspace::LocalTerminalRuntimeGate, WorkspaceState, WorkspaceTabStatus},
     sessions::{
         terminal::{emit_local_terminal_data, set_terminal_state, update_local_terminal_cwd},
+        terminal_input::TerminalInput,
         WorkerCmd,
     },
 };

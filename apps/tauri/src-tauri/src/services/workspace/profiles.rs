@@ -123,7 +123,7 @@ pub struct WorkspaceState {
     /// High-frequency SSH keystrokes bypass the general worker command queue.
     /// The SSH worker drains and coalesces this channel before writing to the
     /// PTY, so file commands cannot fill the bounded queue and reject input.
-    pub terminal_inputs: Arc<RwLock<HashMap<String, tokio::sync::mpsc::UnboundedSender<String>>>>,
+    pub terminal_inputs: Arc<RwLock<HashMap<String, tokio::sync::mpsc::UnboundedSender<crate::sessions::terminal_input::TerminalInput<String>>>>>,
     /// Tauri IPC channels are the ordered streaming boundary for terminal
     /// output. Ordinary app events remain appropriate for low-frequency state
     /// updates, but can fall behind sustained PTY traffic in WKWebView.

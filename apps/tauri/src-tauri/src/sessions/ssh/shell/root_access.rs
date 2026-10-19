@@ -449,9 +449,9 @@ fn capture_root_access_password_input(
 }
 
 fn coalesce_terminal_input(
-    mut first: String,
-    receiver: &mut mpsc::UnboundedReceiver<String>,
-) -> String {
+    mut first: TerminalInput<String>,
+    receiver: &mut mpsc::UnboundedReceiver<TerminalInput<String>>,
+) -> TerminalInput<String> {
     // Leave input bursts queued so the fair worker loop can poll output and cancellation.
     // Keep individual paste/escape payloads intact, even when one exceeds the byte budget.
     for _ in 1..TERMINAL_INPUT_COALESCE_MESSAGES {
@@ -461,7 +461,7 @@ fn coalesce_terminal_input(
         let Ok(next) = receiver.try_recv() else {
             break;
         };
-        first.push_str(&next);
+        first.append(next);
     }
     first
 }

@@ -167,7 +167,15 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     options.reconnectHintShownRef.current = true
     terminal.write(`\r\n${options.reconnectHintRef.current}\r\n`)
   }
+  let lastInputBacklogWarning = -Infinity
   const handleTerminalWriteFailure = (error: unknown) => {
+    if (String(error).includes('Terminal input backlog full')) {
+      if (Date.now() - lastInputBacklogWarning >= 5000) {
+        lastInputBacklogWarning = Date.now()
+        terminal.write('\r\n[FileTerm] Terminal input backlog full; input was not sent.\r\n')
+      }
+      return
+    }
     if (String(error).includes('serial transfer active')) {
       return
     }

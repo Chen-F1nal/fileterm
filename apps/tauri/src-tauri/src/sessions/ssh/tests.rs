@@ -2189,12 +2189,16 @@ mod tests {
         );
     }
 
+    fn budgeted_input(value: impl Into<String>) -> crate::sessions::terminal_input::TerminalInput<String> {
+        crate::sessions::terminal_input::TerminalInput::try_new(value.into()).unwrap()
+    }
+
     #[test]
     fn coalesces_high_frequency_terminal_input_without_losing_order() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        sender.send("clear\r".to_string()).unwrap();
+        sender.send(budgeted_input("clear\r")).unwrap();
         for _ in 0..2_000 {
-            sender.send("\r".to_string()).unwrap();
+            sender.send(budgeted_input("\r")).unwrap();
         }
 
         let first = receiver.try_recv().unwrap();
@@ -2205,9 +2209,9 @@ mod tests {
             "a burst must leave work for the next event-loop turn"
         );
         while let Ok(first) = receiver.try_recv() {
-            merged.push_str(&coalesce_terminal_input(first, &mut receiver));
+            merged.append(coalesce_terminal_input(first, &mut receiver));
         }
-        assert_eq!(merged, format!("clear\r{}", "\r".repeat(2_000)));
+        assert_eq!(merged.data, format!("clear\r{}", "\r".repeat(2_000)));
         assert!(receiver.is_empty());
     }
 
@@ -2215,22 +2219,22 @@ mod tests {
     fn terminal_input_coalescing_yields_at_byte_budget_and_preserves_large_pastes() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let block = "中".repeat(12_000);
-        sender.send(block.clone()).unwrap();
-        sender.send("\u{3}tail".to_string()).unwrap();
-        let merged = coalesce_terminal_input(block.clone(), &mut receiver);
+        sender.send(budgeted_input(block.clone())).unwrap();
+        sender.send(budgeted_input("\u{3}tail")).unwrap();
+        let merged = coalesce_terminal_input(budgeted_input(block.clone()), &mut receiver);
         assert!(
-            merged == block.repeat(2),
+            merged.data == block.repeat(2),
             "merged bytes must preserve UTF-8 input order"
         );
-        assert_eq!(receiver.try_recv().unwrap(), "\u{3}tail");
+        assert_eq!(receiver.try_recv().unwrap().data, "\u{3}tail");
 
-        sender.send("next".into()).unwrap();
+        sender.send(budgeted_input("next")).unwrap();
         let paste = "中文".repeat(20_000);
         assert!(
-            coalesce_terminal_input(paste.clone(), &mut receiver) == paste,
+            coalesce_terminal_input(budgeted_input(paste.clone()), &mut receiver).data == paste,
             "a single large paste must remain intact"
         );
-        assert_eq!(receiver.try_recv().unwrap(), "next");
+        assert_eq!(receiver.try_recv().unwrap().data, "next");
     }
 
     #[test]
@@ -2238,7 +2242,7 @@ mod tests {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let bytes = [0xff, 0x00, 0x1b, b'[', b'6', b'n', 0x03];
         for _ in 0..2_000 {
-            sender.send(bytes.to_vec()).unwrap();
+            sender.send(crate::sessions::terminal_input::TerminalInput::from(bytes.to_vec())).unwrap();
         }
         let first = receiver.try_recv().unwrap();
         let mut merged = coalesce_terminal_writes(first, &mut receiver);
@@ -2248,9 +2252,9 @@ mod tests {
         );
         assert!(!receiver.is_empty(), "writer-side batching must also yield");
         while let Ok(first) = receiver.try_recv() {
-            merged.extend(coalesce_terminal_writes(first, &mut receiver));
+            merged.append(coalesce_terminal_writes(first, &mut receiver));
         }
-        assert!(merged == bytes.repeat(2_000));
+        assert!(merged.data == bytes.repeat(2_000));
     }
 
     #[test]

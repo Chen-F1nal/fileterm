@@ -34,7 +34,11 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - SSH 私钥库：私钥、元数据和可选口令分离存储；连接 profile 仅保存 `privateKeyId`，口令交互通过 `ssh:interaction` 返回 renderer。
 - SSH 私钥导入同时支持文件和临时文本输入；文本只在导入弹窗与一次 IPC 调用期间存在，不进入 profile、workspace snapshot 或日志。
 - SSH 密码认证缺少凭据时，登录补全弹窗可显式改用密钥库私钥；响应仅传递密钥 ID，私钥解析与口令交互仍由 Rust 完成，选择只作用于本次连接。Kubernetes 模式保持密码认证。
-- 终端写入与 resize IPC
+- 终端写入与 resize IPC。主进程待写输入共享 16 MiB 额度（每条至少记账 64 字节），
+  单次最多 1 MiB UTF-8，另留 4 KiB 控制字节余量；输入所有权穿过 SSH 暂存/写入队列及
+  本地 PTY 线程队列，完成、失败或关闭后归还。Telnet 与串口未完成行也持有额度。
+  renderer 每个 WebView 共享 1 MiB/4,096 条待发送额度并预留控制消息空间；满额明确
+  拒绝整次输入，不截断粘贴或把连接标为断开。
 - SFTP 远程目录浏览
 - 远程文件读取与写回
 - FTP 会话连接与远程文件能力
@@ -90,7 +94,8 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - `apps/tauri/src/renderer/xterm-adapters/`
   - 归集 xterm 的私有 API、DOM 渲染、Unicode/emoji、输入法、回包过滤、Vim 选区、字体缓存和 WebView 兼容实现；目录 README 说明模块职责与注册时机。组件层负责生命周期、应用快捷键、会话守卫和 PTY resize 编排。共享字体观察器保留在 `app/font-metrics.ts`，xterm 专用的字体栈脉冲在适配目录内完成。
 - `apps/tauri/src/renderer/xterm-adapters/terminal-log-colorizer.ts`
-  - 在 xterm 完成解析后对普通缓冲区的时间戳、服务名和常见日志级别着色；不向远端输出注入 ANSI，不处理 `top`、`vim`、`less` 等备用屏幕程序，并随终端主题重新套用颜色。
+  - 在 xterm 完成解析后对普通缓冲区的时间戳、服务名和常见日志级别着色；先匹配文本，
+    命中才建立字符到终端列的映射，保留仍适用的颜色，仅刷新前景实际变化的行；不向远端输出注入 ANSI，不处理 `top`、`vim`、`less` 等备用屏幕程序，并随终端主题重新套用颜色。
 - `apps/tauri/src/renderer/xterm-adapters/terminal-foreground-adapter.ts`
   - 让正常/备用屏幕默认背景上的 RGB 纯白文字使用主题默认前景，保留样式与显式背景/反色配对；只适配可见 xterm cell，不改写协议数据或原始 transcript。
 - `apps/tauri/src/renderer/app/action-text-color.ts`
