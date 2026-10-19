@@ -213,11 +213,11 @@ fn default_remember_window_size() -> bool {
 }
 
 fn default_tab_bar_layout() -> String {
-    "host-groups".to_string()
+    "single-row".to_string()
 }
 
 fn default_compact_tab_bar() -> bool {
-    true
+    false
 }
 
 fn default_ui_zoom_percent() -> i32 {

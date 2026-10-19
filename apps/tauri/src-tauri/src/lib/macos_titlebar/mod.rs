@@ -4,7 +4,7 @@ thread_local! {
 }
 
 static MACOS_TITLEBAR_ZOOM: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(100);
-static MACOS_TITLEBAR_COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+static MACOS_TITLEBAR_COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 struct MacosTitlebarLayoutGuard;
 
@@ -30,7 +30,7 @@ fn refresh_macos_titlebar_zoom(app: &AppHandle<Wry>) {
     MACOS_TITLEBAR_ZOOM.store(percent, Ordering::Relaxed);
     let compact_tab_bar = preferences
         .as_ref()
-        .is_none_or(|value| value.compact_tab_bar);
+        .is_some_and(|value| value.compact_tab_bar);
     MACOS_TITLEBAR_COMPACT.store(compact_tab_bar, Ordering::Relaxed);
     if let (Some(preferences), Some(window)) = (preferences, app.get_webview_window("main")) {
         if let Err(error) =

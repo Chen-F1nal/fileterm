@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DEFAULT_TAB_BAR_LAYOUT, type FileTermDesktopApi, type TabBarLayout } from '@fileterm/core'
 
 function normalizeTabBarLayout(value: unknown): TabBarLayout {
-  return value === 'single-row' ? 'single-row' : DEFAULT_TAB_BAR_LAYOUT
+  return value === 'host-groups' ? 'host-groups' : DEFAULT_TAB_BAR_LAYOUT
 }
 
 /**

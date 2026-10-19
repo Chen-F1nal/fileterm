@@ -61,6 +61,7 @@ pub fn app_set_ui_preferences(
     let previous_app_icon = preferences.app_icon.clone();
     #[cfg(target_os = "macos")]
     let previous_ui_zoom_percent = preferences.ui_zoom_percent;
+    let previous_compact_tab_bar = preferences.compact_tab_bar;
     #[cfg(target_os = "macos")]
     let theme_changed = input.theme.is_some() || input.theme_config.is_some();
     let theme_was_provided = input.theme.is_some();
@@ -255,10 +256,14 @@ pub fn app_set_ui_preferences(
         schedule_disabled_monitoring_cleanup(&app, &preferences.connection_defaults);
     }
     let _ = app.emit("app:ui-preferences-changed", &preferences);
-    // Page zoom changes renderer layout without a native window resize.
-    // Sync AppKit appearance and control geometry after theme or zoom changes.
+    // Page zoom and the tab bar height change renderer layout without a native
+    // window resize. Sync AppKit appearance and control geometry after theme,
+    // zoom or tab bar height changes.
     #[cfg(target_os = "macos")]
-    if previous_ui_zoom_percent != preferences.ui_zoom_percent || theme_changed {
+    if previous_ui_zoom_percent != preferences.ui_zoom_percent
+        || previous_compact_tab_bar != preferences.compact_tab_bar
+        || theme_changed
+    {
         crate::schedule_macos_traffic_light_recalibration(&app);
     }
     Ok(preferences)

@@ -68,16 +68,6 @@ export function LayoutSettingsSection() {
         onChange={setTabBarLayoutPreference}
         options={[
           {
-            value: 'host-groups',
-            label: (
-              <>
-                <TabBarLayoutPreview layout="host-groups" />
-                <span>{t.tabBarLayoutHostGroups}</span>
-              </>
-            ),
-            description: t.tabBarLayoutHostGroupsHint
-          },
-          {
             value: 'single-row',
             label: (
               <>
@@ -86,6 +76,16 @@ export function LayoutSettingsSection() {
               </>
             ),
             description: t.tabBarLayoutSingleRowHint
+          },
+          {
+            value: 'host-groups',
+            label: (
+              <>
+                <TabBarLayoutPreview layout="host-groups" />
+                <span>{t.tabBarLayoutHostGroups}</span>
+              </>
+            ),
+            description: t.tabBarLayoutHostGroupsHint
           }
         ]}
         value={tabBarLayout}
