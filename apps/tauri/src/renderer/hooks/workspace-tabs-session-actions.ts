@@ -24,6 +24,7 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
     setLocalTabs,
     activeLocalTabId,
     setActiveLocalTabId,
+    setPendingActiveTabId,
     setNextHomeTabNumber,
     tabOrder,
     setTabOrder,
@@ -208,14 +209,18 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
       return
     }
 
+    // Switch before the snapshot round trip, which carries every session's metrics history.
+    const topLevelTabId = workspace.tabs.find((tab) => tab.id === tabId)?.paneRootTabId ?? tabId
+    setPendingActiveTabId(topLevelTabId)
+    setActiveLocalTabId(null)
     try {
       onBusyChange(true)
       const snapshot = await desktopApi.activateTab(tabId)
       applySnapshot(snapshot)
-      setActiveLocalTabId(null)
     } catch (error) {
       onError('激活标签页', error)
     } finally {
+      setPendingActiveTabId((current) => (current === topLevelTabId ? null : current))
       onBusyChange(false)
     }
   }

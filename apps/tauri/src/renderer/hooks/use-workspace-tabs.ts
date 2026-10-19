@@ -29,6 +29,7 @@ import {
   parseStoredMainTabUiState,
   resolveFallbackHomeTabId,
   uniqueItemsById,
+  withPendingActiveTab,
   uniqueStrings
 } from './workspace-tabs-utils'
 
@@ -36,7 +37,7 @@ const MAIN_TAB_UI_STATE_KEY = 'main.tab-ui'
 
 export function useWorkspaceTabs({
   desktopApi,
-  workspace,
+  workspace: syncedWorkspace,
   isMainWorkspaceWindow,
   hasLoadedInitialSnapshot,
   locale,
@@ -52,6 +53,12 @@ export function useWorkspaceTabs({
   onCloseCurrentWindow,
   onRequestQuit
 }: UseWorkspaceTabsOptions) {
+  // A clicked tab shows at once; the backend round trip only confirms it.
+  const [pendingActiveTabId, setPendingActiveTabId] = useState<string | null>(null)
+  const workspace = useMemo(
+    () => withPendingActiveTab(syncedWorkspace, pendingActiveTabId),
+    [syncedWorkspace, pendingActiveTabId]
+  )
   const initialMainTabUiState = createInitialMainTabUiState(isMainWorkspaceWindow, null)
   const [localTabs, setLocalTabs] = useState<LocalTab[]>(() => initialMainTabUiState.localTabs)
   const [activeLocalTabId, setActiveLocalTabId] = useState<string | null>(() => initialMainTabUiState.activeLocalTabId)
@@ -548,6 +555,7 @@ export function useWorkspaceTabs({
     setLocalTabs,
     activeLocalTabId,
     setActiveLocalTabId,
+    setPendingActiveTabId,
     nextHomeTabNumber,
     setNextHomeTabNumber,
     tabOrder,

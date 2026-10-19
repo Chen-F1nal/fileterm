@@ -113,6 +113,7 @@ export type WorkspaceTabsActionContext = Pick<
   setLocalTabs: Dispatch<SetStateAction<LocalTab[]>>
   activeLocalTabId: string | null
   setActiveLocalTabId: Dispatch<SetStateAction<string | null>>
+  setPendingActiveTabId: Dispatch<SetStateAction<string | null>>
   nextHomeTabNumber: number
   setNextHomeTabNumber: Dispatch<SetStateAction<number>>
   tabOrder: string[]

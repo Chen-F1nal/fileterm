@@ -1,4 +1,4 @@
-import type { PaneFocusDirection, PaneNode, WorkspaceTab } from '@fileterm/core'
+import type { PaneFocusDirection, PaneNode, WorkspaceSnapshot, WorkspaceTab } from '@fileterm/core'
 import { t } from '../i18n'
 import type { LocalTab, StoredMainTabUiState, TerminalDockSendState } from './workspace-tabs-types'
 
@@ -40,6 +40,17 @@ export function areStringArraysEqual(left: string[], right: string[]) {
 
 export function uniqueStrings(values: string[]) {
   return [...new Set(values)]
+}
+
+/** Shows a requested tab as active until the backend snapshot confirms or replaces it. */
+export function withPendingActiveTab(workspace: WorkspaceSnapshot, pendingTabId: string | null): WorkspaceSnapshot {
+  if (!pendingTabId || workspace.activeTabId === pendingTabId) {
+    return workspace
+  }
+  if (!workspace.tabs.some((tab) => tab.id === pendingTabId)) {
+    return workspace
+  }
+  return { ...workspace, activeTabId: pendingTabId }
 }
 
 export function uniqueItemsById<T extends { id: string }>(items: T[]) {
