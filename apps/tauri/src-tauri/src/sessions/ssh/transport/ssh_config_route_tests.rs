@@ -152,7 +152,7 @@ fn identity_files_load_public_keys_and_private_key_siblings() {
             ]
         }
     });
-    let (public_keys, private_keys) = super::ssh_config_identities(&profile, None);
+    let (public_keys, private_keys) = super::ssh_config_identities(&profile);
     assert_eq!(public_keys, vec![ed25519_test_key(4), ed25519_test_key(5)]);
     assert_eq!(private_keys, vec![directory.join("pair")]);
     let _ = std::fs::remove_dir_all(directory);
@@ -267,7 +267,7 @@ async fn real_openssh_ssh_config_alias_signs_with_agent_from_public_key() {
     });
     let route = super::expand_ssh_config_route_with(vec![target], &environment).unwrap();
     let hop = &route[0];
-    let (public_keys, private_keys) = super::ssh_config_identities(hop, None);
+    let (public_keys, private_keys) = super::ssh_config_identities(hop);
     assert_eq!(public_keys.len(), 1);
     assert!(private_keys.is_empty());
 
@@ -349,13 +349,28 @@ fn ssh_config_identity_file_none_never_loads_default_private_keys() {
     for alias in ["none", "explicit", "default", "restricted"] {
         let profile = serde_json::json!({"type": "ssh", "host": alias, "authType": "sshConfig"});
         let route = super::expand_ssh_config_route_with(vec![profile], &environment).unwrap();
-        let (public_keys, private_keys) = super::ssh_config_identities(&route[0], Some(&home));
-        if alias == "none" || alias == "explicit" {
-            assert!(public_keys.is_empty(), "{alias}");
-            assert!(private_keys.is_empty(), "{alias}");
+        let (public_keys, private_keys) = super::ssh_config_identities(&route[0]);
+        // A default .pub file must not change which identities the agent tries or their order.
+        assert!(public_keys.is_empty(), "{alias}");
+        assert!(private_keys.is_empty(), "{alias}");
+        let agent_keys = vec![ed25519_test_key(7), ed25519_test_key(8)];
+        let selected =
+            super::order_agent_identities(agent_keys.clone(), &public_keys, alias == "restricted");
+        if alias == "restricted" {
+            assert!(selected.is_empty());
         } else {
-            assert_eq!(public_keys, vec![ed25519_test_key(8)], "{alias}");
-            assert_eq!(private_keys, vec![key_path.clone()], "{alias}");
+            assert_eq!(selected, agent_keys, "{alias}");
+        }
+        let candidates = super::ssh_config_private_key_candidates(
+            &route[0],
+            &public_keys,
+            private_keys,
+            Some(&home),
+        );
+        if alias == "default" {
+            assert_eq!(candidates, vec![key_path.clone()]);
+        } else {
+            assert!(candidates.is_empty(), "{alias}");
         }
     }
     let _ = std::fs::remove_dir_all(home);

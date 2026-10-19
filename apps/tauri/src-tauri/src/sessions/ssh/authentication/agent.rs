@@ -165,11 +165,8 @@ async fn authenticate_agent_identity(
 
 /// Public keys named by `IdentityFile`: the file itself when it is a public
 /// key, otherwise its `.pub` sibling. Also returns readable private-key files.
-fn ssh_config_identities(
-    profile: &Value,
-    home: Option<&Path>,
-) -> (Vec<russh::keys::PublicKey>, Vec<PathBuf>) {
-    let mut files = profile
+fn ssh_config_identities(profile: &Value) -> (Vec<russh::keys::PublicKey>, Vec<PathBuf>) {
+    let files = profile
         .get(SSH_CONFIG_RESOLVED_KEY)
         .and_then(|resolved| resolved.get("identityFiles"))
         .and_then(Value::as_array)
@@ -181,16 +178,6 @@ fn ssh_config_identities(
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    if profile
-        .get(SSH_CONFIG_RESOLVED_KEY)
-        .and_then(|resolved| resolved.get("useDefaultIdentityFiles"))
-        .and_then(Value::as_bool)
-        == Some(true)
-    {
-        if let Some(home) = home {
-            files = default_ssh_key_paths(home);
-        }
-    }
     let mut public_keys = Vec::new();
     let mut private_keys = Vec::new();
     for file in files {
@@ -213,6 +200,32 @@ fn ssh_config_identities(
         }
     }
     (public_keys, private_keys)
+}
+
+/// Keep default private keys as a post-agent fallback, unless IdentityFile forbids them.
+fn ssh_config_private_key_candidates(
+    profile: &Value,
+    configured_keys: &[russh::keys::PublicKey],
+    private_key_files: Vec<PathBuf>,
+    home: Option<&Path>,
+) -> Vec<PathBuf> {
+    let resolved = &profile[SSH_CONFIG_RESOLVED_KEY];
+    if private_key_files.is_empty()
+        && configured_keys.is_empty()
+        && resolved.get("identitiesOnly").and_then(Value::as_bool) != Some(true)
+        && resolved
+            .get("useDefaultIdentityFiles")
+            .and_then(Value::as_bool)
+            == Some(true)
+    {
+        if let Some(home) = home {
+            return default_ssh_key_paths(home)
+                .into_iter()
+                .filter(|path| path.is_file())
+                .collect();
+        }
+    }
+    private_key_files
 }
 
 fn same_public_key(left: &russh::keys::PublicKey, right: &russh::keys::PublicKey) -> bool {
@@ -310,8 +323,7 @@ async fn try_ssh_config_authenticate(
         .and_then(|resolved| resolved.get("identitiesOnly"))
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let (configured_keys, private_key_files) =
-        ssh_config_identities(profile, app.path().home_dir().ok().as_deref());
+    let (configured_keys, private_key_files) = ssh_config_identities(profile);
     let mut attempts = PublicKeyAttempts::default();
     crate::services::logging::session(
         app,
@@ -392,8 +404,14 @@ async fn try_ssh_config_authenticate(
         }
     }
 
+    let key_files = ssh_config_private_key_candidates(
+        profile,
+        &configured_keys,
+        private_key_files,
+        app.path().home_dir().ok().as_deref(),
+    );
     let passphrase = profile.get("passphrase").and_then(Value::as_str);
-    for path in private_key_files {
+    for path in key_files {
         let content = match std::fs::read_to_string(&path) {
             Ok(content) => content,
             Err(error) => {
