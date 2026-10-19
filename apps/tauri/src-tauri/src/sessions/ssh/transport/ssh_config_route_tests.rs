@@ -152,7 +152,7 @@ fn identity_files_load_public_keys_and_private_key_siblings() {
             ]
         }
     });
-    let (public_keys, private_keys) = super::ssh_config_identities(&profile);
+    let (public_keys, private_keys) = super::ssh_config_identities(&profile, None);
     assert_eq!(public_keys, vec![ed25519_test_key(4), ed25519_test_key(5)]);
     assert_eq!(private_keys, vec![directory.join("pair")]);
     let _ = std::fs::remove_dir_all(directory);
@@ -189,20 +189,50 @@ fn agent_socket_prefers_identity_agent_then_setting() {
 async fn real_openssh_ssh_config_alias_signs_with_agent_from_public_key() {
     let fixture = start_openssh_fixture();
     wait_for_openssh(fixture.port).await;
-    let socket = fixture.root.join("agent.sock");
-    let mut agent_process = std::process::Command::new("/usr/bin/ssh-agent")
+    use std::os::unix::fs::DirBuilderExt;
+
+    struct AgentFixture {
+        process: std::process::Child,
+        root: std::path::PathBuf,
+    }
+    impl Drop for AgentFixture {
+        fn drop(&mut self) {
+            let _ = self.process.kill();
+            let _ = self.process.wait();
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    // macOS TMPDIR paths can exceed sockaddr_un's limit; keep the socket in a short private directory.
+    let agent_root =
+        std::path::Path::new("/tmp").join(format!("ft-agent-{}", uuid::Uuid::new_v4()));
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&agent_root)
+        .unwrap();
+    let socket = agent_root.join("agent.sock");
+    let agent_process = std::process::Command::new("/usr/bin/ssh-agent")
         .args(["-D", "-a"])
         .arg(&socket)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::inherit())
         .spawn()
         .expect("ssh-agent is required for this test");
+    let mut agent_fixture = AgentFixture {
+        process: agent_process,
+        root: agent_root,
+    };
     for _ in 0..40 {
         if socket.exists() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+    assert!(
+        agent_fixture.process.try_wait().unwrap().is_none(),
+        "ssh-agent exited before becoming ready"
+    );
+    assert!(socket.exists(), "ssh-agent did not create its socket");
     let decoy = fixture.root.join("decoy-key");
     let keygen = std::process::Command::new("/usr/bin/ssh-keygen")
         .args(["-q", "-t", "ed25519", "-N", "", "-f"])
@@ -237,7 +267,7 @@ async fn real_openssh_ssh_config_alias_signs_with_agent_from_public_key() {
     });
     let route = super::expand_ssh_config_route_with(vec![target], &environment).unwrap();
     let hop = &route[0];
-    let (public_keys, private_keys) = super::ssh_config_identities(hop);
+    let (public_keys, private_keys) = super::ssh_config_identities(hop, None);
     assert_eq!(public_keys.len(), 1);
     assert!(private_keys.is_empty());
 
@@ -280,8 +310,6 @@ async fn real_openssh_ssh_config_alias_signs_with_agent_from_public_key() {
         .await
         .unwrap();
     assert!(result.success());
-    let _ = agent_process.kill();
-    let _ = agent_process.wait();
     let _ = std::fs::remove_dir_all(home);
 }
 
@@ -304,4 +332,95 @@ fn ssh_config_forward_agent_reaches_target_profile() {
     assert_eq!(super::ssh_config_agent_forwarding(&route[0]), Some(None));
     let route = super::expand_ssh_config_route_with(vec![profile("plain")], &environment).unwrap();
     assert_eq!(super::ssh_config_agent_forwarding(&route[0]), None);
+}
+
+#[test]
+fn ssh_config_identity_file_none_never_loads_default_private_keys() {
+    let (home, environment) = ssh_config_test_environment(
+        "Host none\n  IdentityFile none\nHost explicit\n  IdentityFile ~/missing\nHost restricted\n  IdentitiesOnly yes\n",
+    );
+    let key_path = home.join(".ssh/id_ed25519");
+    std::fs::write(&key_path, "fixture private key").unwrap();
+    std::fs::write(
+        key_path.with_extension("pub"),
+        ed25519_test_key(8).to_openssh().unwrap(),
+    )
+    .unwrap();
+    for alias in ["none", "explicit", "default", "restricted"] {
+        let profile = serde_json::json!({"type": "ssh", "host": alias, "authType": "sshConfig"});
+        let route = super::expand_ssh_config_route_with(vec![profile], &environment).unwrap();
+        let (public_keys, private_keys) = super::ssh_config_identities(&route[0], Some(&home));
+        if alias == "none" || alias == "explicit" {
+            assert!(public_keys.is_empty(), "{alias}");
+            assert!(private_keys.is_empty(), "{alias}");
+        } else {
+            assert_eq!(public_keys, vec![ed25519_test_key(8)], "{alias}");
+            assert_eq!(private_keys, vec![key_path.clone()], "{alias}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(home);
+}
+
+#[test]
+fn ssh_config_strict_host_keys_require_a_known_hosts_match() {
+    let (home, environment) = ssh_config_test_environment(
+        "Host strict\n  StrictHostKeyChecking yes\n  UserKnownHostsFile ~/.ssh/known_hosts\n",
+    );
+    let profile = serde_json::json!({
+        "type": "ssh", "host": "strict", "authType": "sshConfig",
+        "trustedHostFingerprint": super::fingerprint_sha256_base64(&ed25519_test_key(9)),
+    });
+    let route = super::expand_ssh_config_route_with(vec![profile], &environment).unwrap();
+    assert_eq!(route[0]["sshConfigResolved"]["strictHostKeyChecking"], true);
+    let files = super::ssh_config_known_hosts_files(&route[0]);
+    let verify = |key: &russh::keys::PublicKey| {
+        super::ssh_config_known_hosts_match(&files, "strict", 22, key)
+    };
+    assert_eq!(
+        verify(&ed25519_test_key(9)),
+        super::KnownHostsMatch::Unknown
+    );
+    std::fs::write(
+        &files[0],
+        format!("strict {}\n", ed25519_test_key(9).to_openssh().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(
+        verify(&ed25519_test_key(9)),
+        super::KnownHostsMatch::Trusted
+    );
+    assert_eq!(
+        verify(&ed25519_test_key(10)),
+        super::KnownHostsMatch::Changed
+    );
+    let _ = std::fs::remove_dir_all(home);
+}
+
+#[test]
+fn strict_host_key_policy_cannot_be_overridden_by_saved_fingerprints() {
+    use super::KnownHostsMatch::{Changed, Trusted, Unknown};
+    for known_hosts in [Unknown, Changed] {
+        for saved in [None, Some("current"), Some("old")] {
+            assert_eq!(
+                super::ssh_host_key_trust_decision(true, saved, "current", known_hosts),
+                Some(false)
+            );
+        }
+    }
+    assert_eq!(
+        super::ssh_host_key_trust_decision(true, Some("old"), "current", Trusted),
+        Some(true)
+    );
+    assert_eq!(
+        super::ssh_host_key_trust_decision(false, Some("current"), "current", Unknown),
+        Some(true)
+    );
+    assert_eq!(
+        super::ssh_host_key_trust_decision(false, None, "current", Unknown),
+        None
+    );
+    assert_eq!(
+        super::ssh_host_key_trust_decision(false, Some("old"), "current", Trusted),
+        None
+    );
 }

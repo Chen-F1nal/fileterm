@@ -161,6 +161,8 @@ fn apply_ssh_config_host(profile: &mut Value, host: &crate::services::ssh_config
         "forwardAgentSocket": forward_agent_socket,
         "identityFiles": path_list(&host.identity_files),
         "identitiesOnly": host.identities_only,
+        "useDefaultIdentityFiles": host.use_default_identity_files,
+        "strictHostKeyChecking": host.strict_host_key_checking,
         "agent": agent_mode,
         "agentSocket": agent_socket,
         "knownHostsFiles": path_list(&host.known_hosts_files),
@@ -199,11 +201,30 @@ fn ssh_config_known_hosts_files(profile: &Value) -> Vec<std::path::PathBuf> {
         .unwrap_or_default()
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum KnownHostsMatch {
     Trusted,
     Changed,
     Unknown,
+}
+
+/// A strict config policy cannot be overridden by a saved profile or a prompt.
+/// `None` leaves verification to FileTerm's interactive flow.
+fn ssh_host_key_trust_decision(
+    strict: bool,
+    saved_fingerprint: Option<&str>,
+    fingerprint: &str,
+    known_hosts: KnownHostsMatch,
+) -> Option<bool> {
+    if strict {
+        return Some(known_hosts == KnownHostsMatch::Trusted);
+    }
+    if saved_fingerprint == Some(fingerprint)
+        || (saved_fingerprint.is_none() && known_hosts == KnownHostsMatch::Trusted)
+    {
+        return Some(true);
+    }
+    None
 }
 
 fn ssh_config_known_hosts_match(

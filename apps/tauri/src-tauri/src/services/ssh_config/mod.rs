@@ -97,6 +97,8 @@ pub struct ResolvedSshHost {
     pub user: String,
     pub identity_files: Vec<PathBuf>,
     pub identities_only: bool,
+    pub use_default_identity_files: bool,
+    pub strict_host_key_checking: bool,
     pub agent: SshConfigAgent,
     /// `ForwardAgent`: `None` when disabled, otherwise the agent to forward
     /// (`Default` follows `IdentityAgent`, like `ForwardAgent yes`).
@@ -150,6 +152,15 @@ impl CollectedOptions {
         }
         if keyword == "identityfile" {
             self.identity_files.push(args[0].clone());
+            return;
+        }
+        // ProxyJump and ProxyCommand share precedence: whichever appears first wins.
+        if (keyword == "proxyjump" && self.first.contains_key("proxycommand"))
+            || (keyword == "proxycommand"
+                && self
+                    .value("proxyjump")
+                    .is_some_and(|value| !value.eq_ignore_ascii_case("none")))
+        {
             return;
         }
         self.first.entry(keyword.to_string()).or_insert(args);
@@ -378,6 +389,10 @@ pub fn resolve_host(
         port,
         user,
         identity_files,
+        use_default_identity_files: options.identity_files.is_empty(),
+        strict_host_key_checking: options
+            .value("stricthostkeychecking")
+            .is_some_and(|value| value.eq_ignore_ascii_case("yes")),
         identities_only: options
             .value("identitiesonly")
             .is_some_and(|value| value.eq_ignore_ascii_case("yes")),

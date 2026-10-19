@@ -188,6 +188,11 @@ async fn open_session_hop(
         disconnect_reason.clone(),
     );
     handler.known_hosts_files = ssh_config_known_hosts_files(profile);
+    handler.strict_host_key_checking = profile
+        .get(SSH_CONFIG_RESOLVED_KEY)
+        .and_then(|resolved| resolved.get("strictHostKeyChecking"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     handler.agent_forward_socket = ssh_config_agent_forwarding(profile).map(|socket| {
         let home = app.path().home_dir().ok();
         socket

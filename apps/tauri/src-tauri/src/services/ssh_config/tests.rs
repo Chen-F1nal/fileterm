@@ -350,3 +350,45 @@ fn forward_agent_follows_identity_agent_and_first_value() {
         Some(SshConfigAgent::Default)
     );
 }
+
+#[test]
+fn proxy_directives_share_first_value_precedence() {
+    for (directives, expected_hops, rejected) in [
+        ("ProxyCommand nc %h %p\n  ProxyJump bastion", 0, true),
+        ("ProxyJump bastion\n  ProxyCommand nc %h %p", 2, false),
+        ("ProxyCommand none\n  ProxyJump bastion", 1, false),
+        ("ProxyJump none\n  ProxyCommand nc %h %p", 0, true),
+    ] {
+        let home = TempHome::new(&format!("Host target\n  {directives}\n"));
+        let result = resolve_route(
+            "target",
+            &SshConfigOverrides::default(),
+            &home.environment(),
+        );
+        if rejected {
+            assert!(result.unwrap_err().contains("ProxyCommand"), "{directives}");
+        } else {
+            assert_eq!(result.unwrap().len(), expected_hops, "{directives}");
+        }
+    }
+}
+
+#[test]
+fn identity_file_none_and_missing_explicit_keys_disable_default_files() {
+    let home =
+        TempHome::new("Host none\n  IdentityFile none\nHost explicit\n  IdentityFile ~/missing\n");
+    let none = resolve(&home, "none");
+    assert!(none.identity_files.is_empty());
+    assert!(!none.use_default_identity_files);
+    assert!(!resolve(&home, "explicit").use_default_identity_files);
+    assert!(resolve(&home, "default").use_default_identity_files);
+}
+
+#[test]
+fn strict_host_key_checking_uses_first_matching_setting() {
+    let home = TempHome::new(
+        "Host strict\n  StrictHostKeyChecking yes\nHost *\n  StrictHostKeyChecking ask\n",
+    );
+    assert!(resolve(&home, "strict").strict_host_key_checking);
+    assert!(!resolve(&home, "other").strict_host_key_checking);
+}
