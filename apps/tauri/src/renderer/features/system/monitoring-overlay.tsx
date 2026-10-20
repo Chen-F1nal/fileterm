@@ -69,6 +69,7 @@ export function MonitoringOverlay({
   const phase = reconnecting ? 'reconnecting' : sshDisconnected ? 'ssh-disconnected' : state.phase
   const titles = {
     starting: t.monitoringStarting,
+    shared: t.monitoringShared,
     stopped: t.monitoringStopped,
     healthy: '',
     paused: t.monitoringPaused,

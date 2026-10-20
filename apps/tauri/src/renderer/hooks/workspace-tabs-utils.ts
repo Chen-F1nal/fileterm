@@ -1,6 +1,8 @@
-import type { PaneFocusDirection, PaneNode, WorkspaceTab } from '@fileterm/core'
+import type { PaneFocusDirection, PaneNode, WorkspaceSnapshot, WorkspaceTab } from '@fileterm/core'
 import { t } from '../i18n'
 import type { LocalTab, StoredMainTabUiState, TerminalDockSendState } from './workspace-tabs-types'
+import type { OrderedTabEntry } from '../features/layout/tab-bar'
+import { entryHostGroupKey } from '../features/layout/host-groups'
 
 type PaneBounds = {
   tabId: string
@@ -40,6 +42,45 @@ export function areStringArraysEqual(left: string[], right: string[]) {
 
 export function uniqueStrings(values: string[]) {
   return [...new Set(values)]
+}
+
+/** Snapshot tabs must be visible before the effect persists their order. */
+export function buildOrderedTabs(
+  tabOrder: string[],
+  localTabs: LocalTab[],
+  sessionTabs: WorkspaceTab[],
+  options?: { deferMissingSessionTabs?: boolean }
+): OrderedTabEntry[] {
+  const entries: OrderedTabEntry[] = [
+    ...localTabs.map((tab) => ({
+      key: `home:${tab.id}`,
+      kind: 'local' as const,
+      id: tab.id,
+      title: tab.title,
+      tabKind: tab.kind,
+      sessionTabId: tab.kind === 'system' ? tab.sessionTabId : undefined
+    })),
+    ...sessionTabs.map((tab) => ({ key: `session:${tab.id}`, kind: 'session' as const, tab }))
+  ]
+  const byKey = new Map(entries.map((entry) => [entry.key, entry]))
+  const keys = options?.deferMissingSessionTabs
+    ? uniqueStrings(tabOrder)
+    : uniqueStrings([...tabOrder, ...byKey.keys()])
+  return keys.flatMap((key) => {
+    const entry = byKey.get(key)
+    return entry ? [entry] : []
+  })
+}
+
+/** Shows a requested tab as active until the backend snapshot confirms or replaces it. */
+export function withPendingActiveTab(workspace: WorkspaceSnapshot, pendingTabId: string | null): WorkspaceSnapshot {
+  if (!pendingTabId || workspace.activeTabId === pendingTabId) {
+    return workspace
+  }
+  if (!workspace.tabs.some((tab) => tab.id === pendingTabId)) {
+    return workspace
+  }
+  return { ...workspace, activeTabId: pendingTabId }
 }
 
 export function uniqueItemsById<T extends { id: string }>(items: T[]) {
@@ -242,4 +283,26 @@ export function createDefaultTerminalDockSendState(): TerminalDockSendState {
     selectedTabIds: [],
     rememberSelection: false
   }
+}
+
+/** Prefer the visible neighbour on the right, then the left, before leaving a host group. */
+export function nextTabAfterClose(
+  entries: OrderedTabEntry[],
+  closedKey: string,
+  grouped: boolean,
+  removedKeys: string[] = [closedKey]
+) {
+  const closed = entries.find((entry) => entry.key === closedKey)
+  if (!closed) return null
+  const sessions = entries.flatMap((entry) => (entry.kind === 'session' ? [entry.tab] : []))
+  const groupKey = entryHostGroupKey(closed, sessions)
+  const candidates = [
+    ...entries.slice(entries.indexOf(closed) + 1),
+    ...entries.slice(0, entries.indexOf(closed)).reverse()
+  ].filter((entry) => !removedKeys.includes(entry.key))
+  return (
+    (grouped ? candidates.find((entry) => entryHostGroupKey(entry, sessions) === groupKey) : undefined) ??
+    candidates[0] ??
+    null
+  )
 }

@@ -18,6 +18,7 @@ export type RadioCardOption<Value extends string> = {
 export function RadioCardGroup<Value extends string>({
   ariaLabel,
   className,
+  copyClassName,
   disabled = false,
   name,
   onChange,
@@ -26,6 +27,8 @@ export function RadioCardGroup<Value extends string>({
 }: {
   ariaLabel: string
   className?: string
+  /** Extra class for the copy block when a caller needs a different internal layout. */
+  copyClassName?: string
   disabled?: boolean
   name?: string
   onChange(value: Value): void
@@ -53,7 +56,7 @@ export function RadioCardGroup<Value extends string>({
               value={option.value}
               onChange={() => onChange(option.value)}
             />
-            <span className="radio-card-group__copy">
+            <span className={`radio-card-group__copy ${copyClassName ?? ''}`.trim()}>
               <strong>{option.label}</strong>
               {option.description ? <small>{option.description}</small> : null}
             </span>

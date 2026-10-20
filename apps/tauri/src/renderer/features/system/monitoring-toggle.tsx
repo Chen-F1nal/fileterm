@@ -4,15 +4,19 @@ import { Button } from '../../components/common/button/button'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
 import { t } from '../../i18n'
 import { waitForMonitoringRequest } from './monitoring-request'
+import type { MonitoringTarget } from './shared-monitoring'
 import './monitoring-toggle.css'
 
 export function MonitoringToggle({
   session,
   tabId,
+  peers = [],
   onSnapshot
 }: {
   session: SessionSnapshot | null
   tabId: string | null
+  /** Sessions sharing this machine's collector; stop/start applies to all of them. */
+  peers?: MonitoringTarget[]
   onSnapshot(snapshot: WorkspaceSnapshot): void
 }) {
   const [confirming, setConfirming] = useState(false)
@@ -44,16 +48,30 @@ export function MonitoringToggle({
     const id = ++requestId.current
     setRequested(enabled)
     setError('')
+    const api = window.fileterm
+    const targets = (peers.length ? peers : [{ tabId, session: session as SessionSnapshot }])
+      .filter((target) => target.session.monitoring && (target.session.monitoring.phase === 'stopped') === enabled)
+      // Stop the collector holding the lease last so no follower takes over in between.
+      .sort((a, b) => Number(a.tabId === tabId) - Number(b.tabId === tabId))
     try {
       // Apply confirmed state even if this button unmounts or the UI wait
       // times out. Workspace revisions reject stale results after reconnect.
-      const request = window.fileterm.setMonitoringEnabled(tabId, state.generation, enabled).then((snapshot) => {
-        onSnapshot(snapshot)
-        if (mounted.current && requestId.current === id) {
-          setError('')
-          setConfirming(false)
-        }
-      })
+      const request = targets
+        .reduce<Promise<void>>(
+          (previous, target) =>
+            previous.then(() =>
+              api
+                .setMonitoringEnabled(target.tabId, target.session.monitoring?.generation ?? 0, enabled)
+                .then(onSnapshot)
+            ),
+          Promise.resolve()
+        )
+        .then(() => {
+          if (mounted.current && requestId.current === id) {
+            setError('')
+            setConfirming(false)
+          }
+        })
       await waitForMonitoringRequest(request)
     } catch {
       if (mounted.current && requestId.current === id) {

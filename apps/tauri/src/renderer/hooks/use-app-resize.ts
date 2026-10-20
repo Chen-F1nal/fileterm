@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import type { WorkspaceSnapshot } from '@fileterm/core'
 import {
   DEFAULT_SIDEBAR_WIDTH,
@@ -13,6 +13,7 @@ export type AppResizeOptions = {
   isResizingSidebar: boolean
   setIsResizingSidebar: Dispatch<SetStateAction<boolean>>
   setSidebarWidth: Dispatch<SetStateAction<number>>
+  setHostInfoWidth: Dispatch<SetStateAction<number>>
   isResizingAiCopilot: boolean
   setIsResizingAiCopilot: Dispatch<SetStateAction<boolean>>
   isSystemSidebarCollapsed: boolean
@@ -32,6 +33,7 @@ export function useAppResize({
   isResizingSidebar,
   setIsResizingSidebar,
   setSidebarWidth,
+  setHostInfoWidth,
   isResizingAiCopilot,
   setIsResizingAiCopilot,
   isSystemSidebarCollapsed,
@@ -45,6 +47,11 @@ export function useAppResize({
   requestWindowCloseConfirmation,
   clearWindowCloseRequest
 }: AppResizeOptions) {
+  const [isResizingHostRail, setIsResizingHostRail] = useState(false)
+  const startHostRailResize = useCallback(() => {
+    window.getSelection()?.removeAllRanges()
+    setIsResizingHostRail(true)
+  }, [])
   const startSidebarResize = useCallback(() => {
     window.getSelection()?.removeAllRanges()
     document.body.classList.add('is-resizing-sidebar')
@@ -52,19 +59,29 @@ export function useAppResize({
   }, [])
 
   useEffect(() => {
-    if (!isResizingSidebar) {
+    if (!isResizingSidebar && !isResizingHostRail) {
       return
     }
     const onMouseMove = (event: globalThis.MouseEvent) => {
       const maxWidth = getSidebarMaxWidth(window.innerWidth, isHomeWorkspaceVisible)
-      const nextWidth = Math.min(maxWidth, Math.max(SIDEBAR_MIN_WIDTH, event.clientX))
-      setSidebarWidth(
+      // Session workspaces dock the machine info sidebar on the right, so it grows leftwards.
+      const rightDockedSidebar =
+        isHomeWorkspaceVisible || isResizingHostRail
+          ? null
+          : document.querySelector<HTMLElement>('.fs-shell.has-host-rail > .fs-sidebar')
+      const rawWidth = rightDockedSidebar
+        ? rightDockedSidebar.getBoundingClientRect().right - event.clientX
+        : event.clientX
+      const nextWidth = Math.min(maxWidth, Math.max(SIDEBAR_MIN_WIDTH, rawWidth))
+      const setWidth = rightDockedSidebar ? setHostInfoWidth : setSidebarWidth
+      setWidth(
         Math.abs(nextWidth - DEFAULT_SIDEBAR_WIDTH) <= SIDEBAR_SNAP_THRESHOLD ? DEFAULT_SIDEBAR_WIDTH : nextWidth
       )
     }
     const onMouseUp = () => {
       window.getSelection()?.removeAllRanges()
       setIsResizingSidebar(false)
+      setIsResizingHostRail(false)
     }
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
@@ -80,7 +97,7 @@ export function useAppResize({
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-  }, [isHomeWorkspaceVisible, isResizingSidebar])
+  }, [isHomeWorkspaceVisible, isResizingSidebar, isResizingHostRail])
 
   useEffect(() => {
     if (!isHomeWorkspaceVisible) {
@@ -108,7 +125,13 @@ export function useAppResize({
     const onMouseMove = (event: globalThis.MouseEvent) => {
       const windowWidth = window.innerWidth
       const rawWidth = windowWidth - event.clientX
-      const currentLeftWidth = isSystemSidebarCollapsed ? 44 : sidebarWidth
+      const hostRail = document.querySelector<HTMLElement>('.fs-host-rail')
+      const currentLeftWidth = hostRail
+        ? hostRail.getBoundingClientRect().width +
+          (document.querySelector<HTMLElement>('.fs-shell > .fs-sidebar')?.getBoundingClientRect().width ?? 0)
+        : isSystemSidebarCollapsed
+          ? 44
+          : sidebarWidth
       const minMainWorkspaceWidth = 460
       const maxAllowedWidth = Math.max(340, Math.min(600, windowWidth - currentLeftWidth - minMainWorkspaceWidth))
       const nextWidth = Math.min(maxAllowedWidth, Math.max(340, rawWidth))
@@ -139,7 +162,13 @@ export function useAppResize({
     if (!shouldShowAiCopilot) return
     const handleWindowResize = () => {
       const windowWidth = window.innerWidth
-      const currentLeftWidth = isSystemSidebarCollapsed ? 44 : sidebarWidth
+      const hostRail = document.querySelector<HTMLElement>('.fs-host-rail')
+      const currentLeftWidth = hostRail
+        ? hostRail.getBoundingClientRect().width +
+          (document.querySelector<HTMLElement>('.fs-shell > .fs-sidebar')?.getBoundingClientRect().width ?? 0)
+        : isSystemSidebarCollapsed
+          ? 44
+          : sidebarWidth
       const minMainWorkspaceWidth = 460
       const maxAllowed = Math.max(340, Math.min(600, windowWidth - currentLeftWidth - minMainWorkspaceWidth))
       setAiCopilotWidth((prev) => (prev > maxAllowed ? maxAllowed : prev))
@@ -169,5 +198,5 @@ export function useAppResize({
     clearWindowCloseRequest()
   }, [windowCloseRequest, workspace.tabs, requestWindowCloseConfirmation, clearWindowCloseRequest])
 
-  return { startSidebarResize, startAiCopilotResize }
+  return { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize }
 }

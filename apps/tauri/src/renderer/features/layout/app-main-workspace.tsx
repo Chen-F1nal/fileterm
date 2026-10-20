@@ -4,16 +4,20 @@ import { DEFAULT_UI_ZOOM_PERCENT, MAX_UI_ZOOM_PERCENT, MIN_UI_ZOOM_PERCENT, UI_Z
 import { AiCopilotPanel } from '../ai/ai-copilot-panel'
 import { CloseButton } from '../common/close-button'
 import { SystemSidebarShell } from '../system/system-sidebar-shell'
+import { resolveMonitoringSource } from '../system/shared-monitoring'
 import { TransferCenterHost } from '../transfers/transfer-center-host'
 import { KeepAliveWorkspaceStage } from '../workspace/workspace-stage'
 import { TabBar, type TabBarProps, type TabContextTarget } from './tab-bar'
 import type { AppViewModel } from './app-view-model'
 import { WindowMenubar } from './window-menubar'
+import { HostRail } from './host-rail'
+import { useHostNavigation } from './use-host-navigation'
 import { DEFAULT_SIDEBAR_WIDTH, STATUS_MESSAGE_TIMEOUT_MS } from '../../app/app-shell-utils'
 import { t, setLocale } from '../../i18n'
 import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
 
 export function AppMainWorkspace({ model }: { model: AppViewModel }) {
+  const [isHostRailCollapsed, setIsHostRailCollapsed] = useState(false)
   const [dismissedInteractiveGatewayNoticeTabId, setDismissedInteractiveGatewayNoticeTabId] = useState<string | null>(
     null
   )
@@ -38,6 +42,10 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     filePanelRememberRatio,
     sidebarWidth,
     setSidebarWidth,
+    hostInfoWidth,
+    setHostInfoWidth,
+    tabBarLayout,
+    compactTabBar,
     aiCopilotWidth,
     isResizingSidebar,
     isResizingAiCopilot,
@@ -161,7 +169,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     updateConnectionOrder,
     openLogsDirectory
   } = data
-  const { startSidebarResize, startAiCopilotResize } = resize
+  const { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize } = resize
 
   const isInteractiveGatewayRoutePending =
     activeSession?.resourceMonitoringUnavailableReason === 'interactive-gateway-target-route-required'
@@ -189,26 +197,62 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   }, [activeTab?.id, interactiveGatewayNoticeTabId])
 
   const hasStatusMessage = Boolean(error || isInteractiveGatewayNoticeVisible)
-  const resolvedSidebarWidth = isSystemSidebarCollapsed ? 44 : sidebarWidth
+  const usesHostGroups = tabBarLayout === 'host-groups'
+  const resolvedSidebarWidth = isSystemSidebarCollapsed
+    ? 44
+    : usesHostGroups && !isHomeWorkspaceVisible
+      ? hostInfoWidth
+      : sidebarWidth
   const activeJumpHosts =
     activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
   const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined
   // Home and session titlebars share the expanded sidebar's live width.
   // A collapsed sidebar keeps enough titlebar space for the native window controls.
-  const brandWidth = isSystemSidebarCollapsed ? DEFAULT_SIDEBAR_WIDTH : resolvedSidebarWidth
+  // The host-groups layout puts the machine list on the left and machine info on the right.
+  const showHostRail = usesHostGroups && !isHomeWorkspaceVisible
+  const brandWidth = showHostRail
+    ? isHostRailCollapsed
+      ? DEFAULT_SIDEBAR_WIDTH
+      : sidebarWidth
+    : isSystemSidebarCollapsed
+      ? DEFAULT_SIDEBAR_WIDTH
+      : resolvedSidebarWidth
+  const activateSession = (tabId: string) => {
+    void activateSessionTab(tabId)
+  }
+  const hostNavigation = useHostNavigation({
+    orderedTabs,
+    profiles: workspace.profiles,
+    activeHomeTabId: effectiveActiveLocalTabId,
+    activeSessionTabId: visibleActiveSessionTabId,
+    onActivateHome: activateHomeTab,
+    onActivateSession: activateSession,
+    onAddHomeTab: addHomeTab
+  })
+  // Sessions on one machine share a collector, so machine info shows the collecting tab's samples.
+  const monitoringSource = resolveMonitoringSource(activeTab?.id ?? null, workspace.sessions)
+  const activeHostGroup = hostNavigation.groups.find((group) => group.key === hostNavigation.activeGroupKey)
+  // "+" opens another tab on the active machine.
+  const addTabToActiveHost = () => {
+    if (activeHostGroup?.kind === 'local') {
+      void openLocalTerminal()
+    } else if (activeHostGroup?.kind === 'profile' && activeHostGroup.profileId) {
+      void openProfile(activeHostGroup.profileId)
+    } else {
+      addHomeTab()
+    }
+  }
   const tabBarProps: Omit<TabBarProps, 'homeBrandContent'> = {
     activeHomeTabId: effectiveActiveLocalTabId,
     activeSessionTabId: visibleActiveSessionTabId,
     isAiCopilotAvailable,
     isAiCopilotOpen,
     isWorkspaceFocusMode,
-    onAddHomeTab: addHomeTab,
+    onAddHomeTab: usesHostGroups ? addTabToActiveHost : addHomeTab,
     onActivateHome: activateHomeTab,
-    onActivateSession: (tabId: string) => {
-      void activateSessionTab(tabId)
-    },
+    onActivateSession: activateSession,
     onCloseHomeTab: closeHomeTab,
-    onCloseSessionTab: (event: MouseEvent<HTMLButtonElement>, tabId: string) => {
+    onCloseSessionTab: (event: MouseEvent<HTMLElement>, tabId: string) => {
       void closeSessionTab(event, tabId)
     },
     onDragEnd: endTabDrag,
@@ -232,19 +276,21 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         ...currentModes,
         [activeWorkspaceFocusKey]: nextFocusMode
       }))
-      if (!nextFocusMode) setSidebarWidth(214)
+      if (!nextFocusMode) (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)
     },
-    orderedTabs
+    orderedTabs,
+    hostNavigation: usesHostGroups ? hostNavigation : undefined
   }
 
   return (
     <>
       <div
-        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${isResizingSidebar ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
+        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${compactTabBar ? 'is-compact-tabbar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${showHostRail ? 'has-host-rail' : ''} ${shouldShowSystemSidebar ? 'has-system-sidebar' : ''} ${isResizingSidebar || isResizingHostRail ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
         style={
           {
             '--sidebar-width': `${resolvedSidebarWidth}px`,
             '--brand-width': `${brandWidth}px`,
+            '--host-rail-width': `${isHostRailCollapsed ? 44 : sidebarWidth}px`,
             '--ai-copilot-panel-width': `${aiCopilotWidth}px`
           } as CSSProperties
         }
@@ -274,11 +320,24 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         ) : null}
         {!isHomeWorkspaceVisible && <TabBar {...tabBarProps} />}
 
+        {showHostRail ? (
+          <HostRail
+            navigation={hostNavigation}
+            collapsed={isHostRailCollapsed}
+            width={sidebarWidth}
+            isResizing={isResizingHostRail}
+            onToggleCollapsed={() => setIsHostRailCollapsed((current) => !current)}
+            onResizeStart={startHostRailResize}
+            onWidthChange={setSidebarWidth}
+          />
+        ) : null}
+
         {shouldShowSystemSidebar ? (
           <SystemSidebarShell
             activeProfile={activeProfile}
-            activeSession={activeSession}
-            activeTabId={activeTab?.id ?? null}
+            activeSession={monitoringSource.session}
+            activeTabId={monitoringSource.tabId}
+            monitoringPeers={monitoringSource.peers}
             collapsed={isSystemSidebarCollapsed}
             connectionStatus={activeTab?.status ?? null}
             showResourceMeters={isResourceMonitoringAvailable}
@@ -287,7 +346,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
             onMonitoringSnapshot={shell.applySnapshot}
             onOpenSystemInfo={openSystemInfo}
             onResizeStart={startSidebarResize}
-            onRestoreWidth={() => setSidebarWidth(214)}
+            onRestoreWidth={() => (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)}
             onToggleCollapsed={setIsSystemSidebarCollapsed}
           />
         ) : null}
@@ -502,7 +561,8 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
           </div>
         </main>
 
-        {!isHomeWorkspaceVisible && !isLocalTerminalWorkspace && (
+        {/* Machine info borders the terminal in the host-groups layout, so the edge frame would be a stray strip. */}
+        {!isHomeWorkspaceVisible && !isLocalTerminalWorkspace && !showHostRail && (
           <div className="terminal-right-frame" aria-hidden="true" />
         )}
 

@@ -1,10 +1,15 @@
 .fs-shell {
+  --window-tabbar-height: 48px;
   display: grid;
   grid-template-columns: var(--sidebar-width, 256px) minmax(0, 1fr) auto;
-  grid-template-rows: 48px minmax(0, 1fr) 24px;
+  grid-template-rows: var(--window-tabbar-height) minmax(0, 1fr) 24px;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+}
+
+.fs-shell.is-compact-tabbar {
+  --window-tabbar-height: 36px;
 }
 
 :root[data-platform='linux'] .fs-shell {
@@ -17,13 +22,12 @@
 
 .fs-shell.has-window-menubar {
   --window-menubar-height: 28px;
-  --window-tabbar-height: 48px;
   grid-template-rows: var(--window-menubar-height) var(--window-tabbar-height) minmax(0, 1fr) 24px;
 }
 
 .fs-shell.is-local-terminal {
   grid-template-columns: var(--sidebar-width, 256px) minmax(0, 1fr) 0;
-  grid-template-rows: 48px minmax(0, 1fr);
+  grid-template-rows: var(--window-tabbar-height) minmax(0, 1fr);
 }
 
 .fs-shell.has-window-menubar.is-local-terminal {
@@ -995,7 +999,7 @@
 
 .fs-shell.has-window-menubar .fs-tabbar {
   grid-row: 2;
-  height: var(--window-tabbar-height, 48px);
+  height: var(--window-tabbar-height);
 }
 
 /* Overview sorting owns the pointer stream. Keep the renderer/native window
@@ -1336,12 +1340,11 @@
   z-index: 1;
 }
 
-.workspace-stage-transition.is-transitioning > * {
-  animation: workspace-stage-fade-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.workspace-stage-transition[data-nav-direction='up'] > * {
-  animation-name: workspace-stage-fade-in;
+@media (prefers-reduced-motion: no-preference) {
+  .workspace-stage-transition.is-transitioning .workspace-content-stack__item.is-active > :not(.home-workspace),
+  .workspace-stage-transition.is-transitioning .workspace-content-stack__item.is-active .home-content-body {
+    animation: workspace-stage-fade-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
 }
 
 @keyframes workspace-stage-fade-in {
@@ -1350,11 +1353,5 @@
   }
   to {
     opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .workspace-stage-transition > * {
-    animation: none;
   }
 }

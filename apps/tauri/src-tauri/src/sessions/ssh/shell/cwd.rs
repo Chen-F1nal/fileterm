@@ -173,6 +173,54 @@ pub(crate) fn shell_cwd_sftp_path_candidates(shell_cwd: &str) -> Vec<String> {
     candidates
 }
 
+/// Return shell-namespace candidates for an SFTP/UI path.
+///
+/// Synology often exposes `/homes/user` over SFTP while the shell only knows
+/// `/volume1/homes/user`. Shell file operations must resolve the alias before
+/// running `rm`, `chmod`, or similar commands.
+pub(crate) fn shell_file_path_candidates(path: &str, shell_cwd: Option<&str>) -> Vec<String> {
+    let mut candidates = Vec::new();
+    if !path.is_empty() {
+        push_shell_file_candidate(&mut candidates, path);
+    }
+    let Some(cwd) = shell_cwd else {
+        return candidates;
+    };
+
+    for alias in shell_cwd_sftp_path_candidates(cwd) {
+        if alias == "/" || alias == cwd {
+            continue;
+        }
+        if path == alias {
+            push_shell_file_candidate(&mut candidates, cwd);
+        } else if let Some(suffix) = path.strip_prefix(&format!("{alias}/")) {
+            push_shell_file_candidate(&mut candidates, &format!("{cwd}/{suffix}"));
+        }
+    }
+
+    if let Some(prefix) = synology_volume_prefix(cwd) {
+        push_shell_file_candidate(
+            &mut candidates,
+            &format!("{prefix}/{}", path.trim_start_matches('/')),
+        );
+    }
+    if cwd.starts_with("/var/services/") {
+        push_shell_file_candidate(
+            &mut candidates,
+            &format!("/var/services/{}", path.trim_start_matches('/')),
+        );
+    }
+
+    candidates
+}
+
+fn push_shell_file_candidate(candidates: &mut Vec<String>, candidate: &str) {
+    let candidate = if candidate.is_empty() { "/" } else { candidate };
+    if !candidates.iter().any(|item| item == candidate) {
+        candidates.push(candidate.to_string());
+    }
+}
+
 /// Detect `/volumeN` without treating names such as `/volume10foo` as a
 /// volume root. The actual volume number is intentionally not fixed.
 fn synology_volume_prefix(path: &str) -> Option<&str> {

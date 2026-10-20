@@ -32,6 +32,6 @@ description: 修改 FileTerm renderer 的 React/TSX、组件 CSS、主题 token 
 bash .agents/skills/common-components-skill/scripts/check-css-contract.sh
 ```
 
-对比已有债务与本次新增问题，不为通过检查顺手重写无关样式。检查范围是 semantic.css、公共组件、feature CSS、四个主题文件；feature TSX 行内颜色、原生 select/confirm 和自定义主题映射需另外检查。
+对比已有债务与本次新增问题，不为通过检查顺手重写无关样式。检查器全量检查 semantic.css 和公共组件；feature CSS 只阻塞相对 `CSS_CONTRACT_BASE`（默认 `origin/main`）的 merge-base 变更文件及未跟踪文件，避免历史债务阻塞。需要其他基准时设置该环境变量。它也检查十六进制、颜色函数和 CSS 命名颜色；四个主题文件检查是否缺失。feature TSX 行内颜色、原生 select/confirm 和自定义主题映射需另外检查。
 
 运行改动文件的 Prettier 检查及 AGENTS.md 要求的代码门禁。验证受影响主题、自定义 accent、控件状态和平台分支；报告结果、历史债务与未验证平台。

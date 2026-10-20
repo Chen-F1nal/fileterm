@@ -193,7 +193,7 @@ async fn open_session(
     } else {
         Vec::new()
     };
-    let route = resolve_ssh_route(profile, &profiles)?;
+    let route = expand_ssh_config_route(resolve_ssh_route(profile, &profiles)?, app)?;
     let mut cleanup = SshSessionCleanup {
         handles: Vec::new(),
     };
@@ -219,7 +219,11 @@ async fn open_session(
             format!("SSH hop {} ({name}): {error}", index + 1)
         })?;
     }
+    let agent_forwarding = route
+        .last()
+        .is_some_and(|target| ssh_config_agent_forwarding(target).is_some());
     Ok(OpenSshSession {
+        agent_forwarding,
         handle: cleanup.handles.last().unwrap().clone(),
         cleanup,
         remote_sshid,

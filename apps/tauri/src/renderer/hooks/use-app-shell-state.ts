@@ -28,6 +28,8 @@ import { resolveRendererPlatform } from '../lib/renderer-platform'
 import { useWorkspaceIpcSync } from './use-workspace-ipc-sync'
 import { useSessionSecurity } from './use-session-security'
 import { useThemeMode, type ThemeMode } from './use-theme-mode'
+import { useTabBarLayout } from '../features/layout/use-tab-bar-layout'
+import { useCompactTabBar } from '../features/layout/use-compact-tab-bar'
 import {
   DEFAULT_FILE_PANEL_SNAP_TARGET,
   isFilePanelSnapTarget,
@@ -45,6 +47,8 @@ export type InitialUiPreferences = Pick<
   | 'uiZoomLocked'
   | 'uiZoomPercent'
   | 'rememberWindowSize'
+  | 'tabBarLayout'
+  | 'compactTabBar'
   | 'filePanelRememberRatio'
   | 'resourceMonitoringMetrics'
   | 'resourceMonitoringMetricOrder'
@@ -139,6 +143,8 @@ export function useAppShellState({
     () => initialUiPreferences?.uiZoomPercent ?? DEFAULT_UI_ZOOM_PERCENT
   )
   const [rememberWindowSize, setRememberWindowSize] = useState(() => initialUiPreferences?.rememberWindowSize ?? false)
+  const [tabBarLayout] = useTabBarLayout(desktopApi, initialUiPreferences?.tabBarLayout)
+  const [compactTabBar] = useCompactTabBar(desktopApi, initialUiPreferences?.compactTabBar)
   useLayoutEffect(() => {
     void applyUiZoomPercent(uiZoomPercent)
   }, [uiZoomPercent])
@@ -170,6 +176,7 @@ export function useAppShellState({
   const resolvingActionApprovalIdsRef = useRef(new Set<string>())
 
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
+  const [hostInfoWidth, setHostInfoWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [aiCopilotWidth, setAiCopilotWidth] = useState(368)
   const [filePanelHeights, setFilePanelHeights] = useState<Record<string, number>>({})
   const [filePanelRatios, setFilePanelRatios] = useState<Record<string, number>>({})
@@ -498,6 +505,8 @@ export function useAppShellState({
     setUiZoomPercent,
     rememberWindowSize,
     setRememberWindowSize,
+    tabBarLayout,
+    compactTabBar,
     filePanelRememberRatio,
     setFilePanelRememberRatio,
     resourceMonitoringMetrics,
@@ -529,6 +538,8 @@ export function useAppShellState({
     reportError: handleError,
     sidebarWidth,
     setSidebarWidth,
+    hostInfoWidth,
+    setHostInfoWidth,
     aiCopilotWidth,
     setAiCopilotWidth,
     filePanelHeights,

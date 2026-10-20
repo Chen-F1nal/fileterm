@@ -22,6 +22,8 @@ pub fn app_get_ui_preferences(app: AppHandle) -> Result<UiPreferences, AppError>
             ui_zoom_locked: false,
             ui_zoom_percent: default_ui_zoom_percent(),
             remember_window_size: default_remember_window_size(),
+            tab_bar_layout: default_tab_bar_layout(),
+            compact_tab_bar: default_compact_tab_bar(),
             legacy_file_list_font_size: None,
             local_terminal_shells: default_local_terminal_shells(),
             file_panel_remember_ratio: default_file_panel_remember_ratio(),
@@ -59,6 +61,8 @@ pub fn app_set_ui_preferences(
     let previous_app_icon = preferences.app_icon.clone();
     #[cfg(target_os = "macos")]
     let previous_ui_zoom_percent = preferences.ui_zoom_percent;
+    #[cfg(target_os = "macos")]
+    let previous_compact_tab_bar = preferences.compact_tab_bar;
     #[cfg(target_os = "macos")]
     let theme_changed = input.theme.is_some() || input.theme_config.is_some();
     let theme_was_provided = input.theme.is_some();
@@ -105,6 +109,12 @@ pub fn app_set_ui_preferences(
     }
     if let Some(remember_window_size) = input.remember_window_size {
         preferences.remember_window_size = remember_window_size;
+    }
+    if let Some(tab_bar_layout) = input.tab_bar_layout {
+        preferences.tab_bar_layout = tab_bar_layout;
+    }
+    if let Some(compact_tab_bar) = input.compact_tab_bar {
+        preferences.compact_tab_bar = compact_tab_bar;
     }
     if let Some(local_terminal_shells) = input.local_terminal_shells {
         if let Some(value) = local_terminal_shells.win32 {
@@ -157,6 +167,9 @@ pub fn app_set_ui_preferences(
         }
         if let Some(value) = connection_defaults.legacy_algorithms {
             preferences.connection_defaults.legacy_algorithms = value;
+        }
+        if let Some(value) = connection_defaults.ssh_agent_socket_path {
+            preferences.connection_defaults.ssh_agent_socket_path = value.trim().to_string();
         }
     }
     if let Some(mcp_agent) = input.mcp_agent {
@@ -247,10 +260,14 @@ pub fn app_set_ui_preferences(
         schedule_disabled_monitoring_cleanup(&app, &preferences.connection_defaults);
     }
     let _ = app.emit("app:ui-preferences-changed", &preferences);
-    // Page zoom changes renderer layout without a native window resize.
-    // Sync AppKit appearance and control geometry after theme or zoom changes.
+    // Page zoom and the tab bar height change renderer layout without a native
+    // window resize. Sync AppKit appearance and control geometry after theme,
+    // zoom or tab bar height changes.
     #[cfg(target_os = "macos")]
-    if previous_ui_zoom_percent != preferences.ui_zoom_percent || theme_changed {
+    if previous_ui_zoom_percent != preferences.ui_zoom_percent
+        || previous_compact_tab_bar != preferences.compact_tab_bar
+        || theme_changed
+    {
         crate::schedule_macos_traffic_light_recalibration(&app);
     }
     Ok(preferences)
@@ -329,6 +346,8 @@ pub fn app_toggle_terminal_zoom_lock(app: AppHandle) -> Result<UiPreferences, Ap
             ui_zoom_locked: None,
             ui_zoom_percent: None,
             remember_window_size: None,
+            tab_bar_layout: None,
+            compact_tab_bar: None,
             local_terminal_shells: None,
             file_panel_remember_ratio: None,
             resource_monitoring_metrics: None,
@@ -363,6 +382,8 @@ pub fn app_toggle_ui_zoom_lock(app: AppHandle) -> Result<UiPreferences, AppError
             ui_zoom_locked: Some(!current.ui_zoom_locked),
             ui_zoom_percent: None,
             remember_window_size: None,
+            tab_bar_layout: None,
+            compact_tab_bar: None,
             local_terminal_shells: None,
             file_panel_remember_ratio: None,
             resource_monitoring_metrics: None,
@@ -404,6 +425,8 @@ pub fn app_adjust_ui_zoom(app: AppHandle, operation: &str) -> Result<UiPreferenc
             ui_zoom_locked: None,
             ui_zoom_percent: Some(next),
             remember_window_size: None,
+            tab_bar_layout: None,
+            compact_tab_bar: None,
             local_terminal_shells: None,
             file_panel_remember_ratio: None,
             resource_monitoring_metrics: None,

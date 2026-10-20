@@ -11,7 +11,7 @@
 .home-workspace {
   display: grid;
   grid-template-columns: var(--sidebar-width, 214px) minmax(0, 1fr);
-  grid-template-rows: 48px minmax(0, 1fr);
+  grid-template-rows: var(--window-tabbar-height) minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background-color: var(--bg-main) !important;
@@ -524,6 +524,17 @@
   animation-name: page-card-in-down;
 }
 
+/* Switching to or closing into an existing home tab keeps its content visible;
+ * the first launch and "+" tabs keep the original fly-in above. */
+.home-content-body.suppress-home-entrance .page-transition > .overview-page > *,
+.home-content-body.suppress-home-entrance .page-transition > .quick-links-page > *,
+.home-content-body.suppress-home-entrance .page-transition > .manager-inline > *,
+.workspace-stage-transition.is-transitioning
+  .workspace-content-stack__item.is-active
+  .home-content-body.suppress-home-entrance {
+  animation: none;
+}
+
 /* stagger direct child sections so cards cascade in */
 .page-transition > div > *:nth-child(1) {
   animation-delay: 0.02s;
@@ -947,7 +958,7 @@
 }
 
 .fs-shell.has-window-menubar .home-workspace {
-  grid-template-rows: var(--window-tabbar-height, 48px) minmax(0, 1fr);
+  grid-template-rows: var(--window-tabbar-height) minmax(0, 1fr);
 }
 
 /* Home reuses the same titlebar structure as session workspaces. */
@@ -962,7 +973,7 @@
 
 .home-tabs-bar .fs-tabbar {
   background: var(--bg-sidebar) !important;
-  height: 48px;
+  height: var(--window-tabbar-height);
   grid-template-columns: var(--brand-width, 214px) minmax(0, 1fr) !important;
   -webkit-app-region: drag !important;
   width: 100%;
@@ -991,7 +1002,7 @@
 
 .fs-shell.is-home-active .status-message {
   position: absolute;
-  top: 48px;
+  top: var(--window-tabbar-height);
   left: var(--sidebar-width, 214px);
   right: 0;
   z-index: 100;

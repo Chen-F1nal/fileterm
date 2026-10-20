@@ -1,3 +1,39 @@
+/// Build a delete command that resolves the SFTP/UI path into the shell
+/// namespace and reports a real error when no candidate exists.
+fn delete_remote_path_command(
+    target_path: &str,
+    target_type: &str,
+    shell_cwd: Option<&str>,
+) -> String {
+    let normalized = target_path.trim_matches('/');
+    if normalized.is_empty() || normalized == "." || normalized == ".." {
+        return format!(
+            "printf '%s\\n' {} >&2; exit 1",
+            shell_quote("拒绝删除根目录")
+        );
+    }
+    let rm = if target_type == "folder" {
+        "rm -r --"
+    } else {
+        "rm --"
+    };
+    let mut command = String::new();
+    for candidate in shell_file_path_candidates(target_path, shell_cwd) {
+        if candidate == "/" || candidate.is_empty() {
+            continue;
+        }
+        let quoted = shell_quote(&candidate);
+        command.push_str(&format!(
+            "if [ -e {quoted} ] || [ -L {quoted} ]; then {rm} {quoted}; exit $?; fi\n"
+        ));
+    }
+    command.push_str(&format!(
+        "printf '%s\\n' {} >&2; exit 1",
+        shell_quote(&format!("路径不存在：{target_path}"))
+    ));
+    command
+}
+
 /// Dispatch the SSH worker commands owned by the file group.
 #[allow(clippy::too_many_arguments)]
 async fn dispatch_file_cmd(
@@ -364,17 +400,20 @@ async fn dispatch_file_cmd(
             cancellation,
             respond_to,
         } => {
+            let shell_cwd = {
+                let sessions = state.sessions.read().await;
+                sessions
+                    .get(tab_id)
+                    .and_then(|session| session.shell_cwd.clone())
+            };
+            let cmd_str =
+                delete_remote_path_command(&target_path, &target_type, shell_cwd.as_deref());
             let handle = Arc::clone(handle);
             let fam = file_access_mode.clone();
             let method = *root_file_access_method;
             let su = sudo_user.clone();
             let sp = sudo_password.clone();
             spawn_cancellable_file_operation(cancellation, respond_to, async move {
-                let cmd_str = if target_type == "folder" {
-                    format!("rm -rf {}", shell_quote(&target_path))
-                } else {
-                    format!("rm -f {}", shell_quote(&target_path))
-                };
                 let res = if fam == "root" {
                     match timeout(
                         operation_timeout,
@@ -388,11 +427,28 @@ async fn dispatch_file_cmd(
                 } else {
                     match timeout(
                         operation_timeout,
-                        crate::sessions::system_metrics::exec_command(&handle, &cmd_str),
+                        crate::sessions::system_metrics::exec_command_with_status(
+                            &handle, &cmd_str,
+                        ),
                     )
                     .await
                     {
-                        Ok(inner) => inner.map(|_| ()).map_err(|e| e.to_string()),
+                        Ok(Ok((_output, Some(0)))) => Ok(()),
+                        Ok(Ok((output, status))) => {
+                            let detail = output.trim();
+                            let code = status
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| "unknown".to_string());
+                            Err(if detail.is_empty() {
+                                format!("删除失败（exit={code}）")
+                            } else {
+                                format!(
+                                    "删除失败（exit={code}）：{}",
+                                    detail.chars().take(512).collect::<String>()
+                                )
+                            })
+                        }
+                        Ok(Err(error)) => Err(error),
                         Err(_) => Err("删除超时".to_string()),
                     }
                 };
