@@ -89,6 +89,19 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 
 以上无需管理员权限，不记录按键值、输入内容或终端正文。页面彻底停住时，Event Timing 与 renderer 日志需恢复后才能上报；用已有原生过载告警交叉判断，不能把没有交互采样理解成响应正常。
 
+### 解析、绘制与内存占用的补充采集
+
+排查分支进一步在健康报告、心跳卡顿和进度缓慢告警中记录以下摘要；安装包含此改动的构建后自动启用，旧日志无法回溯补采。
+
+- `work`：xterm 解析、xterm 绘制、输出预处理、日志着色、前景色适配、符号/块字形/选区布局八个阶段的调用数、累计同步耗时、单次最大耗时，以及最近六次至少 16ms 的慢步骤。窗口每分钟或可见性切换时重置；异常日志也带当前摘要，原有五秒去重不受计数变化影响。时间为同步墙钟时间，包含嵌套调用，阶段之间不可直接相加；不包含 Promise 等待，也不是 CPU 占用率。`sampledAtMs` 和可用时的 `timeOriginUnixMs` 用于对应采样时段。
+- `longFrames`：支持 Long Animation Frames API 时保留当前窗口最慢四帧；每帧最多检查前 64 个脚本并保留其中耗时最高三个，包含强制布局耗时。只允许当前应用 `/assets/*.js` 的文件名、函数名和字符位置，不记录完整 URL、查询参数、invoker 或远端脚本路径。脚本列表可能裁剪，不是完整调用栈；布局字段是阶段起点到帧末的跨度，不是该阶段独占耗时。API 不可用时 `supported=false`。
+- `renderer-long-frame`：观察到至少 1,000ms 的长帧后立即提交 WARN，最多每 30 秒一次，带上述上下文和输出/交互摘要。恢复后的心跳可能恰好没有明显延迟，此事件提供补充；仍需主线程恢复才能记录。
+- `terminalResources`：存活终端数、普通/备用屏幕行数、待写和 transcript 字符数、xterm 待解析量，以及成功挂接解析/绘制计时的实例数。私有字段不兼容时队列记入 `unknownXtermQueues`，不能当作零。当前字符串写入路径的队列单位为 UTF-16 字符；若改用 Uint8Array，xterm 内部数量将含字节，届时须同步修改解释。
+- `cellStorageBytesEstimate` 按 xterm 6 每单元三个 Uint32 估算已使用行的基础网格；不含字符串、容量余量、对象和原生/GPU 内存。`canvasBackingBytesEstimate` 按最多 512 个 canvas 的宽×高×4 估算单份 RGBA 存储，超限标记 `canvasEstimateTruncated`；不含纹理副本、合成器和驱动分配。二者都不能解释全部 WebView RSS。
+- `terminalOutput` 增加 `trackedPendingAcks`、`oldestTrackedAckAgeMs`、`lastAckElapsedMs` 和累计 `maxAckElapsedMs`。最多跟踪 64 个待确认 ID；超过上限时最早年龄只代表已跟踪样本，不保证覆盖全部 ACK。耗时从前端排程确认到调用完成，含微任务和 IPC 等待，不能直接等同 Rust 处理时间。慢解析日志另带 `deliveryId`、`batchCharacters`，便于对应同批输出。
+
+`event-loop-gap` 另带 `expectedIntervalMs=1000` 和 `delayedByMs`，区分心跳间隔与额外延迟。以上只留有限数量的数字/固定阶段名称，不逐字符或逐批写日志；终端关闭时注销诊断引用。仍不采集完整 CPU profile、GC 事件或原生堆快照，无法据此独立证明泄漏、唯一阻塞函数或全部内存归属。
+
 `renderer-health.maxEventLoopGapMs` 包含心跳定时器本身的 1,000ms 间隔，
 约 1,002ms 不能解释成阻塞了 1 秒；需要结合长任务和 `event-loop-gap` 判断。
 `renderer:performance` 的 `terminal log coloring disabled after failure` 表示当前终端的

@@ -41,7 +41,10 @@ function fixture(text, fitted = false) {
     ).outputText,
     {
       exports,
-      require: () => ({ isBoxDrawingGlyph: (code) => code >= 0x2500 && code <= 0x257f })
+      require: () => ({
+        trackRendererWork: (_phase, work) => work,
+        isBoxDrawingGlyph: (code) => code >= 0x2500 && code <= 0x257f
+      })
     }
   )
   const registration = exports.registerTerminalSymbolGlyphRenderer({

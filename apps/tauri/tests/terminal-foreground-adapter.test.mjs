@@ -12,7 +12,7 @@ vm.runInNewContext(
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }
   ).outputText,
-  { exports, Uint32Array, queueMicrotask }
+  { exports, Uint32Array, queueMicrotask, require: () => ({ trackRendererWork: (_phase, work) => work }) }
 )
 
 function fixture() {

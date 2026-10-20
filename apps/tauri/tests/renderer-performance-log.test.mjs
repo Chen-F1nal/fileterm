@@ -10,15 +10,17 @@ function fixture({ supportsLongTasks = false } = {}) {
   let reset
   let cleared = false
   let longTaskCallback
+  let longFrameCallback
   let observerDisconnected = false
   const calls = []
+  let work = {}
   let output = null
   let interaction = { supported: false, samples: 0 }
 
   const document = {
     hidden: false,
     hasFocus: () => true,
-    querySelectorAll: () => Array(10),
+    querySelectorAll: (selector) => (selector === 'canvas' ? [{ width: 10, height: 20 }] : Array(10)),
     getElementsByTagName: () => Array(8000),
     addEventListener: (_, listener) => {
       reset = listener
@@ -68,29 +70,53 @@ function fixture({ supportsLongTasks = false } = {}) {
         }
       },
       require: (name) =>
-        name.includes('terminal-output')
+        name.includes('renderer-work-log')
           ? {
-              getTerminalOutputProgress: () => output
+              getRendererWorkSnapshot: () => ({ phases: { ...work }, recentSlowWork: [] }),
+              resetRendererWork: () => {
+                work = {}
+              }
             }
-          : name.includes('renderer-interaction-performance')
+          : name.includes('renderer-frame-log')
             ? {
-                observeInteractionPerformance: () => ({
-                  snapshot: () => interaction,
-                  reset: () => {
-                    interaction = { supported: false, samples: 0 }
-                  },
-                  dispose: () => {}
-                })
+                observeRendererFrames: (listener) => {
+                  longFrameCallback = listener
+                  return {
+                    snapshot: () => ({ supported: false }),
+                    reset: () => {},
+                    dispose: () => {}
+                  }
+                }
               }
-            : {
-                DIAGNOSTIC_SCOPES: { performance: 'renderer:performance' },
-                writeDiagnosticLog: (...args) => calls.push(args)
-              }
+            : name.includes('terminal-diagnostics')
+              ? { getTerminalResourceSnapshot: () => ({ terminals: 10 }) }
+              : name.includes('terminal-output')
+                ? {
+                    getTerminalOutputProgress: () => output
+                  }
+                : name.includes('renderer-interaction-performance')
+                  ? {
+                      observeInteractionPerformance: () => ({
+                        snapshot: () => interaction,
+                        reset: () => {
+                          interaction = { supported: false, samples: 0 }
+                        },
+                        dispose: () => {}
+                      })
+                    }
+                  : {
+                      DIAGNOSTIC_SCOPES: { performance: 'renderer:performance' },
+                      writeDiagnosticLog: (...args) => calls.push(args)
+                    }
     }
   )
   const dispose = exports.installRendererPerformanceLogging()
   return {
     calls,
+    emitLongFrame: () => longFrameCallback(),
+    setWork: (value) => {
+      work = value
+    },
     setOutput: (value) => {
       output = value
     },
@@ -128,6 +154,22 @@ test('recovered foreground stalls log WARN without an exception and are rate lim
   assert.equal(f.calls.length, 2)
   f.dispose()
   assert.equal(f.cleared, true)
+})
+
+test('long frames report immediately with context and at most once per thirty seconds', () => {
+  const f = fixture()
+  f.setWork({ 'xterm-render': { calls: 1, maxElapsedMs: 2000 } })
+  f.emitLongFrame()
+  f.emitLongFrame()
+  assert.equal(f.calls.length, 1)
+  const first = JSON.parse(f.calls[0][2])
+  assert.equal(first.event, 'renderer-long-frame')
+  assert.equal(first.work.phases['xterm-render'].maxElapsedMs, 2000)
+  assert.equal(first.terminalResources.terminals, 10)
+  for (let index = 0; index < 30; index++) f.tick(1000)
+  f.emitLongFrame()
+  assert.equal(f.calls.length, 2)
+  f.dispose()
 })
 
 test('hidden timer throttling and the transition back to foreground are ignored', () => {
@@ -202,5 +244,22 @@ test('new output after a long idle period is not mistaken for a stalled parse', 
   f.setOutput({ pendingBatches: 1, busyForMs: 100, sinceLastParsedMs: 60000 })
   f.tick(1000)
   assert.equal(f.calls.length, 0)
+  f.dispose()
+})
+
+test('minute health and a coincident stall share evidence before summaries reset', () => {
+  const f = fixture()
+  f.setWork({ 'xterm-parse': { calls: 1, totalElapsedMs: 400, maxElapsedMs: 400 } })
+  f.tick(60000)
+  const health = JSON.parse(f.calls[0][2])
+  const gap = JSON.parse(f.calls[1][2])
+  assert.equal(health.event, 'renderer-health')
+  assert.equal(gap.event, 'event-loop-gap')
+  assert.equal(gap.work.phases['xterm-parse'].maxElapsedMs, 400)
+  assert.deepEqual(health.work, gap.work)
+  assert.equal(health.canvasBackingBytesEstimate, 10 * 20 * 4)
+  assert.equal(health.terminalResources.terminals, 10)
+  f.tick(60000)
+  assert.deepEqual(JSON.parse(f.calls[2][2]).work.phases, {})
   f.dispose()
 })

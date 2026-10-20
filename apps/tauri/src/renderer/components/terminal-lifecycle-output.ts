@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import {
   observeTerminalFontMetrics,
   registerTerminalBufferRenderRecovery
@@ -218,10 +219,7 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       logTerminalClipboard(terminal, 'selection-changed', { nextHasSelection })
     })
 
-    const offData = window.fileterm?.onTerminalData(({ tabId: nextTabId, chunk }) => {
-      if (nextTabId !== tabIdRef.current) {
-        return
-      }
+    const prepareOutput = trackRendererWork('output-prepare', (chunk: string) => {
       const shouldTrimHydratedBacklog = Date.now() < suppressHydratedChunksUntilRef.current
       if (shouldTrimHydratedBacklog) {
         // IPC ordering can leave one queued batch behind an authoritative
@@ -239,6 +237,9 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       clearSearchDecorations()
       const parsed = scheduleTerminalWrite(formatTerminalChunk(terminal, visibleChunk))
       return parsed
+    })
+    const offData = window.fileterm?.onTerminalData(({ tabId: nextTabId, chunk }) => {
+      if (nextTabId === tabIdRef.current) return prepareOutput(chunk)
     })
 
     const offState = window.fileterm?.onTerminalState(

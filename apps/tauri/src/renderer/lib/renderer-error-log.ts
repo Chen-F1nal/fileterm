@@ -1,4 +1,5 @@
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from './diagnostic-log'
+import { getRendererWorkSnapshot } from './renderer-work-log'
 
 type ErrorSource = 'react-boundary' | 'window-error' | 'unhandled-rejection' | 'bootstrap'
 
@@ -35,19 +36,25 @@ export function reportRendererError(source: ErrorSource, error: unknown, compone
   try {
     const api = window.fileterm
     const windowMode = new URLSearchParams(window.location.search).get('window') ?? 'main'
-    const message = JSON.stringify({
+    const details = {
       source,
       version: limited(api?.appVersion, 100),
       platform: limited(api?.platform, 30),
       window: limited(windowMode, 100),
       ...describeError(error),
       componentStack: limited(componentStack)
-    })
+    }
+    const message = JSON.stringify(details)
     const previous = previousReports.get(source)
     const now = Date.now()
     if (previous?.message === message && now - previous.at < 5000) return
     previousReports.set(source, { message, at: now })
-    writeDiagnosticLog('ERROR', DIAGNOSTIC_SCOPES.error, message, api)
+    writeDiagnosticLog(
+      'ERROR',
+      DIAGNOSTIC_SCOPES.error,
+      JSON.stringify({ ...details, work: getRendererWorkSnapshot() }),
+      api
+    )
   } catch {
     // Even an unusual rejection with throwing property getters must not recurse.
   }

@@ -1,3 +1,4 @@
+import { registerTerminalDiagnostics } from '../xterm-adapters/terminal-diagnostics'
 import { getTerminalCompatibilityOptions } from '../xterm-adapters/terminal-options'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -83,6 +84,11 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   terminal.unicode.activeVersion = '11'
   const emojiWidths = registerTerminalEmojiWidths(terminal)
   terminal.open(host)
+  const terminalDiagnostics = registerTerminalDiagnostics(
+    terminal,
+    options.pendingWriteRef,
+    options.renderedTranscriptRef
+  )
   const renderCacheLimits = registerTerminalRenderCacheLimits(terminal)
   const selectionRenderer = registerTerminalSelectionRenderer(terminal)
   const symbolGlyphRenderer = registerTerminalSymbolGlyphRenderer(terminal)
@@ -280,6 +286,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     isTerminalUnderPointer: () => terminalUnderPointer === terminal,
     clearGlobalTerminalState: () => clearTerminalGlobalState(terminal),
     disposeCore: () => {
+      terminalDiagnostics.dispose()
       terminalInputWriteQueue.dispose()
       terminalTextarea?.removeEventListener('focus', markTerminalFocused)
       terminalLogColorizer.dispose()

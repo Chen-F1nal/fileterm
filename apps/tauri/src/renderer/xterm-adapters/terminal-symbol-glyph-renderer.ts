@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import type { Terminal } from '@xterm/xterm'
 import { isBoxDrawingGlyph } from './box-drawing'
 
@@ -109,7 +110,7 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       })
     }
   }
-  const renderRows = (indexes: number[]) => {
+  const renderRows = trackRendererWork('symbol-layout', (indexes: number[]) => {
     for (const source of sources.keys()) if (!rows.contains(source)) sources.delete(source)
     const affected = indexes.filter((index) => {
       const row = rows.children[index]
@@ -137,7 +138,7 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
     for (const update of updates) update()
     // Our wrappers are already fitted; observing them again only repeats the row scan.
     observer.takeRecords()
-  }
+  })
   const render = (start = 0, end = rows.children.length - 1) =>
     renderRows(Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index))
   const subscription = terminal.onRender(({ start, end }) => render(start, end))

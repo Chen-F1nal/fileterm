@@ -43,6 +43,7 @@ import monoBold from '${root}apps/tauri/src/renderer/assets/fonts/text/jetbrains
 import cjk from '${root}apps/tauri/src/renderer/assets/fonts/text/noto-sans-sc/NotoSansSC-Variable.ttf?url'
 import { emptyState } from '${root}apps/tauri/src/renderer/app/app-data'
 import { createTerminalOutputDelivery } from '${root}apps/tauri/src/bridge/events/terminal-output'
+import { getTerminalResourceSnapshot } from '${root}apps/tauri/src/renderer/xterm-adapters/terminal-diagnostics'
 const noop = () => {}
 const subscriptions = new Map()
 const subscribe = (name, callback) => {
@@ -129,7 +130,7 @@ window.start = () => {
 window.stop = ()=>{stopped=true;clearTimeout(timer)}
 window.sample = () => {
  const live=window.terminals.map(ref=>ref.deref()).filter(Boolean)
- return {sent:window.sent,acked:window.acked,maxPending:window.maxPending,history:window.currentHistory?.length,maxHistory:window.maxHistory,subscriptions:Object.fromEntries([...subscriptions].map(([name,listeners])=>[name,listeners.size])),liveTerminals:live.length,terminalElements:document.querySelectorAll('.xterm').length,markers:live.reduce((sum,t)=>sum+t.markers.length,0),pendingXterm:live.reduce((sum,t)=>sum+t._core._writeBuffer._pendingData,0),liveDomNodes:document.getElementsByTagName('*').length,clicks:window.clicks}
+ return {terminalResources:getTerminalResourceSnapshot(),sent:window.sent,acked:window.acked,maxPending:window.maxPending,history:window.currentHistory?.length,maxHistory:window.maxHistory,subscriptions:Object.fromEntries([...subscriptions].map(([name,listeners])=>[name,listeners.size])),liveTerminals:live.length,terminalElements:document.querySelectorAll('.xterm').length,markers:live.reduce((sum,t)=>sum+t.markers.length,0),pendingXterm:live.reduce((sum,t)=>sum+t._core._writeBuffer._pendingData,0),liveDomNodes:document.getElementsByTagName('*').length,clicks:window.clicks}
 }
 Promise.all([
  new FontFace('JetBrains Mono', 'url('+monoRegular+')',{weight:'400'}),
@@ -243,6 +244,9 @@ try {
   const replaced = await sample()
   console.log(JSON.stringify({ phase: 'replaced', ...replaced }))
   assert.equal(replaced.subscriptions.terminal, 10)
+  assert.equal(replaced.terminalResources.terminals, 10)
+  assert.equal(replaced.terminalResources.instrumentedParsers, 10)
+  assert.equal(replaced.terminalResources.instrumentedRenderers, 10)
   assert.equal(replaced.subscriptions.metrics, 1)
   if (cdp) assert.equal(replaced.liveTerminals, 10, 'replaced terminals must be garbage collected')
   if (cdp)
@@ -256,6 +260,7 @@ try {
   const disposed = await sample()
   console.log(JSON.stringify({ phase: 'disposed', ...disposed }))
   assert.equal(disposed.pendingXterm, 0)
+  assert.equal(disposed.terminalResources.terminals, 0, 'diagnostics must release all terminal references')
   assert.equal(disposed.markers, 0)
   assert.ok(
     Object.values(disposed.subscriptions).every((count) => count === 0),

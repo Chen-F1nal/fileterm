@@ -1,10 +1,30 @@
 import { getTerminalOutputProgress } from '../../bridge/events/terminal-output'
 import { observeInteractionPerformance } from './renderer-interaction-performance'
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from './diagnostic-log'
+import { getRendererWorkSnapshot, resetRendererWork } from './renderer-work-log'
+import { observeRendererFrames } from './renderer-frame-log'
+import { getTerminalResourceSnapshot } from '../xterm-adapters/terminal-diagnostics'
 
 /** Detect recovered stalls without relying on an exception or animation frames. */
 export function installRendererPerformanceLogging(): () => void {
+  resetRendererWork()
   const interactions = observeInteractionPerformance()
+  let lastFrameReport = -Infinity
+  const frames = observeRendererFrames(() => {
+    const now = performance.now()
+    if (now - lastFrameReport < 30000) return
+    lastFrameReport = now
+    writeDiagnosticLog(
+      'WARN',
+      DIAGNOSTIC_SCOPES.performance,
+      JSON.stringify({
+        event: 'renderer-long-frame',
+        ...readContext(),
+        terminalOutput: getTerminalOutputProgress(),
+        interaction: interactions.snapshot()
+      })
+    )
+  })
   let lastSlowReport = -Infinity
   let previous = performance.now()
   const started = previous
@@ -30,7 +50,25 @@ export function installRendererPerformanceLogging(): () => void {
     previous = performance.now()
     lastHealthReport = previous
     interactions.reset()
+    frames.reset()
+    resetRendererWork()
     maxEventLoopGapMs = longTaskCount = longTaskTotalMs = maxLongTaskMs = 0
+  }
+  const readContext = () => {
+    const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas')
+    let canvasBackingBytesEstimate = 0
+    for (let index = 0; index < Math.min(canvases.length, 512); index++) {
+      const canvas = canvases[index]
+      canvasBackingBytesEstimate += canvas.width * canvas.height * 4
+    }
+    return {
+      work: getRendererWorkSnapshot(),
+      longFrames: frames.snapshot(),
+      terminalResources: getTerminalResourceSnapshot(),
+      canvasCount: canvases.length,
+      canvasBackingBytesEstimate,
+      canvasEstimateTruncated: canvases.length > 512
+    }
   }
   const timer = window.setInterval(() => {
     const now = performance.now()
@@ -39,6 +77,8 @@ export function installRendererPerformanceLogging(): () => void {
     if (!document.hidden) maxEventLoopGapMs = Math.max(maxEventLoopGapMs, elapsed)
     const terminalOutput = getTerminalOutputProgress()
     const interaction = interactions.snapshot()
+    let capturedContext: ReturnType<typeof readContext> | undefined
+    const context = () => (capturedContext ??= readContext())
     const output = terminalOutput as { pendingBatches?: number; busyForMs?: number; sinceLastParsedMs?: number } | null
     const outputStalled =
       !!output?.pendingBatches && Math.min(output.sinceLastParsedMs ?? Infinity, output.busyForMs ?? 0) >= 5000
@@ -53,6 +93,7 @@ export function installRendererPerformanceLogging(): () => void {
         DIAGNOSTIC_SCOPES.performance,
         JSON.stringify({
           event: 'renderer-progress-slow',
+          ...context(),
           terminalOutput,
           interaction
         })
@@ -69,6 +110,7 @@ export function installRendererPerformanceLogging(): () => void {
         DIAGNOSTIC_SCOPES.performance,
         JSON.stringify({
           event: 'renderer-health',
+          ...context(),
           terminalOutput,
           interaction,
           uptimeMs: Math.round(now - started),
@@ -87,6 +129,8 @@ export function installRendererPerformanceLogging(): () => void {
       )
       maxEventLoopGapMs = longTaskCount = longTaskTotalMs = maxLongTaskMs = 0
       interactions.reset()
+      frames.reset()
+      resetRendererWork()
     }
     if (document.hidden || elapsed < 4000 || now - lastReport < 30000) return
     lastReport = now
@@ -95,9 +139,12 @@ export function installRendererPerformanceLogging(): () => void {
       DIAGNOSTIC_SCOPES.performance,
       JSON.stringify({
         event: 'event-loop-gap',
+        ...context(),
         terminalOutput,
         interaction,
         elapsedMs: Math.round(elapsed),
+        expectedIntervalMs: 1000,
+        delayedByMs: Math.max(0, Math.round(elapsed - 1000)),
         focused: document.hasFocus(),
         version: window.fileterm?.appVersion,
         platform: window.fileterm?.platform
@@ -110,6 +157,7 @@ export function installRendererPerformanceLogging(): () => void {
     window.clearInterval(timer)
     longTasks?.disconnect()
     interactions.dispose()
+    frames.dispose()
     document.removeEventListener('visibilitychange', reset)
   }
 }

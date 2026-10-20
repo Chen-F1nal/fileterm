@@ -18,6 +18,7 @@ vm.runInNewContext(
     Uint32Array,
     Uint8Array,
     require: (name) => {
+      if (name === '../lib/renderer-work-log') return { trackRendererWork: (_phase, work) => work }
       assert.equal(name, '../lib/diagnostic-log')
       return {
         DIAGNOSTIC_SCOPES: { performance: 'renderer:performance' },

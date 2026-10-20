@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import type { IBufferCell, IBufferLine, IDisposable, ITheme, Terminal } from '@xterm/xterm'
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 
@@ -332,32 +333,35 @@ export class TerminalLogColorizer implements IDisposable {
     this.recolorRange(0, buffer.length - 1, true)
   }
 
-  private recolorRange(startY: number, endY: number, refresh: boolean): void {
-    const buffer = this.terminal.buffer.normal
-    const first = Math.max(0, Math.min(startY, endY))
-    const last = Math.min(buffer.length - 1, Math.max(startY, endY))
-    if (last < first) {
-      return
-    }
+  private readonly recolorRange = trackRendererWork(
+    'log-coloring',
+    (startY: number, endY: number, refresh: boolean): void => {
+      const buffer = this.terminal.buffer.normal
+      const first = Math.max(0, Math.min(startY, endY))
+      const last = Math.min(buffer.length - 1, Math.max(startY, endY))
+      if (last < first) {
+        return
+      }
 
-    let changedFirst = Infinity
-    let changedLast = -1
-    for (let y = first; y <= last; y += 1) {
-      if (this.recolorLine(y)) {
-        changedFirst = Math.min(changedFirst, y)
-        changedLast = y
+      let changedFirst = Infinity
+      let changedLast = -1
+      for (let y = first; y <= last; y += 1) {
+        if (this.recolorLine(y)) {
+          changedFirst = Math.min(changedFirst, y)
+          changedLast = y
+        }
+      }
+
+      if (refresh && this.terminal.buffer.active.type === 'normal') {
+        const viewportY = this.terminal.buffer.active.viewportY
+        const startRow = Math.max(0, changedFirst - viewportY)
+        const endRow = Math.min(this.terminal.rows - 1, changedLast - viewportY)
+        if (startRow <= endRow) {
+          this.terminal.refresh(startRow, endRow)
+        }
       }
     }
-
-    if (refresh && this.terminal.buffer.active.type === 'normal') {
-      const viewportY = this.terminal.buffer.active.viewportY
-      const startRow = Math.max(0, changedFirst - viewportY)
-      const endRow = Math.min(this.terminal.rows - 1, changedLast - viewportY)
-      if (startRow <= endRow) {
-        this.terminal.refresh(startRow, endRow)
-      }
-    }
-  }
+  )
 
   private recolorLine(y: number): boolean {
     const line = this.terminal.buffer.normal.getLine(y)

@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 
 // xterm 6 stores content/foreground/background in three Uint32 words per cell.
@@ -20,7 +21,7 @@ const COLOR_MODE_MASK = 0x03000000
 export function registerTerminalForegroundAdapter(terminal: Terminal): IDisposable {
   let pending = false
   let disposed = false
-  const adaptViewport = () => {
+  const adaptViewport = trackRendererWork('foreground-adapt', () => {
     pending = false
     if (disposed) return
     const buffer = terminal.buffer.active
@@ -41,7 +42,7 @@ export function registerTerminalForegroundAdapter(terminal: Terminal): IDisposab
       }
     }
     if (changed) terminal.refresh(0, Math.max(0, terminal.rows - 1))
-  }
+  })
 
   const scheduleAdaptViewport = () => {
     if (pending || disposed) return

@@ -51,7 +51,10 @@ function fixture(writer) {
     return exports
   }
   const diagnostic = load('../src/renderer/lib/diagnostic-log.ts')
-  const reporter = load('../src/renderer/lib/renderer-error-log.ts', { './diagnostic-log': diagnostic })
+  const reporter = load('../src/renderer/lib/renderer-error-log.ts', {
+    './diagnostic-log': diagnostic,
+    './renderer-work-log': { getRendererWorkSnapshot: () => ({ phases: {}, recentSlowWork: [] }) }
+  })
   const boundary = load('../src/renderer/features/common/error-boundary.tsx', {
     react: { Component: class {} },
     'react/jsx-runtime': {},

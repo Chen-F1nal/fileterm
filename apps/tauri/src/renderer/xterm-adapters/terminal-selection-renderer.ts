@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import type { Terminal } from '@xterm/xterm'
 
 type SelectionPalette = {
@@ -12,7 +13,7 @@ type ThemeServiceView = { _core?: { _themeService?: { colors?: SelectionPalette 
  * but let the selection layer own the background once per row.
  */
 export function registerTerminalSelectionRenderer(terminal: Terminal) {
-  const render = () => {
+  const render = trackRendererWork('selection-layout', () => {
     const selection = terminal.getSelectionPosition()
     if (!selection) return
     // Guard the same xterm 6 palette boundary as the block glyph renderer.
@@ -46,7 +47,7 @@ export function registerTerminalSelectionRenderer(terminal: Terminal) {
         }
       })
     })
-  }
+  })
   const subscription = terminal.onRender(render)
   // DOM selection updates repaint rows directly without emitting onRender.
   // Request the public render cycle so both this adapter and graphical cells
