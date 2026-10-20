@@ -26,11 +26,13 @@ const utils = load('../src/renderer/hooks/workspace-tabs-utils.ts', {
   '../i18n': i18n,
   '../features/layout/host-groups': groups
 })
+const profileOpenGuard = load('../src/renderer/hooks/profile-open-guard.ts')
 const { buildOrderedTabs, nextTabAfterClose } = utils
 const { createWorkspaceTabsSessionActions } = load('../src/renderer/hooks/workspace-tabs-session-actions.ts', {
   '../app/app-utils': { homeTabKey: (id) => `home:${id}`, sessionTabKey: (id) => `session:${id}` },
   '../features/common/session-send-targets': {},
   '../i18n': i18n,
+  './profile-open-guard': profileOpenGuard,
   './workspace-tabs-utils': utils
 })
 const tabs = ['a', 'b', 'c', 'd'].map((id) => ({

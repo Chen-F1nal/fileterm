@@ -15,6 +15,7 @@ import type { AppViewModel } from './app-view-model'
 import { isDarkTheme } from '../../app/theme-config'
 import { t } from '../../i18n'
 import { useWindowReveal } from '../../hooks/use-window-reveal'
+import { runProfileOpenOnce } from '../../hooks/profile-open-guard'
 
 const FileEditorModal = lazy(() =>
   import('../files/file-editor-modal').then((module) => ({
@@ -115,9 +116,11 @@ export function AppStandaloneWindows({ model }: { model: AppViewModel }) {
             onEditProfile={openEditConnection}
             onOpenProfile={(profileId) => {
               if (desktopApi) {
-                void desktopApi.openProfileFromManager(profileId).catch((error) => {
-                  reportError('从管理器打开连接', error)
-                })
+                void runProfileOpenOnce(profileId, () =>
+                  desktopApi.openProfileFromManager(profileId).catch((error) => {
+                    reportError('从管理器打开连接', error)
+                  })
+                )
                 return
               }
               void openProfile(profileId)
