@@ -1,5 +1,5 @@
 import './system-network-panel.css'
-import { buildLinePath, buildScrollingWindow, areSampleWindowsEqual } from './network-history'
+import { buildLinePath, buildScrollingWindow } from './network-history'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SystemMetrics } from '@fileterm/core'
 import { t } from '../../i18n'
@@ -36,22 +36,22 @@ function NetworkPanel({ metrics }: { metrics?: SystemMetrics }) {
       ? metrics.networkSamples
       : []
   const samples = useMemo(() => buildScrollingWindow(rawSamples, visibleSampleCount), [rawSamples])
-  const [displaySamples, setDisplaySamples] = useState(samples)
-  const [chartOffset, setChartOffset] = useState(-chartStep)
+  const chartRef = useRef<SVGGElement | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const previousInterfaceRef = useRef(selectedInterface)
   const previousLastSampleRef = useRef(rawSamples.at(-1))
   const previousSampleCountRef = useRef(rawSamples.length)
 
-  const activityValues = displaySamples.map((sample) => Math.max(sample.rx, sample.tx))
+  const activityValues = samples.map((sample) => Math.max(sample.rx, sample.tx))
   const maxValue = Math.max(...activityValues, 1)
-  const txPath = buildLinePath(displaySamples, 'tx', maxValue)
-  const rxPath = buildLinePath(displaySamples, 'rx', maxValue)
+  const txPath = buildLinePath(samples, 'tx', maxValue)
+  const rxPath = buildLinePath(samples, 'rx', maxValue)
   const chartScale = [maxValue, maxValue * 0.66, maxValue * 0.33]
 
   useEffect(() => {
     if (!interfaceOptions.includes(selectedInterface)) {
-      setSelectedInterface(metrics?.activeNetworkInterface ?? interfaceOptions[0] ?? '')
+      const nextInterface = metrics?.activeNetworkInterface ?? interfaceOptions[0] ?? ''
+      if (nextInterface !== selectedInterface) setSelectedInterface(nextInterface)
     }
   }, [interfaceOptions, metrics?.activeNetworkInterface, selectedInterface])
 
@@ -74,23 +74,17 @@ function NetworkPanel({ metrics }: { metrics?: SystemMetrics }) {
       animationFrameRef.current = null
     }
 
-    if (interfaceChanged) {
-      setDisplaySamples((current) => (areSampleWindowsEqual(current, samples) ? current : samples))
+    // Animation must not enqueue React updates behind every monitoring/input commit.
+    const setChartOffset = (offset: number) => chartRef.current?.setAttribute('transform', `translate(${offset} 0)`)
+    if (interfaceChanged || !sampleAdvanced) {
       setChartOffset(-chartStep)
-      return
-    }
-
-    if (!sampleAdvanced) {
-      setDisplaySamples((current) => (areSampleWindowsEqual(current, samples) ? current : samples))
-      setChartOffset((current) => (current === -chartStep ? current : -chartStep))
       return
     }
 
     const startTime = performance.now()
     const duration = 420
 
-    setDisplaySamples((current) => (areSampleWindowsEqual(current, samples) ? current : samples))
-    setChartOffset((current) => (current === 0 ? current : 0))
+    setChartOffset(0)
 
     const animate = (now: number) => {
       const progress = Math.min(1, (now - startTime) / duration)
@@ -158,7 +152,7 @@ function NetworkPanel({ metrics }: { metrics?: SystemMetrics }) {
             <path className="network-guide major" d="M 0 12 H 100" />
             <path className="network-guide minor" d="M 0 44 H 100" />
             <path className="network-guide minor" d="M 0 76 H 100" />
-            <g transform={`translate(${chartOffset} 0)`}>
+            <g ref={chartRef} transform={`translate(${-chartStep} 0)`}>
               <path className="network-path tx-path" d={txPath} />
               <path className="network-path rx-path" d={rxPath} />
             </g>

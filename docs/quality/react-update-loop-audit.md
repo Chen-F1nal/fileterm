@@ -1,5 +1,47 @@
 # React 更新循环排查
 
+## 2026-10-20：长会话日志与监控图表的重复更新
+
+用户提供的 `app-log.md` 摘录包含 Windows `2.3.1-beta.10` 的 React #185，资源为
+`index-DcpQ0jto.js`。用对应源码重建并开启 hidden source map，得到相同文件名，按现场
+一基行列还原：`131:29` 是 `terminal-lifecycle-input.ts:208` 的 `setContextMenu(null)`；
+`67:7162` 是 xterm 的 `Event.forward`，`71:885/1203` 是其 Emitter 的分发/转发。
+因此两层 `_deliver → fire` 本身属于正常事件转发，不能归因为 Tauri/workspace 递归。
+xterm 捕获监听器错误后通过定时器重抛，也解释了为什么全局错误与 `parseFailures=0`
+可以同时出现。重建仅写入临时目录，生产构建配置没有增加 source map。
+
+继续检查抛错前的更新来源，生产 React + 真实 SystemSidebar/TerminalView 夹具中确认：
+网络图表每次收到新的 samples 引用，都会在 passive effect 中提交 `displaySamples` 和
+`chartOffset`；即使 updater 最终返回原值，存在待处理工作时仍可能先进入 React 队列。
+磁盘列表刷新时也可能反复提交相同的挂载点。在连续同步提交先于普通优先级工作排空的
+条件下，React 的 `nestedUpdateCount` 持续增加，越过 50 后由下一次实际入队的 setter
+抛 #185。诊断夹具临时记录过每次增加时 `remainingLanes=32`，以及来自 NetworkPanel
+和 SystemSidebar 的 effect 调用栈；没有修改 React 的上限或屏蔽异常。
+
+修复移除图表的派生 samples 副本 state，直接用当前指标计算曲线。420ms 的滚动动画
+只更新现有 SVG `<g>` 的 transform，不再每帧触发 React 渲染；切换网卡和卸载仍取消
+旧动画。网卡恢复和磁盘失效回退在实际值不变时不调用 setter。终端输入、解析、ACK、
+历史容量和生产默认 DOM 后端均未改动。移除不再需要的 samples 副本比较函数。
+
+`tests/browser/monitoring-update-depth.mjs` 使用 `flushSync` 在测试中构造积压的离散提交，
+生产代码没有引入 `flushSync`。它覆盖空历史、内容相同的新数组、持续新采样各 120 次
+监控/输入提交；检查动画期间 NetworkPanel 渲染计数不增加、恢复断点仍在、网卡选择
+保留/失效回退、终端菜单能关闭、200 批输出全部解析/ACK，以及动画中卸载。
+设置 `FILETERM_PERF_BASELINE=1 FILETERM_PERF_BASELINE_REF=v2.3.1-beta.10` 后相同夹具
+在旧代码中触发 #185；修复后通过。夹具只替换桌面 IPC，没有注入状态自增 effect 或
+修改 React 调度逻辑。既有监控持续更新和终端菜单/侧栏交互回归也通过。
+
+验证通过：typecheck、lint、全范围 Prettier、155 项 renderer、879 项 Rust/contract
+（846 单元、10 CLI、23 contract）、全 target/feature 严格 Clippy、CSS contract 与
+diff 空白检查。Chromium 十终端 60 秒混合负载确认 4,766/4,766 批，待解析队列、marker
+在替换后归零，卸载后终端实例/订阅归零。CSS contract 只有既有的 11 处 `!important`
+和约 6 处旧颜色值警告。本轮未运行 WebKit 或原生桌面长测。
+
+证据边界：现场栈已精确定位，但单条现场栈没有保留此前所有提交的来源。上述是实际
+组件中可复现并已修复的上游更新链，尚不能证明它是 Windows 现场唯一原因，或解释了
+全部 9.9 秒间隔。同步提交洪峰是确定性的回归条件，不等同完整 Windows 长会话复现；
+两段日志的运行时长按各自会话理解，不拼接成一次连续恶化过程。仍需 Windows 原生长测。
+
 ## 触发场景与证据边界
 
 用户最初反馈终端右键粘贴、监控侧栏反复展开时出现 React #185，随后确认“启动后立即连接，右键菜单还没点粘贴就崩溃”。开发版显示完整错误 `Maximum update depth exceeded`。

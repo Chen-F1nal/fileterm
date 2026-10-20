@@ -1,5 +1,22 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-20：定位 React #185 并移除监控图表的重复状态更新
+
+重建得到与现场相同的 `index-DcpQ0jto.js`，hidden source map 将 `131:29` 精确定位到
+xterm `onData` 中的 `setContextMenu(null)`。两层 Emitter 是 xterm 正常转发，不是
+Tauri/workspace 递归。继续用实际监控侧栏和终端组件构造同步提交洪峰，旧代码的图表
+派生状态和磁盘回退 effect 会留下重复更新，触发 #185；修复后相同夹具通过。
+
+图表直接从指标生成曲线，420ms 滚动只更新 SVG transform，不再保存样本副本或每帧
+写 React state；磁盘失效回退和网卡恢复先比较实际值。未改变终端输入/解析/ACK，也
+未切换生产 DOM 后端。浏览器覆盖 360 次监控/输入提交、网卡选择、断点、动画和卸载，
+另确认 200 批输出全部解析/ACK。现场此前的全部提交来源仍未知，不能把合成复现写成
+Windows 真机根因已最终确认；详见 [React 更新链证据与边界](../../quality/react-update-loop-audit.md#2026-10-20长会话日志与监控图表的重复更新)。
+
+类型、lint、格式、155 项 renderer、879 项 Rust/contract、严格 Clippy、CSS contract 与
+diff 检查通过。Chromium 十终端 60 秒混合负载完整确认 4,766 批，替换/卸载后解析队列、
+marker 与订阅正常回收；这仍不能代替 Windows 原生数小时复测。
+
 ## 2026-10-20：校准 DOM / WebGL 实验网格
 
 截图差异已定位为 xterm 6 DOM 的浮点格宽和 WebGL 0.19 的物理像素向下取整策略。

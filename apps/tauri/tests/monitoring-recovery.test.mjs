@@ -24,9 +24,7 @@ const core = load('../../../packages/core/src/index.ts')
 const { applyMonitoringUpdate, mergeMonitoringSnapshot } = load('../src/renderer/hooks/workspace-monitoring.ts', {
   '@fileterm/core': core
 })
-const { buildLinePath, buildScrollingWindow, areSampleWindowsEqual } = load(
-  '../src/renderer/features/system/network-history.ts'
-)
+const { buildLinePath, buildScrollingWindow } = load('../src/renderer/features/system/network-history.ts')
 const health = (generation = 2, revision = 3, phase = 'paused') => ({
   generation,
   revision,
@@ -99,9 +97,9 @@ test('recovery preserves history and marks its discontinuity', () => {
   assert.equal(path.includes(' C '), false)
 })
 
-test('equal rates with a new timestamp or gap are still a new sample', () => {
-  assert.equal(areSampleWindowsEqual([{ rx: 1, tx: 2, sampledAt: 1 }], [{ rx: 1, tx: 2, sampledAt: 2 }]), false)
-  assert.equal(areSampleWindowsEqual([{ rx: 1, tx: 2 }], [{ rx: 1, tx: 2, breakBefore: true }]), false)
+test('padding retains sample timestamps and recovery gaps', () => {
+  const samples = [{ rx: 1, tx: 2, sampledAt: 2, breakBefore: true }]
+  assert.equal(buildScrollingWindow(samples, 64).at(-1), samples[0])
 })
 
 test('initial padding connects to live samples but preserves explicit recovery gaps', () => {
