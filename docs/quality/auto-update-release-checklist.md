@@ -10,7 +10,8 @@ FileTerm 的桌面运行时是 Rust + Tauri（唯一维护、构建和发布的�
 
 1. 在 GitHub repository 的 secrets 中配置 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，用于 Windows NSIS 更新器签名。缺少该密钥时 release workflow 的 Windows 打包会直接失败。
 2. macOS 当前为未签名发布（`signingIdentity: "-"`），无需 Apple 证书即可构建；若后续要启用 macOS 应用内更新或 notarization，再补充对应签名密钥。
-3. 确认 release workflow（`.github/workflows/release.yml`）在 tag push 时产出以下产物：
+3. 配置 GitHub Actions secret `WINGET_CREATE_GITHUB_TOKEN`（classic token，`public_repo` scope），供稳定版发布后的 WinGet manifest 更新 PR 使用。首次更新前，`St0ff3l.FileTerm` 必须已收录到 WinGet 社区仓库。
+4. 确认 release workflow（`.github/workflows/release.yml`）在 tag push 时产出以下产物：
    - Windows x64/ARM64：`*-setup.exe`、`*-setup.exe.sig`、portable EXE 与签名，以及含两种架构条目的 `latest.json`
    - macOS：Apple Silicon（arm64）与 Intel（x64）各自的 `.dmg`
    - Linux x86_64/ARM64：`.deb`、`.rpm`、`.AppImage` 与 `.AppImage.zsync`
@@ -24,6 +25,7 @@ FileTerm 的桌面运行时是 Rust + Tauri（唯一维护、构建和发布的�
 4. 打开 GitHub Release，确认 Windows（x64/ARM64 exe / sig / combined `latest.json`）、macOS（arm64 + x64 dmg）、Linux（x86_64/arm64 deb / rpm / AppImage / zsync）均已作为资产附加。
 5. 确认 Arch x86_64 与 Arch Linux ARM aarch64 两个 `.pkg.tar.zst` 都已发布；包内 `.PKGINFO` 的架构、运行依赖、桌面入口、AppStream 元数据、图标与 MIT 许可证均通过构建校验。
 6. 确认 Linux AppImage 的 AppDir 根目录、内部目录对其他用户可读和遍历，所有可执行文件及 `AppRun`、`AppRun.wrapped` 对其他用户可执行。Release 工作流会在上传前校正权限，并直接检查内嵌 SquashFS 的权限元数据。AppImage 资产统一命名为 `FileTerm-<version>-linux-x86_64.AppImage` 或 `FileTerm-<version>-linux-arm64.AppImage`。AppImageHub 会对 `linux` 字样给出命名建议警告，该警告不影响运行，也不作为本仓库的发布失败条件。
+7. 稳定版 tag 会在 Release 创建成功后自动提交 WinGet 更新 PR；检查 `update-winget` job 和微软仓库的 manifest 验证结果。带连字符的预发布 tag 会跳过 WinGet 更新。
 
 ## 升级验收
 
