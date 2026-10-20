@@ -34,7 +34,11 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
 - SSH 私钥库：私钥、元数据和可选口令分离存储；连接 profile 仅保存 `privateKeyId`，口令交互通过 `ssh:interaction` 返回 renderer。
 - SSH 私钥导入同时支持文件和临时文本输入；文本只在导入弹窗与一次 IPC 调用期间存在，不进入 profile、workspace snapshot 或日志。
 - SSH 密码认证缺少凭据时，登录补全弹窗可显式改用密钥库私钥；响应仅传递密钥 ID，私钥解析与口令交互仍由 Rust 完成，选择只作用于本次连接。Kubernetes 模式保持密码认证。
-- 终端写入与 resize IPC
+- 终端写入与 resize IPC。主进程待写输入共享 16 MiB 额度（每条至少记账 64 字节），
+  单次最多 1 MiB UTF-8，另留 4 KiB 控制字节余量；输入所有权穿过 SSH 暂存/写入队列及
+  本地 PTY 线程队列，完成、失败或关闭后归还。Telnet 与串口未完成行也持有额度。
+  renderer 每个 WebView 共享 1 MiB/4,096 条待发送额度并预留控制消息空间；满额明确
+  拒绝整次输入，不截断粘贴或把连接标为断开。
 - SFTP 远程目录浏览
 - 远程文件读取与写回
 - FTP 会话连接与远程文件能力
@@ -85,12 +89,13 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
   - 同一 WebView 文档内，字体、字号、字重/斜体、字体特性、语言、字距和 DPI 等测量环境一致的终端，复用实际测得的字符宽度。共享测量结果总计最多 32,768 项，超过 64 个 UTF-16 单元的字符组合不进入共享缓存；字体加载/失败和校准失效时清空结果，最后一个终端销毁时移除字体监听器并释放共享状态。
   - 相同主题与日志颜色不重复失效缓存或扫描历史；文件面板的吸附观察仅覆盖 shell 与侧栏，不订阅终端子树重绘。
   - 符号显示槽严格采用 buffer 列宽，避免 fallback 字体实际 advance 与重复字形测量不同而推偏表格；不把 `✻`、`※` 等单列字符扩大为双列。笔画越界时先平移，确实超宽才等比缩小；双列 emoji 的笔画位于选区背景上方，避免从延续格开始选择时被遮住。保留 buffer 列宽与原始复制文本。
-  - `terminal-block-glyph-renderer.ts` 将块字符和连续横线 `─`、`━`、`═` 按字符格几何绘入逐行设备像素位图，复用实时 palette 与选区前景，避免字体边缘和 ANSI span 接缝造成断线或粗细变化。
+  - `terminal-block-glyph-renderer.ts` 将块字符和连续横线 `─`、`━`、`═` 按字符格几何绘入逐行设备像素位图，复用实时 palette 与选区前景，避免字体边缘和 ANSI span 接缝造成断线或粗细变化。同一原始文本 / 样式段里的连续图形共用一个透明 DOM 占位节点，避免长横线逐格建节点放大后续布局测量；不跨 ANSI / 选区来源合并，位图仍按每格绘制。
   - 图形适配器先筛选需要处理的行，再读取布局；普通文本不触发符号/块字符几何测量。行数缩小时移除越界位图，图形变为普通文字时仍清理旧画布。
 - `apps/tauri/src/renderer/xterm-adapters/`
   - 归集 xterm 的私有 API、DOM 渲染、Unicode/emoji、输入法、回包过滤、Vim 选区、字体缓存和 WebView 兼容实现；目录 README 说明模块职责与注册时机。组件层负责生命周期、应用快捷键、会话守卫和 PTY resize 编排。共享字体观察器保留在 `app/font-metrics.ts`，xterm 专用的字体栈脉冲在适配目录内完成。
 - `apps/tauri/src/renderer/xterm-adapters/terminal-log-colorizer.ts`
-  - 在 xterm 完成解析后对普通缓冲区的时间戳、服务名和常见日志级别着色；不向远端输出注入 ANSI，不处理 `top`、`vim`、`less` 等备用屏幕程序，并随终端主题重新套用颜色。
+  - 在 xterm 完成解析后对普通缓冲区的时间戳、服务名和常见日志级别着色；先匹配文本，
+    命中才建立字符到终端列的映射，保留仍适用的颜色，仅刷新前景实际变化的行；不向远端输出注入 ANSI，不处理 `top`、`vim`、`less` 等备用屏幕程序，并随终端主题重新套用颜色。
 - `apps/tauri/src/renderer/xterm-adapters/terminal-foreground-adapter.ts`
   - 让正常/备用屏幕默认背景上的 RGB 纯白文字使用主题默认前景，保留样式与显式背景/反色配对；只适配可见 xterm cell，不改写协议数据或原始 transcript。
 - `apps/tauri/src/renderer/app/action-text-color.ts`
@@ -620,9 +625,9 @@ SSH/SFTP 和 FTP/FTPS 会在会话建立后上报实际能力，而不是把所�
 - 传输层逐数据块累计真实字节数，Rust backend 最多每 200ms 发送一次轻量 `transfer:update` 任务事件；完成、失败和取消立即发送。
 - Renderer 的传输订阅与列表状态收敛在独立 `TransferCenter`，进度变化不更新顶层 workspace state。
 - Tauri 的 SSH 终端输入使用 renderer 到 Rust backend 的单向 command，并进入每个 tab 独立的无界输入 channel；SSH worker 在写入 PTY 前按序合并当前积压，不能与 SFTP/文件操作共用有界 worker command 队列，也不能因该队列满而丢失按键。
-- 终端 resize 同样使用单向 command；终端输出在 Rust backend 按 16ms 合并，再交给 renderer 按 16 KiB 分批写入 xterm；空闲时立即提交，积压由解析完成回调继续排空，绘制帧交给 xterm，避免后台 WebView 暂停动画帧时停止消费输出。
-- 终端日志颜色属于 renderer 的 xterm 表现层：远端原有 ANSI 继续由 xterm 解析，纯文本日志只在普通缓冲区完成解析后按主题色补充语义颜色；备用屏幕程序保持原始输出，避免破坏 TUI。
-- Tauri 终端输出使用持久的 IPC `Channel`，SSH/本地 PTY 输出按 UTF-8 边界分为至多 16 KiB 的批次，每窗口最多 4 批待确认；renderer 在 xterm 解析完成后经 `app_ack_terminal_data` 归还额度。通道按原生窗口绑定，每窗口独立转发；每标签最多 8 批待发送（最多 128 KiB），每窗口最多 128 批（最多 2 MiB），防止单个刷屏标签占满窗口待发送容量。转发取得额度后再按就绪标签轮转取批次，各标签内部保持顺序。同一标签的新输出可合入该标签最后一个尚未发送的批次，单批仍不超过 16 KiB，丢失计数与合并屏障按标签隔离，不跨显示丢失点合并，也不为凑批增加等待。关闭标签清理其缓存与计数，SSH pump 的迟到排空在标签已移除时补做清理。慢窗口不阻塞其他窗口或 SSH IO；重订阅和销毁时取消旧转发、清空旧缓存并释放等待者，入队在队列锁内检查关闭状态。SSH pump 保留有界显示队列并持续读取共享连接，饱和时沿用显示跳过策略，限频告警并在后续输出中标记跳过字节数，输入/取消仍由 worker 单独处理；空闲不启动输出刷新定时器。串口/Telnet 的读取和输入共用 worker，沿用非等待显示额度的发送路径，避免暂停设备 IO。普通 Tauri events 只承载低频状态和 snapshot，避免持续 PTY 输出与状态广播争用同一事件路径。
+- 终端 resize 同样使用单向 command；终端输出在 Rust backend 按 16ms 合并，再交给 renderer 按 16 KiB 分批写入 xterm；空闲时立即提交，积压由解析完成回调继续排空，绘制帧交给 xterm，避免后台 WebView 暂停动画帧时停止消费输出。xterm 拒绝写入时清除 busy 状态并 reject 受影响的待解析批次，让 bridge 记录失败并归还额度，后续输出可继续；不把失败批次当作已成功显示。
+- 终端日志颜色属于 renderer 的 xterm 表现层：远端原有 ANSI 继续由 xterm 解析，纯文本日志只在普通缓冲区完成解析后按主题色补充语义颜色；备用屏幕程序保持原始输出，避免破坏 TUI。可选着色的写入后处理异常会禁用当前终端后续写入的语义着色并只记一次 WARN，始终继续解析完成回调，避免中断 xterm 的内部排空循环。
+- Tauri 终端输出使用持久的 IPC `Channel`，所有协议的显示输出按 UTF-8 边界分成至多 16 KiB 的批次，每窗口最多 4 批待确认；renderer 在 xterm 解析完成后经 `app_ack_terminal_data` 归还额度。通道按原生窗口绑定，每窗口独立转发；每标签最多 8 批待发送（最多 128 KiB），每窗口最多 128 批（最多 2 MiB），防止单个刷屏标签占满窗口待发送容量。转发取得额度后按就绪标签轮转取批次，各标签内部保持顺序；同一标签的新输出可合入最后一个尚未发送的批次，不跨显示丢失点合并，也不为凑批增加等待。关闭标签清理其缓存与计数，SSH pump 的迟到排空在标签已移除时补做清理。慢窗口不阻塞其他窗口或协议 IO；重订阅和销毁时取消旧转发、清空旧缓存并释放等待者，入队在队列锁内检查关闭状态。SSH pump 持续读取共享连接，饱和时沿用显示跳过策略并限频告警；串口/Telnet 也使用非阻塞窗口队列，避免暂停设备 IO。原生 transcript 与已启用的会话日志在窗口显示入队前处理。过载时屏幕可能缺少输出，Ctrl+L 是否能重绘由远端决定；普通 Tauri events 只承载低频状态和 snapshot，避免持续输出与状态广播争用同一事件路径。
 - SSH transcript 由 controller 的有界分块缓冲统一维护，runtime 不重复拼接第二份历史。
 - 系统指标首次绑定时发送完整历史，稳定轮询只发送最新样本，由 renderer 追加到固定长度历史。
 - 同一 Renderer 的并发完整快照采用单飞和尾随合并，确保最终状态可达，同时避免重复磁盘读取与大对象序列化。
@@ -765,6 +770,7 @@ tokens -> theme vars -> component skins -> terminal colors
 
 Rust 诊断日志集中在 `services/logging/`，由 `mod.rs` 保留稳定 facade；tracing subscriber/layer 接收结构化事件和 span，级别和分类、脱敏格式化、队列写入与轮转、panic 捕获分别维护。
 Windows 的 `windows_performance/` 保留独立原生进程健康采样；启动时仅回收通过名称、GUID、PID 和进程创建时间验证的孤儿会话，ETW 采集只由既有卡顿告警触发。短时 headless helper 不初始化桌面 runtime，设置时间、事件量、消费线程/整个 helper CPU 与报告体积限制；身份或清理不确定时不启新采集。日志区分线程调度驻留与实际 CPU 执行能力，明确未校正 DPC/ISR，不持久化原始系统事件，不改变绑核或业务线程策略。
+Windows 主窗口及子窗口在创建时登记 WebView2 浏览器 PID 和进程创建时间，窗口销毁时移除；原生分钟采样据此补充父子进程树，普通内存查询仅申请有限查询权限。登记/查询失败与截断明确记录，不以零内存替代未知值，也不依赖 renderer 心跳或管理员权限。
 Renderer 使用 `lib/diagnostic-log.ts` 经已有 IPC 写入本地日志，不直接访问文件。
-日志增加统一 category，保留原 scope 与标签 ID；常规写入由有界队列和专用线程处理，正常退出进行有界排空。
+日志增加统一 category，保留原 scope 与标签 ID；所有级别共用 1,024 项有界队列和一个专用线程，接纳时为 WARN/ERROR 预留容量。满载或故障不创建逐条兜底任务、不在业务线程写盘；丢弃和写入失败按级别累计，由写盘线程限频汇总，正常退出进行有界排空。
 完整分类、限流、保留和故障边界见 [本地诊断日志](./quality/logging.md)。

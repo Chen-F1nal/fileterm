@@ -726,7 +726,7 @@ mod tests {
 
         std::thread::sleep(Duration::from_millis(100));
         control_tx
-            .send(LocalPtyCommand::Input("\u{3}".to_string()))
+            .send(LocalPtyCommand::Input(crate::sessions::terminal_input::TerminalInput::try_new("\u{3}".to_string()).unwrap()))
             .expect("local PTY should accept Ctrl+C input");
 
         let (summary, status) = match result_rx.recv_timeout(Duration::from_secs(2)) {

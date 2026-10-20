@@ -59,11 +59,11 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 
 ## 写入和限流
 
-- 常规日志通过非阻塞提交进入 1024 条有界队列，由一个专用线程串行写入；避免每行都创建 Tokio blocking task。
-- 队列满时 TRACE/DEBUG/INFO 被丢弃，并在后续写入时记录 dropped_low_priority 计数（受 WARN 级别过滤约束）。
-- WARN/ERROR 在队列满时继续走后台写入回退路径，不因队列满而主动丢弃；该回退不受普通队列容量限制。
-- 排队顺序在普通写入线程中保持；回退路径可能与普通日志交错，应以时间戳和 scope 关联。
-- 正常桌面退出最多等待 500ms 排空已排队的日志；磁盘错误、后台任务异常、线程启动失败、强制终止或超时仍可能导致日志缺失。
+- 所有级别共用 1024 条有界队列，由一个专用线程串行写入。提交只尝试入队，不等待磁盘；满载、关闭或写入失败都不会逐条创建 Tokio task 或原生线程，也不回退到调用线程写盘。
+- 队列预留 128 个位置给 WARN/ERROR，另预留 32 个位置给 ERROR。普通级别最多占 864 个位置，WARN 可以使用前 992 个位置，ERROR 可使用全部 1024 个位置；预留只控制接纳，实际入队的消息保持 FIFO，不按级别重排。容量包含待排空标记，不包含写盘线程正在处理的一条记录、并发格式化及分配余量，不作为进程内存上限。
+- 超过相应容量的日志被丢弃，分别累计 `dropped_low_priority`、`dropped_warn`、`dropped_error`；写盘失败的记录也计入对应级别。必要时 WARN/ERROR 也会缺失，不能把没有 ERROR 当作没有故障。
+- 写盘线程在后续处理消息时输出 `diagnostic logs dropped` 摘要，通常最多每 30 秒一条；排空标记强制尝试输出剩余计数。摘要含 ERROR 丢弃时使用 ERROR 级别，否则使用 WARN，仍受该级别过滤约束。摘要写入失败或级别禁用时保留计数，等待后续消息或排空再尝试，不递归提交日志、不增加定时器。
+- 正常桌面退出对入队等待和排空确认共用最多 500ms 的等待预算。磁盘错误、写入线程异常、线程启动失败、强制终止或超时仍可能导致日志与摘要缺失；线程无法启动时本进程诊断日志不可用，不再为每条日志创建兜底线程。
 
 业务采样日志应单独限频，不依赖队列满后的保护。监控样本摘要最多每分钟一条，侧栏状态变化去重，详见 monitoring-sidebar-diagnostics.md。
 
@@ -79,6 +79,21 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 | `event-loop-gap` / `renderer:performance`        | WARN；可见页面的 1 秒心跳间隔达到 4 秒，最多每 30 秒一次                             | `elapsedMs`、页面是否聚焦、应用版本与平台                                                                                                                                                                        | 在 renderer 恢复后才能记录；不能单独证明键盘输入或按钮响应耗时                       |
 | `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
 | `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口/标签标识、累计跳过字节数与 `since_last_ack_ms`                                                                                                     | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
+
+当前排查分支（尚未发布，beta.9 不含以下新增字段）补充：
+
+- `renderer-health.terminalOutput`：当前窗口订阅的累计接收、解析结束、确认数量，解析/确认失败数，最近接收、解析结束、解析成功和确认的 delivery ID；以及待解析批数/字符数、待确认数、连续繁忙时长和距上次解析结束的时间。没有订阅时为 `null`；计数在重新订阅时重置，ID 不是按顺序完成的水位。解析结束包含失败，需结合 `parseFailures` 和 `lastSuccessfulDeliveryId`。不带原始正文或 tab 名称。
+- `renderer-health.interaction`：Event Timing 支持状态、采样数量、最大输入派发延迟和最大事件至下一次绘制耗时。只汇总 `keydown` / `click`，采集阈值为 16ms，浏览器耗时有精度取整；样本数量不是全部操作次数，耗时也不包含远端命令响应。API 不支持时标记 `supported=false`，省略耗时。
+- `renderer-progress-slow`：可见页面待解析且连续至少 5 秒无解析结束，或交互采样耗时达到 1 秒时，由既有每秒心跳触发 WARN，最多每 30 秒一次。带上述两份摘要，不新增定时器、逐批日志或逐次交互日志；`event-loop-gap` 与慢解析告警也携带输出进度。
+- 原生 `window display queue saturated` / `renderer backpressure` 的 `progress`，以及健康报告的 `native.terminalOutput.windowProgress`：窗口、已分配批次数、最近确认 ID/距确认时间、待确认批数及最早 ID、队列批数/字节数。原生告警不等待 renderer 心跳，仍沿用 30 秒限频；健康报告最多展开 16 个窗口，其余计入 `omittedWindows`。锁忙字段为 `null`，不能当作零。`issuedBatches` 是分配 ID 的计数，不保证通道发送成功。
+
+以上无需管理员权限，不记录按键值、输入内容或终端正文。页面彻底停住时，Event Timing 与 renderer 日志需恢复后才能上报；用已有原生过载告警交叉判断，不能把没有交互采样理解成响应正常。
+
+`renderer-health.maxEventLoopGapMs` 包含心跳定时器本身的 1,000ms 间隔，
+约 1,002ms 不能解释成阻塞了 1 秒；需要结合长任务和 `event-loop-gap` 判断。
+`renderer:performance` 的 `terminal log coloring disabled after failure` 表示当前终端的
+可选语义着色在写入后处理时异常，后续写入绕过该着色，解析完成与 ACK 继续。
+该提示每个终端实例至多一次，不记录输出正文。
 
 `terminal:output` 的 `since_last_ack_ms` 是最近一次有效确认（窗口、通道与批次均匹配）
 距今的毫秒数，尚无确认时为 `none`。数值很小表示最近仍有确认进度；数值很大也可能
@@ -108,10 +123,26 @@ Windows 构建在日志初始化后启动一个独立原生采样线程，立即
   Windows CPU Sets 报告的效率等级、各等级逻辑处理器数和物理核心数。失败记录 `errorCode`；
   多效率等级仅说明系统报告了异构拓扑，不把等级直接标成 Intel P/E 核，也不代表实际线程调度。
 - `power` 记录电源连接和节电状态原始值；`acLineStatus` 的 0/1/255 对应离线/在线/未知。
-- `processes.samples` 只选本 FileTerm 和它的 WebView2 子进程树，记录 PID、角色、累计 CPU 时间、
+- 主窗口与子窗口在创建时经 WebView2 `BrowserProcessId` 登记浏览器进程，窗口销毁时移除；
+  采样用浏览器 PID 补充父子树，避免浏览器由已有环境托管时只找到 FileTerm。每次校验创建
+  时间，防止退出后 PID 复用。登记不轮询 UI，不依赖 renderer IPC；若浏览器已退出或身份
+  查询失败则明确报告，不扫描系统里所有同名 WebView2 进程。
+- `processes.samples` 只选本 FileTerm 和上述已确认的 WebView2 进程树，记录 PID、角色、累计 CPU 时间、
   `cpuPercentOneCore`、工作集字节、private committed bytes、优先级及 power throttling 原始 masks。
   CPU 百分比按两次成功采样间隔计算，100 表示占满一个逻辑处理器；多线程可超过 100，
   不是任务管理器按整机容量归一化的数值。首次采样或 PID 被复用时为 `null`。
+- 普通内存/CPU/策略采集只申请 `PROCESS_QUERY_LIMITED_INFORMATION`，不申请 `PROCESS_VM_READ`
+  或调试权限，也不尝试提权。微软的 [GetProcessMemoryInfo 接口要求](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-getprocessmemoryinfo)
+  支持有限查询权限。域策略仍可能拒绝访问，拒绝时保留错误码，不用 0 代替未知内存。
+- `processes` 增加 `discoveryMethod`、`webview2Count`、`memoryReadCount` 与 `accessMode`。
+  `browserRegistrations` 说明登记状态：`awaiting-webview` / `available` / `partial` / `registry-busy`；
+  每窗详细记录可显示 `pending` / `browser-replaced` / `unavailable` 和失败阶段/错误码。
+  最多展开 16 个窗口，`windowCount` / `omittedWindows` 保留数量；`memoryReadCount` 是成功
+  读到内存的进程数量，必须结合 `count`、`truncated` 和登记状态判断覆盖情况。启动最早一条
+  记录可能尚无窗口登记，`webview2Count=0` 不证明 WebView2 没有内存占用。
+- 同一用户数据目录可能复用浏览器进程。PID 在单条记录内去重；不同 FileTerm 实例若共用
+  同一浏览器，可能列出相同 PID，不能跨实例相加后当作各自独占内存。CPU 百分比与工作集
+  都是进程级统计，工作集含共享页面。
 - 最多采样 32 个进程，`count` 保留实际匹配数量，超出时 `truncated=true`。退出、权限不足或 API
   不支持会记录对应 `*ErrorCode`，不作为 0 CPU/0 内存；退出进程的采样状态会清理，句柄及时关闭。
 

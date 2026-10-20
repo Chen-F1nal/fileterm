@@ -3,6 +3,7 @@ mod tests {
     use super::{
         authentication_result_from_auth_result, build_http_connect_request, build_legacy_preferred,
         capture_root_access_password_input, coalesce_terminal_input,
+        coalesce_terminal_writes,
         configured_authentication_method, contains_interrupt_byte, decode_bytes,
         default_ssh_key_paths, delete_remote_path_command, detect_network_device_family,
         detect_remote_exec_input_kind, effective_exec_channel_enabled, effective_remote_file_type,
@@ -2188,19 +2189,72 @@ mod tests {
         );
     }
 
+    fn budgeted_input(value: impl Into<String>) -> crate::sessions::terminal_input::TerminalInput<String> {
+        crate::sessions::terminal_input::TerminalInput::try_new(value.into()).unwrap()
+    }
+
     #[test]
     fn coalesces_high_frequency_terminal_input_without_losing_order() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        sender.send("clear\r".to_string()).unwrap();
+        sender.send(budgeted_input("clear\r")).unwrap();
         for _ in 0..2_000 {
-            sender.send("\r".to_string()).unwrap();
+            sender.send(budgeted_input("\r")).unwrap();
         }
 
         let first = receiver.try_recv().unwrap();
-        let merged = coalesce_terminal_input(first, &mut receiver);
+        let mut merged = coalesce_terminal_input(first, &mut receiver);
         assert!(merged.starts_with("clear\r"));
-        assert_eq!(merged.matches('\r').count(), 2_001);
+        assert!(
+            !receiver.is_empty(),
+            "a burst must leave work for the next event-loop turn"
+        );
+        while let Ok(first) = receiver.try_recv() {
+            merged.append(coalesce_terminal_input(first, &mut receiver));
+        }
+        assert_eq!(merged.data, format!("clear\r{}", "\r".repeat(2_000)));
         assert!(receiver.is_empty());
+    }
+
+    #[test]
+    fn terminal_input_coalescing_yields_at_byte_budget_and_preserves_large_pastes() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let block = "中".repeat(12_000);
+        sender.send(budgeted_input(block.clone())).unwrap();
+        sender.send(budgeted_input("\u{3}tail")).unwrap();
+        let merged = coalesce_terminal_input(budgeted_input(block.clone()), &mut receiver);
+        assert!(
+            merged.data == block.repeat(2),
+            "merged bytes must preserve UTF-8 input order"
+        );
+        assert_eq!(receiver.try_recv().unwrap().data, "\u{3}tail");
+
+        sender.send(budgeted_input("next")).unwrap();
+        let paste = "中文".repeat(20_000);
+        assert!(
+            coalesce_terminal_input(budgeted_input(paste.clone()), &mut receiver).data == paste,
+            "a single large paste must remain intact"
+        );
+        assert_eq!(receiver.try_recv().unwrap().data, "next");
+    }
+
+    #[test]
+    fn coalesces_queued_ssh_writes_without_decoding_or_reordering_bytes() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let bytes = [0xff, 0x00, 0x1b, b'[', b'6', b'n', 0x03];
+        for _ in 0..2_000 {
+            sender.send(crate::sessions::terminal_input::TerminalInput::from(bytes.to_vec())).unwrap();
+        }
+        let first = receiver.try_recv().unwrap();
+        let mut merged = coalesce_terminal_writes(first, &mut receiver);
+        assert!(
+            merged.len() > bytes.len(),
+            "a queued burst must be batched before writing SSH"
+        );
+        assert!(!receiver.is_empty(), "writer-side batching must also yield");
+        while let Ok(first) = receiver.try_recv() {
+            merged.append(coalesce_terminal_writes(first, &mut receiver));
+        }
+        assert!(merged.data == bytes.repeat(2_000));
     }
 
     #[test]

@@ -80,11 +80,21 @@ try {
                 width: screen.getBoundingClientRect().width,
                 height: screen.getBoundingClientRect().height,
                 fitted: terminal.element.querySelectorAll('.xterm-fitted-symbol-source').length,
+                placeholders: Array.from(
+                  terminal.element.querySelectorAll('.xterm-rows > div'),
+                  (row) => row.querySelectorAll('.xterm-block-glyph-placeholder').length
+                ),
                 text: [0, 1, 2].map((row) => terminal.buffer.active.getLine(row).translateToString(true))
               }
             },
             { fixed, fontSize, glyph }
           )
+          if (fixed)
+            assert.equal(
+              geometry.placeholders[1],
+              1,
+              'a continuous rule must not allocate one DOM placeholder per cell'
+            )
           const png = await page.locator('.xterm-screen').screenshot()
           const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true })
           const gaps = [0, 0, 0]

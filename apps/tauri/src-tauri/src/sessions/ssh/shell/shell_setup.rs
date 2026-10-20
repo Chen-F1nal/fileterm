@@ -199,8 +199,8 @@ fn suppress_shell_setup_echo(
 /// through either stream must also release queued user input exactly once.
 fn filter_shell_setup_output(
     pending: &mut Option<ShellSetupEchoSuppression>,
-    deferred_input: &mut Vec<Vec<u8>>,
-    terminal_write_tx: &mpsc::UnboundedSender<Vec<u8>>,
+    deferred_input: &mut Vec<TerminalInput<Vec<u8>>>,
+    terminal_write_tx: &mpsc::UnboundedSender<TerminalInput<Vec<u8>>>,
     chunk: &str,
 ) -> Result<String, String> {
     let was_pending = pending.is_some();

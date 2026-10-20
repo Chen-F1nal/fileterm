@@ -111,7 +111,7 @@ fn output_after_ready_is_not_trimmed_with_the_hidden_echo() {
 #[test]
 fn setup_output_from_either_stream_releases_queued_input_once() {
     let mut pending = Some(ShellSetupEchoSuppression::new(false));
-    let mut deferred = vec![b"echo user-command\r".to_vec()];
+    let mut deferred = vec![crate::sessions::terminal_input::TerminalInput::from(b"echo user-command\r".to_vec())];
     let (tx, mut rx) = mpsc::unbounded_channel();
     // Exercise the shared Data/ExtendedData filter, including stderr echo or
     // diagnostics followed by a ready marker split across deliveries.
@@ -126,7 +126,7 @@ fn setup_output_from_either_stream_releases_queued_input_once() {
         filter_shell_setup_output(&mut pending, &mut deferred, &tx, "Ready\x07user$ ").unwrap(),
         "user$ "
     );
-    assert_eq!(rx.try_recv().unwrap(), b"echo user-command\r");
+    assert_eq!(rx.try_recv().unwrap().data, b"echo user-command\r");
     assert!(deferred.is_empty());
     assert!(pending.is_none());
     assert_eq!(

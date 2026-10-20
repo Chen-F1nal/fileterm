@@ -199,3 +199,43 @@ test('pixel-only resizing repaints frozen columns without sending a mismatched P
   assert.equal(f.terminalRef.current.cols, 81)
   assert.deepEqual(terminalResizes, [['tab', 81, 24, 810, 400]])
 })
+
+test('a rejected xterm write cannot latch the writer busy or leak later display credit', async () => {
+  const f = fixture()
+  const terminal = f.terminalRef.current
+  const write = terminal.write
+  terminal.write = () => {
+    throw new Error('write data discarded')
+  }
+  const failed = f.scheduleTerminalWrite('lost frame')
+  await assert.rejects(failed, /write data discarded/)
+  assert.equal(f.isWritingRef.current, false)
+  assert.equal(f.pendingWriteCompletionsRef.current.length, 0)
+  assert.equal(f.pendingWriteRef.current, '')
+  terminal.write = write
+  const next = f.scheduleTerminalWrite('new frame')
+  f.callbacks.shift()()
+  await next
+  assert.deepEqual(f.writes, ['new frame'])
+})
+
+test('failure while draining rejects all affected batches and leaves the next delivery usable', async () => {
+  const f = fixture()
+  const terminal = f.terminalRef.current
+  const write = terminal.write
+  const first = f.scheduleTerminalWrite('A'.repeat(chunkSize + 10))
+  const second = f.scheduleTerminalWrite('B')
+  terminal.write = () => {
+    throw new Error('cannot enqueue')
+  }
+  const rejected = Promise.all([assert.rejects(first, /cannot enqueue/), assert.rejects(second, /cannot enqueue/)])
+  f.callbacks.shift()()
+  await rejected
+  assert.equal(f.isWritingRef.current, false)
+  assert.equal(f.pendingWriteRef.current, '')
+  assert.equal(f.pendingWriteCompletionsRef.current.length, 0)
+  terminal.write = write
+  const next = f.scheduleTerminalWrite('C')
+  f.callbacks.shift()()
+  await next
+})

@@ -554,7 +554,13 @@ export function useWorkspaceIpcSync({
           'DEBUG',
           `workspace snapshot event received workspace_revision=${typeof snapshot.workspaceRevision === 'number' ? snapshot.workspaceRevision : 'none'} sessions=${Object.keys(snapshot.sessions).length} active_tab_id=${snapshot.activeTabId ?? 'none'}`
         )
-        receivedSnapshotEvent = applySnapshot(snapshot) || receivedSnapshotEvent
+        const applied = applySnapshot(snapshot)
+        receivedSnapshotEvent = applied || receivedSnapshotEvent
+        if (applied) {
+          for (const tabId of lastMetricsDiagnosticAtByTab.keys()) {
+            if (!snapshot.sessions[tabId]) lastMetricsDiagnosticAtByTab.delete(tabId)
+          }
+        }
         finishHydration()
       })
       .then((unsubscribe) => {

@@ -2,7 +2,7 @@ async fn run_worker_loop(
     tab_id: &str,
     profile: &Value,
     cmd_rx: &mut mpsc::Receiver<WorkerCmd>,
-    terminal_input_rx: &mut mpsc::UnboundedReceiver<String>,
+    terminal_input_rx: &mut mpsc::UnboundedReceiver<TerminalInput<String>>,
     app: &AppHandle,
     cancellation: CancellationToken,
 ) -> Result<SshWorkerExit, String> {
@@ -215,7 +215,7 @@ async fn run_worker_loop(
     // Normal terminal bytes are serialized here so a slow SSH channel cannot
     // block the session event loop. Ctrl+C bypasses this queue below via the
     // SSH SIGINT request and also keeps its raw 0x03 byte as a fallback.
-    let (terminal_write_tx, mut terminal_write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let (terminal_write_tx, mut terminal_write_rx) = mpsc::unbounded_channel::<TerminalInput<Vec<u8>>>();
     let terminal_writer = Arc::clone(&shell_writer);
     let terminal_writer_cancellation = cancellation.clone();
     let terminal_writer_app = app.clone();
@@ -226,6 +226,7 @@ async fn run_worker_loop(
                 _ = terminal_writer_cancellation.cancelled() => break,
                 data = terminal_write_rx.recv() => {
                     let Some(data) = data else { break };
+                    let data = coalesce_terminal_writes(data, &mut terminal_write_rx);
                     if let Err(error) = write_shell_data(&terminal_writer, data).await {
                         crate::services::logging::session(
                             &terminal_writer_app,

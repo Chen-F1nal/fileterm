@@ -2,7 +2,7 @@ pub fn start_ssh_worker(
     tab_id: String,
     profile: Value,
     mut cmd_rx: mpsc::Receiver<WorkerCmd>,
-    mut terminal_input_rx: mpsc::UnboundedReceiver<String>,
+    mut terminal_input_rx: mpsc::UnboundedReceiver<TerminalInput<String>>,
     app: AppHandle,
     cancellation: CancellationToken,
 ) {

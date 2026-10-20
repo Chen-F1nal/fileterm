@@ -32,7 +32,7 @@ pub fn start_local_terminal_worker(
     tab_id: String,
     runtime_id: String,
     worker_rx: mpsc::Receiver<WorkerCmd>,
-    terminal_input_rx: mpsc::UnboundedReceiver<String>,
+    terminal_input_rx: mpsc::UnboundedReceiver<TerminalInput<String>>,
     app: AppHandle,
     cancellation: CancellationToken,
     launch: LocalTerminalLaunch,
@@ -249,6 +249,8 @@ pub fn start_local_terminal_worker(
             let mut output_drop_state = LocalOutputDropState::default();
             let send_query_replies = |replies: Vec<String>| {
                 replies.into_iter().all(|reply| {
+                    // Query replies must not disconnect a busy shell when the input budget is full.
+                    let Ok(reply) = TerminalInput::try_new(reply) else { return true };
                     reader_control_tx
                         .send(LocalPtyCommand::Input(reply))
                         .is_ok()
@@ -490,7 +492,7 @@ pub fn start_local_terminal_worker(
 
 async fn forward_terminal_commands(
     mut worker_rx: mpsc::Receiver<WorkerCmd>,
-    mut terminal_input_rx: mpsc::UnboundedReceiver<String>,
+    mut terminal_input_rx: mpsc::UnboundedReceiver<TerminalInput<String>>,
     cancellation: CancellationToken,
     control_tx: std_mpsc::Sender<LocalPtyCommand>,
 ) {

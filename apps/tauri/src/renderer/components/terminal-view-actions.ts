@@ -40,7 +40,7 @@ export type TerminalViewActionsOptions = {
   findOpenRef: MutableRef<boolean>
   renderedTranscriptRef: MutableRef<string>
   pendingWriteRef: MutableRef<string>
-  pendingWriteCompletionsRef: MutableRef<Array<{ remaining: number; resolve(): void }>>
+  pendingWriteCompletionsRef: MutableRef<Array<{ remaining: number; resolve(): void; reject(error: unknown): void }>>
   isWritingRef: MutableRef<boolean>
   suppressHydratedChunksUntilRef: MutableRef<number>
   preserveVisibleBufferRef: MutableRef<boolean>
@@ -394,19 +394,26 @@ export function useTerminalViewActions({
     pendingWriteRef.current = pendingWriteRef.current.slice(nextChunk.length)
     isWritingRef.current = true
     const generation = transcriptReplayGenerationRef.current
-    terminal.write(nextChunk, () => {
-      if (terminalRef.current !== terminal || transcriptReplayGenerationRef.current !== generation) return
+    try {
+      terminal.write(nextChunk, () => {
+        if (terminalRef.current !== terminal || transcriptReplayGenerationRef.current !== generation) return
+        isWritingRef.current = false
+        settleParsedWrite(nextChunk.length)
+        // Parsing owns backpressure; hidden WebViews may stop animation frames entirely.
+        if (pendingWriteRef.current) queueMicrotask(flushPendingWrite)
+      })
+    } catch (error) {
+      // A rejected write must not strand every subsequent batch behind a busy flag.
       isWritingRef.current = false
-      settleParsedWrite(nextChunk.length)
-      // Parsing owns backpressure; hidden WebViews may stop animation frames entirely.
-      if (pendingWriteRef.current) queueMicrotask(flushPendingWrite)
-    })
+      pendingWriteRef.current = ''
+      pendingWriteCompletionsRef.current.splice(0).forEach((completion) => completion.reject(error))
+    }
   }
 
   const scheduleTerminalWrite = (text: string): Promise<void> => {
     if (!text || !terminalRef.current) return Promise.resolve()
-    const completion = new Promise<void>((resolve) => {
-      pendingWriteCompletionsRef.current.push({ remaining: text.length, resolve })
+    const completion = new Promise<void>((resolve, reject) => {
+      pendingWriteCompletionsRef.current.push({ remaining: text.length, resolve, reject })
     })
     pendingWriteRef.current += text
     if (!isWritingRef.current) flushPendingWrite()

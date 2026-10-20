@@ -9,6 +9,7 @@ pub mod system_metrics;
 pub mod telnet;
 mod telnet_direct;
 pub mod terminal;
+pub(crate) mod terminal_input;
 pub(crate) mod transfer_file_safety;
 
 /// 传输数据块的读取/写入缓冲大小。
@@ -20,7 +21,7 @@ pub(crate) mod transfer_file_safety;
 pub(crate) const TRANSFER_IO_BUFFER_BYTES: usize = 256 * 1024;
 
 pub enum WorkerCmd {
-    WriteTerminal(String),
+    WriteTerminal(terminal_input::TerminalInput<String>),
     SerialControl {
         action: SerialControlAction,
         value: Option<bool>,

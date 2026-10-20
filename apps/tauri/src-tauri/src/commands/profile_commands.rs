@@ -119,6 +119,8 @@ pub async fn app_test_connection(
     let now = Instant::now();
     let cooldown_error = {
         let mut last_started = connection_tests_last_started.lock().await;
+        // Expired endpoints no longer participate in the retry guard.
+        last_started.retain(|_, started| started.elapsed() < CONNECTION_TEST_RETRY_COOLDOWN);
         if let Some(started_at) = last_started.get(&test_key) {
             if started_at.elapsed() < CONNECTION_TEST_RETRY_COOLDOWN {
                 Some("Connection test cooldown active; please wait before retrying".to_string())

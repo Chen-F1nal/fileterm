@@ -11,8 +11,14 @@ const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'play
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
 const root = fileURLToPath(new URL('../../../../', import.meta.url)).replace(/\/$/, '')
 const browser = await engine.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH })
+let progressTimer
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1200 } })
+  const cpuSlowdown = Number(process.env.FILETERM_CPU_SLOWDOWN || 1)
+  if (cpuSlowdown > 1) {
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuSlowdown })
+  }
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.setContent(
@@ -111,6 +117,17 @@ try {
       },
       () => {}
     )
+    window.sampleOutputProgress = () => ({
+      sent: window.sent,
+      acknowledged: window.acknowledged,
+      pendingCharacters: terminals.reduce((sum, state) => sum + state.pendingWriteRef.current.length, 0),
+      pendingCompletions: terminals.reduce((sum, state) => sum + state.pendingWriteCompletionsRef.current.length, 0),
+      pendingXterm: terminals.reduce(
+        (sum, state) => sum + state.terminalRef.current._core._writeBuffer._pendingData,
+        0
+      ),
+      domNodeCount: document.getElementsByTagName('*').length
+    })
     window.startLoad = (total) => {
       const pump = () => {
         while (window.sent < total && window.sent - window.acknowledged < 4) {
@@ -139,8 +156,67 @@ try {
       }
       pump()
     }
-    window.startLoad(4000)
+    window.testRecovery = async () => {
+      const state = terminals[0]
+      const terminal = state.terminalRef.current
+      const originalWrite = terminal._core.write
+      terminal._core.write = () => {
+        terminal._core.write = originalWrite
+        throw new Error('injected enqueue failure')
+      }
+      // Four deliveries to the same view used to exhaust every native credit after one failure.
+      for (let index = 0; index < 4; index++) {
+        deliver({ tabId: '0', deliveryId: window.sent++, chunk: 'recovery probe\r\n' })
+      }
+      while (window.sent !== window.acknowledged) await new Promise((resolve) => setTimeout(resolve, 10))
+      const buffer = terminal.buffer.normal
+      const getLine = buffer.getLine
+      buffer.getLine = function () {
+        buffer.getLine = getLine
+        throw new Error('injected recoloring failure')
+      }
+      deliver({ tabId: '0', deliveryId: window.sent++, chunk: 'coloring probe\r\n' })
+      while (window.sent !== window.acknowledged) await new Promise((resolve) => setTimeout(resolve, 10))
+      deliver({ tabId: '0', deliveryId: window.sent++, chunk: 'after failure\r\n' })
+      while (window.sent !== window.acknowledged) await new Promise((resolve) => setTimeout(resolve, 10))
+      if (
+        state.isWritingRef.current ||
+        state.pendingWriteCompletionsRef.current.length ||
+        state.pendingWriteRef.current
+      ) {
+        throw new Error('parser work retained after recovery')
+      }
+      if (terminal.markers.length) throw new Error('colorizer marker retained after recovery')
+      window.recoveredDeliveries = window.acknowledged
+      window.sent = window.acknowledged = 0
+    }
   })
+  const total = Number(process.env.FILETERM_BATCH_COUNT || 4000)
+  assert.ok(Number.isSafeInteger(total) && total > 0)
+  await page.evaluate(() =>
+    Promise.race([
+      window.testRecovery(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('display credit did not recover')), 30000))
+    ])
+  )
+  const loadStarted = performance.now()
+  let reporting = false
+  progressTimer = setInterval(() => {
+    if (reporting) return
+    reporting = true
+    void page
+      .evaluate(() => window.sampleOutputProgress())
+      .then((progress) =>
+        console.log(
+          JSON.stringify({ event: 'progress', elapsedMs: Math.round(performance.now() - loadStarted), ...progress })
+        )
+      )
+      .catch(() => {})
+      .finally(() => {
+        reporting = false
+      })
+  }, 10000)
+  await page.evaluate((total) => window.startLoad(total), total)
   const timings = []
   for (let index = 0; index < 10; index++) {
     const started = performance.now()
@@ -151,6 +227,7 @@ try {
   }
   await page.waitForFunction(() => window.done, undefined, { timeout: 120000 })
   const result = await page.evaluate(() => ({
+    recoveredDeliveries: window.recoveredDeliveries,
     sent: window.sent,
     acknowledged: window.acknowledged,
     maxPending: window.maxPending,
@@ -159,15 +236,19 @@ try {
     clicks: document.getElementById('clicks').textContent,
     input: document.getElementById('input').value
   }))
-  assert.equal(result.sent, 4000)
-  assert.equal(result.acknowledged, 4000)
+  assert.equal(result.recoveredDeliveries, 6)
+  assert.equal(result.sent, total)
+  assert.equal(result.acknowledged, total)
   assert.equal(result.maxPending, 4)
   assert.equal(result.pendingCharacters, 0)
   assert.equal(result.pendingCompletions, 0)
   assert.equal(result.clicks, '10')
   assert.equal(result.input, '输入 9')
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ...result, inputAndClickMs: timings }))
+  console.log(
+    JSON.stringify({ ...result, elapsedMs: Math.round(performance.now() - loadStarted), inputAndClickMs: timings })
+  )
 } finally {
+  clearInterval(progressTimer)
   await browser.close()
 }

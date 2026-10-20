@@ -12,6 +12,9 @@ function fixture({ supportsLongTasks = false } = {}) {
   let longTaskCallback
   let observerDisconnected = false
   const calls = []
+  let output = null
+  let interaction = { supported: false, samples: 0 }
+
   const document = {
     hidden: false,
     hasFocus: () => true,
@@ -64,15 +67,36 @@ function fixture({ supportsLongTasks = false } = {}) {
           cleared = true
         }
       },
-      require: () => ({
-        DIAGNOSTIC_SCOPES: { performance: 'renderer:performance' },
-        writeDiagnosticLog: (...args) => calls.push(args)
-      })
+      require: (name) =>
+        name.includes('terminal-output')
+          ? {
+              getTerminalOutputProgress: () => output
+            }
+          : name.includes('renderer-interaction-performance')
+            ? {
+                observeInteractionPerformance: () => ({
+                  snapshot: () => interaction,
+                  reset: () => {
+                    interaction = { supported: false, samples: 0 }
+                  },
+                  dispose: () => {}
+                })
+              }
+            : {
+                DIAGNOSTIC_SCOPES: { performance: 'renderer:performance' },
+                writeDiagnosticLog: (...args) => calls.push(args)
+              }
     }
   )
   const dispose = exports.installRendererPerformanceLogging()
   return {
     calls,
+    setOutput: (value) => {
+      output = value
+    },
+    setInteraction: (value) => {
+      interaction = value
+    },
     document,
     dispose,
     get cleared() {
@@ -152,4 +176,31 @@ test('long task summaries reset each minute and across visibility, then disconne
   assert.equal(JSON.parse(f.calls[1][2]).longTaskCount, 0)
   f.dispose()
   assert.equal(f.observerDisconnected, true)
+})
+
+test('stalled output and slow interactions report bounded summaries on the existing heartbeat', () => {
+  const f = fixture()
+  f.setOutput({ pendingBatches: 4, busyForMs: 6000, lastReceivedDeliveryId: 8 })
+  f.setInteraction({ supported: true, samples: 2, maxInputDelayMs: 1200, maxDurationMs: 1504 })
+  f.tick(1000)
+  const report = JSON.parse(f.calls[0][2])
+  assert.equal(report.event, 'renderer-progress-slow')
+  assert.equal(report.terminalOutput.lastReceivedDeliveryId, 8)
+  assert.equal(report.interaction.maxInputDelayMs, 1200)
+  for (let i = 0; i < 20; i++) f.tick(1000)
+  assert.equal(f.calls.length, 1)
+  f.setOutput({ pendingBatches: 4, busyForMs: 30000, sinceLastParsedMs: 1 })
+  f.setInteraction({ supported: false, samples: 0 })
+  for (let i = 0; i < 39; i++) f.tick(1000)
+  assert.equal(f.calls.length, 2)
+  assert.equal(JSON.parse(f.calls[1][2]).event, 'renderer-health')
+  f.dispose()
+})
+
+test('new output after a long idle period is not mistaken for a stalled parse', () => {
+  const f = fixture()
+  f.setOutput({ pendingBatches: 1, busyForMs: 100, sinceLastParsedMs: 60000 })
+  f.tick(1000)
+  assert.equal(f.calls.length, 0)
+  f.dispose()
 })

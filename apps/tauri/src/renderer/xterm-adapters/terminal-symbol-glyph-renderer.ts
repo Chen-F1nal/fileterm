@@ -113,11 +113,17 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
     for (const source of sources.keys()) if (!rows.contains(source)) sources.delete(source)
     const affected = indexes.filter((index) => {
       const row = rows.children[index]
-      const text = row?.textContent ?? ''
+      // Graphical cells are handled by the block adapter, not fallback-font fitting.
+      const text = (row?.textContent ?? '').replace(/[\u2500-\u259f]/gu, '')
       return (
         row instanceof view.HTMLElement &&
         /[\u0080-\u{10ffff}]/u.test(text) &&
-        /[\p{Symbol}\p{Punctuation}]/u.test(text)
+        /[\p{Symbol}\p{Punctuation}]/u.test(text) &&
+        Array.from(row.children).some(
+          (source) =>
+            !source.classList.contains(SOURCE_CLASS) &&
+            /[\p{Symbol}\p{Punctuation}]/u.test((source.textContent ?? '').replace(/[\u2500-\u259f]/gu, ''))
+        )
       )
     })
     if (!affected.length) return

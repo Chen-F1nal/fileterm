@@ -1,5 +1,5 @@
 enum LocalPtyCommand {
-    Input(String),
+    Input(TerminalInput<String>),
     Resize {
         cols: u32,
         rows: u32,

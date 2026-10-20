@@ -466,7 +466,7 @@ fn start_session_worker(
     tab_id: String,
     profile: serde_json::Value,
     receiver: mpsc::Receiver<WorkerCmd>,
-    terminal_input_receiver: Option<mpsc::UnboundedReceiver<String>>,
+    terminal_input_receiver: Option<mpsc::UnboundedReceiver<crate::sessions::terminal_input::TerminalInput<String>>>,
     app: AppHandle,
     cancellation: CancellationToken,
 ) {

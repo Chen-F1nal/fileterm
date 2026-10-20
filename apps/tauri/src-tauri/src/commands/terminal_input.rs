@@ -13,6 +13,8 @@ pub(crate) async fn send_terminal_input(
     {
         return Err(AppError::Command("serial transfer active".to_string()));
     }
+    let data = crate::sessions::terminal_input::TerminalInput::try_new(data)
+        .map_err(|error| AppError::Command(error.to_string()))?;
     if let Some(sender) = state.terminal_inputs.read().await.get(tab_id).cloned() {
         return sender
             .send(data)
@@ -106,6 +108,8 @@ pub(crate) async fn send_exact_active_terminal_input(
         }
     }
 
+    let data = crate::sessions::terminal_input::TerminalInput::try_new(data)
+        .map_err(|error| AppError::Command(error.to_string()))?;
     let workers = state.workers.read().await;
     let sender = workers
         .get(tab_id)

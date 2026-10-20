@@ -299,32 +299,17 @@ function replaceBlockGlyphs(
         continue
       }
       const fragment = document.createDocumentFragment()
-      let plainText = ''
-      const flushPlainText = () => {
-        if (plainText) {
-          const text = document.createElement('span')
-          text.className = BLOCK_GLYPH_TEXT_CLASS
-          text.style.backgroundColor = background
-          text.textContent = plainText
-          fragment.append(text)
-          plainText = ''
-        }
+      // One placeholder per graphical run preserves text/style boundaries without a DOM node per cell.
+      for (const text of textNode.data.split(/([\u2500-\u259f]+)/u)) {
+        if (!text) continue
+        const graphic = isGraphicGlyph(text.codePointAt(0)!)
+        const span = document.createElement('span')
+        span.className = graphic ? BLOCK_GLYPH_PLACEHOLDER_CLASS : BLOCK_GLYPH_TEXT_CLASS
+        if (graphic) span.style.color = 'transparent'
+        else span.style.backgroundColor = background
+        span.textContent = text
+        fragment.append(span)
       }
-      for (const character of textNode.data) {
-        const codepoint = character.codePointAt(0)!
-        if (!isGraphicGlyph(codepoint)) {
-          plainText += character
-          continue
-        }
-
-        flushPlainText()
-        const placeholder = document.createElement('span')
-        placeholder.className = BLOCK_GLYPH_PLACEHOLDER_CLASS
-        placeholder.textContent = character
-        placeholder.style.color = 'transparent'
-        fragment.append(placeholder)
-      }
-      flushPlainText()
       textNode.replaceWith(fragment)
     }
 

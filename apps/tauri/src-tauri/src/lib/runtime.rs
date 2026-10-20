@@ -113,6 +113,7 @@ pub fn run() {
             {
                 prefer_windows_native_rounded_corners(&main_window);
                 disable_windows_webview_zoom(&main_window);
+                crate::services::logging::track_webview_processes(&main_window);
                 main_window
                     .set_icon(windows_icon_image().map_err(|error| error.to_string())?)
                     .map_err(|error| error.to_string())?;

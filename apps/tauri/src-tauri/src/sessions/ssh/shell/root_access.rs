@@ -449,11 +449,19 @@ fn capture_root_access_password_input(
 }
 
 fn coalesce_terminal_input(
-    mut first: String,
-    receiver: &mut mpsc::UnboundedReceiver<String>,
-) -> String {
-    while let Ok(next) = receiver.try_recv() {
-        first.push_str(&next);
+    mut first: TerminalInput<String>,
+    receiver: &mut mpsc::UnboundedReceiver<TerminalInput<String>>,
+) -> TerminalInput<String> {
+    // Leave input bursts queued so the fair worker loop can poll output and cancellation.
+    // Keep individual paste/escape payloads intact, even when one exceeds the byte budget.
+    for _ in 1..TERMINAL_INPUT_COALESCE_MESSAGES {
+        if first.len() >= TERMINAL_INPUT_COALESCE_BYTES {
+            break;
+        }
+        let Ok(next) = receiver.try_recv() else {
+            break;
+        };
+        first.append(next);
     }
     first
 }

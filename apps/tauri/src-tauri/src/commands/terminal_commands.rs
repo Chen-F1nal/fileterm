@@ -71,6 +71,10 @@ pub async fn app_write_terminal(
     let data_len = data.len();
     let result = send_terminal_input(&state, &tab_id, data).await;
     if let Err(error) = &result {
+        // Expected backpressure is reported by the renderer with a throttled notice.
+        if matches!(error, AppError::Command(message) if message == crate::sessions::terminal_input::INPUT_BUSY) {
+            return result;
+        }
         crate::services::logging::warn(
             &app,
             "terminal",
