@@ -7,6 +7,7 @@ import type {
 import { homeTabKey, sessionTabKey, settledResultsError } from '../app/app-utils'
 import { resolveSelectedTabIds, type SendScope } from '../features/common/session-send-targets'
 import { t } from '../i18n'
+import { runProfileOpenOnce } from './profile-open-guard'
 import type { WorkspaceTabsActionContext } from './workspace-tabs-types'
 import { nextTabAfterClose, uniqueStrings } from './workspace-tabs-utils'
 
@@ -130,47 +131,48 @@ export function createWorkspaceTabsSessionActions(context: WorkspaceTabsActionCo
     }
   }
 
-  const openProfileInCurrentWorkspace = async (profileId: string) => {
-    if (!desktopApi) {
-      return
-    }
-
-    const activeHomeId =
-      context.activeLocalTab?.kind === 'home'
-        ? context.activeLocalTab.id
-        : context.isHomeWorkspaceVisible
-          ? (context.activeLocalTabIdForUi ??
-            [...context.localTabs].reverse().find((tab) => tab.kind === 'home')?.id ??
-            null)
-          : null
-    const replacementKey = activeHomeId ? homeTabKey(activeHomeId) : null
-    pendingHomeReplacementKeyRef.current = replacementKey
-
-    try {
-      onBusyChange(true)
-      const snapshot = await desktopApi.openProfile(profileId)
-      applySnapshot(snapshot)
-      onStatusMessage(null)
-      if (activeHomeId && snapshot.activeTabId && replacementKey) {
-        const nextSessionKey = sessionTabKey(snapshot.activeTabId)
-        setTabOrder((current) => {
-          const replacementIndex = current.indexOf(replacementKey)
-          const next = current.filter((key) => key !== replacementKey)
-          if (next.includes(nextSessionKey)) return next
-          if (replacementIndex < 0) return [nextSessionKey, ...next]
-          return [...next.slice(0, replacementIndex), nextSessionKey, ...next.slice(replacementIndex)]
-        })
-        setLocalTabs((current) => current.filter((tab) => tab.id !== activeHomeId))
+  const openProfileInCurrentWorkspace = (profileId: string) =>
+    runProfileOpenOnce(profileId, async () => {
+      if (!desktopApi) {
+        return
       }
-      pendingHomeReplacementKeyRef.current = null
-      setActiveLocalTabId(null)
-    } catch (error) {
-      pendingHomeReplacementKeyRef.current = null
-      onError('打开连接', error)
-    } finally {
-      onBusyChange(false)
-    }
-  }
+
+      const activeHomeId =
+        context.activeLocalTab?.kind === 'home'
+          ? context.activeLocalTab.id
+          : context.isHomeWorkspaceVisible
+            ? (context.activeLocalTabIdForUi ??
+              [...context.localTabs].reverse().find((tab) => tab.kind === 'home')?.id ??
+              null)
+            : null
+      const replacementKey = activeHomeId ? homeTabKey(activeHomeId) : null
+      pendingHomeReplacementKeyRef.current = replacementKey
+
+      try {
+        onBusyChange(true)
+        const snapshot = await desktopApi.openProfile(profileId)
+        applySnapshot(snapshot)
+        onStatusMessage(null)
+        if (activeHomeId && snapshot.activeTabId && replacementKey) {
+          const nextSessionKey = sessionTabKey(snapshot.activeTabId)
+          setTabOrder((current) => {
+            const replacementIndex = current.indexOf(replacementKey)
+            const next = current.filter((key) => key !== replacementKey)
+            if (next.includes(nextSessionKey)) return next
+            if (replacementIndex < 0) return [nextSessionKey, ...next]
+            return [...next.slice(0, replacementIndex), nextSessionKey, ...next.slice(replacementIndex)]
+          })
+          setLocalTabs((current) => current.filter((tab) => tab.id !== activeHomeId))
+        }
+        pendingHomeReplacementKeyRef.current = null
+        setActiveLocalTabId(null)
+      } catch (error) {
+        pendingHomeReplacementKeyRef.current = null
+        onError('打开连接', error)
+      } finally {
+        onBusyChange(false)
+      }
+    })
 
   const openProfile = async (profileId: string) => {
     if (isMainWorkspaceWindow && (!hasLoadedInitialSnapshot || !context.hasHydratedMainTabUiState)) {

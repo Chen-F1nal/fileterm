@@ -47,8 +47,14 @@ export function OverviewPage({
     <div
       key={profile.id}
       className="recent-card"
-      onClick={() => onOpenProfile(profile.id)}
+      onClick={(event) => {
+        // Cards open on a single click; drop the second click of a habitual
+        // double-click so it does not open another session.
+        if (event.detail > 1) return
+        onOpenProfile(profile.id)
+      }}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onOpenProfile(profile.id)
@@ -76,6 +82,7 @@ export function OverviewPage({
           className="recent-action"
           onClick={(event) => {
             event.stopPropagation()
+            if (event.detail > 1) return
             onOpenProfile(profile.id)
           }}
           type="button"

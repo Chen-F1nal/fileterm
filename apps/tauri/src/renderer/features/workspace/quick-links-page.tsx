@@ -35,7 +35,9 @@ export function QuickLinksPage({
     const handleRowClick = (e: React.MouseEvent) => {
       if (isFolder) {
         toggleFolder(node.id, e)
-      } else {
+      } else if (e.detail <= 1) {
+        // Rows open on a single click; drop the second click of a habitual
+        // double-click so it does not open another session.
         onOpen(node.id)
       }
     }
@@ -46,7 +48,10 @@ export function QuickLinksPage({
           className={`flat-grid-row ${isFolder ? 'folder-row' : ''}`}
           onClick={handleRowClick}
           onKeyDown={(event) => {
+            // Enter/Space on the nested action button already fires its own click.
+            if (event.target !== event.currentTarget) return
             if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
               if (isFolder) {
                 toggleFolder(node.id)
               } else {
@@ -80,7 +85,7 @@ export function QuickLinksPage({
                 e.stopPropagation()
                 if (isFolder) {
                   toggleFolder(node.id, e)
-                } else {
+                } else if (e.detail <= 1) {
                   onOpen(node.id)
                 }
               }}
