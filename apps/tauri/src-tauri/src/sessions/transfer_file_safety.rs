@@ -94,6 +94,7 @@ pub(crate) async fn open_local_download_checkpoint(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::*;
 
     #[cfg(unix)]

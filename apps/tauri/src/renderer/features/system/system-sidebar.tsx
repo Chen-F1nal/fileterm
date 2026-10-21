@@ -100,7 +100,8 @@ export function SystemSidebar({
     if (availableFileSystems.some((row) => row.mountPoint === selectedDiskMountPoint)) {
       return
     }
-    setSelectedDiskMountPoint(defaultFileSystem?.mountPoint ?? '')
+    const nextMountPoint = defaultFileSystem?.mountPoint ?? ''
+    if (nextMountPoint !== selectedDiskMountPoint) setSelectedDiskMountPoint(nextMountPoint)
   }, [availableFileSystems, defaultFileSystem?.mountPoint, selectedDiskMountPoint])
 
   useLayoutEffect(() => {

@@ -1,5 +1,134 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-21：协议回复绕过 React 更新与 schema 3
+
+交叉核对 beta10 报告和本机剩余 beta11 轮转日志，修复 xterm 自动查询回复误入活动标签/IME/菜单更新路径：已连接后台终端也能回复查询，自动回复不清选区或更新菜单；串口占用、历史回放与初始 ConPTY 回复规则保留。新增 `terminal-input` 阶段、异常时解析/ACK 快照和最慢四个长任务时间线，启动标记升级 schema 3。DOM/WebGL 生产 React + xterm 查询与监控回归通过，现场 #185 唯一原因和无脚本长帧仍未确认。证据、边界与外部归档文件名见[本轮复核](../../quality/terminal-log-analysis-repair-2026-10-21.md#2026-10-21beta10-与本机-beta11-日志交叉复核)。
+
+## 2026-10-21：根据 Windows 现场日志修补事件与着色热路径
+
+选区/搜索的 React 状态发布改为按帧合并；日志着色复用未变化行的匹配/映射，并限制附加缓存预算。补充命名回调失败/耗时、按终端/后端资源与 schema 2 就绪标记，已核对真实 app.log 落盘。171 个 renderer 测试、类型、定向静态/格式、WebView2 混排/回退检查通过。旧 #185 尚未复现确认根因，不能标为完全解决；完整 Rust 门禁受运行中 exe 文件锁限制，lib/CLI/contract/scheduler 分项及 clippy 通过。详情与后续长测步骤见 [日志分析与修补记录](../../quality/terminal-log-analysis-repair-2026-10-21.md)。
+
+> 2026-10-21 字形回归更新：用户真实会话发现先前小数网格候选存在断笔/拖影。已删除 WebGL 小数宽度覆盖，恢复上游整数像素图集，仅保留 backing resize 同步。52 组字体/DPI 与实际 WebView2 独立临时终端验证通过；初始已有会话回退 DOM，后续门禁触发开发版自动重启，详见记录。此前候选的网格一致和短测性能数据不能作为当前候选视觉或性能验收依据。详见 [字形回归修复](../../quality/terminal-renderer-windows-2026-10-20/font-regression-fix-2026-10-21.md)。
+
+> 2026-10-21 renderer 设置：Windows、macOS 和 Linux 均可在“设置 → 界面 → 终端显示”选择 DOM 或 WebGL。新安装及旧 `state.json` 缺少 renderer 字段时默认 WebGL；已保存的选择会保留。已打开终端需重启后切换；WebGL 加载失败、激活失败或 context loss 会回退 DOM。真实 Claude Code 长任务和中文 IME 仍待验证，不能把自动 soak 当作交互长测结论。
+
+## 2026-10-21：Windows DOM / WebGL 两小时 React workspace soak
+
+同机顺序运行 DOM 与 WebGL 两小时合成 workspace 负载，分别 239 和 237 个采样。两轮均无 React #185、
+Maximum update depth exceeded 或 pageerror，ACK 在途最多 4、历史最多 200，卸载后终端与订阅归零。
+WebGL 轮全程 10/10 硬件加速 renderer、无 context loss 或 DOM 回退；237 次进程组采样显示 working set
+860–877 MiB、private bytes 1249–1274 MiB，前末窗口均值变化较小。JS heap 约 48.6–50.9 MiB。
+
+CDP `Memory.getDOMCounters().nodes` 在 WebGL 负载中每个采样恰好增长 1，338→574；挂载元素数固定
+263，卸载后 nodes 降至 135。记录为活动期节点计数待查信号，不据此判泄漏；DOM 轮没有进程组数据，
+不能作 renderer 进程内存对照。WebGL 原始记录和详细统计见 [Windows 对照报告](../../quality/terminal-dom-webgl-comparison-2026-10-20.md#windows-react-workspace-两小时-renderer-soak2026-10-21)。
+
+此结果仅覆盖合成 React / Chromium 负载。真实 Tauri WebView2 六小时 idle 观察已采集 356 条
+renderer-health 与 359 条完整 Windows 原生样本：目标 WebGL PTY 全程为 WebGL，未见解析/ACK 错误、
+React 错误签名或 context loss；一条无脚本归因的 3.879–4.407 秒长帧仍未解释。进程组内存峰值后
+回落，但 idle 观察不能证明泄漏已解决。六小时预期时长已过，shell 提示符未被 app.log 记录，故
+`Start-Sleep` 返回无法独立确认；筛选日志和摘要见 [Windows 记录](../../quality/terminal-renderer-windows-2026-10-20/README.md#current-development-window)。
+该 soak 记录形成时，真实 Claude Code、持续 PTY/ACK、中文 IME 与物理选区仍待交互验证，默认仍为 DOM；当前三平台默认状态见本计划顶部更新。
+
+## 2026-10-21：修复 Windows WebGL 网格与 backing resize
+
+显式开发版 WebGL 按现有 DOM 原始字体度量计算网格，未套用实验夹具的 DOM 取整修正。
+同时修复 ResizeObserver 更新 backing buffer 后 GL viewport/字形 uniform 未同步、首行被裁切的
+问题。激活与回退后重新 fit；未知私有结构回退 DOM，销毁时恢复方法。
+
+52 组原生 DOM / 生产 WebGL 字体/DPI 矩阵、延迟字体、3 档 resize、首中末列命中、选区、
+搜索、回放和 GL viewport/backing 一致性检查通过。真实 WebView2 155.0.4283.62 按实际容器复测：
+1228×716 内容区两侧初始均 183×49，JetBrains Mono 14 均 144×37；字体切回后原生 DOM 与 WebGL
+均为 184×49，context loss 回退保持该网格，三轮 dispose 清理正常。FitAddon 字体往返时原有的一列
+取整差保留，两后端结果一致；早期无实际内层容器的 188/194 列记录仅作历史。
+环境、源码 SHA-256、JSON 和截图见 [Windows 记录](../../quality/terminal-renderer-windows-2026-10-20/README.md)。
+生产网格 Windows Chromium 12 轮完成：常速 4,000 批 DOM/WebGL 中位数 28.66/11.10 秒、
+CPU 38.41/8.66 秒、下一 rAF p95 43.8/34.6ms；6× 200 批为 18.29/5.80 秒、380.6/123.8ms。
+全部解析与模拟 ACK 完成、最终积压为零、context loss 为零；这不是 WebView2 端到端结论。
+此前短测属于修复前且新 smoke 补充实际容器结构/初始 fit，不直接混算性能。该次验证之后默认仍为 DOM；真实 IME、
+PTY/ACK 和 Claude Code 长任务仍待交互验收。
+
+## 2026-10-21：Windows WebView2 renderer smoke（修复前）
+
+在 PR #348 分支 Windows 11 Tauri 开发版中分别运行 DOM/WebGL，WebView2 155.0.4283.62，
+RTX 3070 Laptop / driver 32.0.16.1742 / NVIDIA ANGLE D3D11 hardwareAcceleration=true，
+显示缩放 125%。真实 WebView2 内创建临时内存 xterm host，回放 1,500 行中文/emoji，检查搜索、
+选区、resize、当前字体与 JetBrains Mono 14，并执行三轮 renderer create/dispose。context loss
+成功回退 DOM，dispose 清空 host 节点。真实过程树各采 35 次（约 38 秒），JSON、截图及过滤的
+renderer 事件保存在 terminal-renderer-windows-2026-10-20 目录。
+
+本次单轮 smoke 中 xterm write callback 是 DOM/WebGL 22.7/34.9ms，callback 到下一 rAF 是
+10/28ms；短时过程树 working set 峰值 637.6/631.9 MiB，private bytes 679.6/536.2 MiB，
+CPU 增量 6.59/2.05s。只有一次合成 run，不能当作性能结论或泄漏判定；callback/rAF 与 CDP task
+不能分别代表绘制完成。125% DPI 下生产格网仍不一致：当前字体 188/194 列，JetBrains Mono 14
+为 147/155 列；实验校准没有接入生产代码。WebView2 in-memory smoke 不经过 PTY/Rust IPC，
+原生输入延迟、parse/ACK 积压和 Windows IME 均无法采集；该次验证之后默认仍为 DOM。
+
+下一步由用户在当前显式 WebGL 开发窗口先完成真实终端的字体/DPI/resize、CJK/emoji、IME、
+选区、搜索和回放检查，再用同一窗口/会话/只读 Claude Code 工作负载分别跑 DOM 与 WebGL 长测。
+采集 app.log 阶段日志、native ACK 年龄和进程树连续趋势后再判断是否有实测改善或内存回归。
+交互步骤与具体复现命令见 ../../quality/terminal-renderer-windows-2026-10-20/README.md。
+
+## 2026-10-20：Windows GPU Chromium 预检与 Tauri 开发开关
+
+最初基于 PR #348 分支增加 `VITE_FILETERM_TERMINAL_RENDERER` 开发版对照开关；后续 Windows 设置页已提供
+DOM/WebGL 选择：新安装和旧配置缺少 renderer 字段时默认 WebGL，之后保存的用户选择跨版本保留。
+加载失败、WebGL 初始化失败和 context loss 都回 DOM；终端销毁时释放 addon、主动丢失
+WebGL context，并在 renderer 变化后重新挂接 xterm 阶段诊断。普通生产版不记录默认 renderer 事件。
+
+Windows 11 Pro 10.0.26300 / RTX 3070 Laptop / driver 32.0.16.1742 上，headless Chromium 156
+使用 NVIDIA D3D11 硬件路径。52 组字体/DPI、3 档 resize、中文/emoji、选区、搜索和回放检查通过；
+真实 IME 及 Windows 原生 DPI 交互仍需 Tauri 手测。独立浏览器 4,000 批常速三轮中位数：DOM/WebGL
+完成 25.47/12.43 秒、进程树 CPU 36.19/9.63 秒、下一 rAF p95 39.7/30.5ms；峰值进程树 working set
+700.8/492.3 MiB。6 倍节流的 4,000 批 DOM 超过 180 秒门限，仅完成 1,747 批；因此最终 6 倍短压测
+每组改为相同的 200 批三轮，DOM/WebGL 完成 51.80/11.50 秒。两档不混算，ACK 在浏览器夹具里是即时
+模拟。所有已纳入轮次解析/ACK 最终积压为零。它们是硬件加速 Chromium 预检，不是 WebView2 结论，
+也不构成长时泄漏判定。逐秒数据和复现步骤见[Windows 对照报告](../../quality/terminal-dom-webgl-comparison-2026-10-20.md)
+及其 [Windows 原始记录和交互步骤](../../quality/terminal-renderer-windows-2026-10-20/README.md)。
+
+当时启动的 Tauri 开发版 PID 为 40504，版本 `2.3.1-beta.10`，WebView2 runtime `155.0.4283.62`；
+PID 40504 后续已退出。2026-10-21 的真实 WebView2 smoke、当前开发窗口和仍待执行的交互长测，
+以本计划顶部的最新记录为准，不据短测推断长期泄漏已解决。
+
+## 2026-10-20：补足下一轮现场日志的阶段证据
+
+沿用既有 app.log、每分钟健康报告和限频卡顿告警，增加八个同步阶段的调用数/累计/最大
+耗时、有限慢步骤、终端网格/历史/解析积压数字、canvas 存储估算和有界 ACK 年龄跟踪。
+解析/绘制使用带兼容性检查的 xterm 6 私有方法，关闭时恢复方法并注销资源引用；不改
+解析结果、信用额度或确认顺序。异常附当前阶段摘要，仍按原错误正文去重。
+
+可用时追加 Long Animation Frames 最慢四帧、最多三项脚本归属和强制布局耗时；至少
+一秒长帧在恢复后额外触发每 30 秒最多一次的 WARN。只保留本应用打包文件名/函数名/
+字符位置，无终端正文、完整 URL、远端路径或逐批日志。API 不可用会明确标记。
+这些是同步墙钟时间和存储估算，不能直接相加为 CPU 时间或解释全部 RSS，也不包含
+GC、原生分配与完整调用栈。旧日志不能补采，Windows 原生数小时复测及发布仍待完成。
+字段边界见 [日志文档](../../quality/logging.md#解析绘制与内存占用的补充采集)。
+
+本轮类型检查、162 项 renderer、801 项 Rust 单元、10 项 CLI、23 项 contract、3 项 Windows scheduler、
+严格 Clippy 与 `cargo fmt --check` 通过；仓库级 lint/Prettier 受 491 个既有 CRLF/格式文件阻塞，
+本次变更文件的定向 ESLint/Prettier 检查通过。
+Chromium 真实终端回放确认阶段采集有效，4,000 批背压回归全部确认、最大在途四批；
+监控更新深度回归覆盖 360 次提交与 200 批 ACK。
+Chromium 十终端混合负载 60 秒确认 4,758 / 4,758 批，最大在途四批；反复替换后
+诊断注册和实际存活终端仍为十个，全部卸载后均为零，解析队列、marker 和订阅清空。
+
+## 2026-10-20：定位 React #185 并移除监控图表的重复状态更新
+
+重建得到与现场相同的 `index-DcpQ0jto.js`，hidden source map 将 `131:29` 精确定位到
+xterm `onData` 中的 `setContextMenu(null)`。两层 Emitter 是 xterm 正常转发，不是
+Tauri/workspace 递归。继续用实际监控侧栏和终端组件构造同步提交洪峰，旧代码的图表
+派生状态和磁盘回退 effect 会留下重复更新，触发 #185；修复后相同夹具通过。
+
+图表直接从指标生成曲线，420ms 滚动只更新 SVG transform，不再保存样本副本或每帧
+写 React state；磁盘失效回退和网卡恢复先比较实际值。未改变终端输入/解析/ACK，也
+未切换生产 DOM 后端。浏览器覆盖 360 次监控/输入提交、网卡选择、断点、动画和卸载，
+另确认 200 批输出全部解析/ACK。现场此前的全部提交来源仍未知，不能把合成复现写成
+Windows 真机根因已最终确认；详见 [React 更新链证据与边界](../../quality/react-update-loop-audit.md#2026-10-20长会话日志与监控图表的重复更新)。
+
+类型、lint、格式、155 项 renderer、879 项 Rust/contract、严格 Clippy、CSS contract 与
+diff 检查通过。Chromium 十终端 60 秒混合负载完整确认 4,766 批，替换/卸载后解析队列、
+marker 与订阅正常回收；这仍不能代替 Windows 原生数小时复测。
+
 ## 2026-10-20：校准 DOM / WebGL 实验网格
 
 截图差异已定位为 xterm 6 DOM 的浮点格宽和 WebGL 0.19 的物理像素向下取整策略。
@@ -62,7 +191,7 @@ CPU 降速、4,000 批回放约 87.45 秒完成，4,000 次全部确认，最终
 
 | 参考                                                                                                                                                                                   | 已核对的做法                                                                   | 对 FileTerm 的判断                                                                                                                                               |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [VS Code 终端渲染](https://code.visualstudio.com/docs/terminal/appearance#_gpu-acceleration)                                                                                           | 默认 WebGL，失败回退 DOM；图形字符和重叠符号有 GPU 绘制支持                    | 当前 `terminal-lifecycle-core.ts` 未加载 WebGL，走 DOM 加符号/框线/选区适配。值得做真实负载对照，但 GPU 可能增加纹理与进程内存，不能直接宣称换后省内存。         |
+| [VS Code 终端渲染](https://code.visualstudio.com/docs/terminal/appearance#_gpu-acceleration)                                                                                           | 默认 WebGL，失败回退 DOM；图形字符和重叠符号有 GPU 绘制支持                    | Windows、macOS、Linux 设置支持 DOM/WebGL；默认 WebGL，块字 glyph 可触发该终端回退 DOM。真实负载仍需现场对照，不能直接宣称 WebGL 更省内存。                       |
 | [VS Code 输出流控](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts) 与 [xterm 流控指南](https://xtermjs.org/docs/guides/flowcontrol/)   | 依据尚未解析确认的字符水位暂停/恢复 PTY，回调代表解析完成；批量确认减少调用    | FileTerm 已有每窗 4 批解析信用和有界输出队列，过载会跳过显示。共享 SSH 不能照搬暂停整个连接；输入方向仍缺两级通道的总字节预算。输出与键盘输入是不同方向的背压。  |
 | [Ghostty 同步输出说明](https://ghostty.org/docs/help/synchronized-output)                                                                                                              | 明确列出 Claude Code 的大范围重绘/撕裂案例，建议应用使用同步输出和减少全屏擦除 | 所安装 xterm 6 的 `InputHandler.ts` / `RenderService.ts` 已实现 DEC 2026、行范围合并和安全超时。先验证碎片化帧及额外适配器开销；不能把撕裂报告当成内存泄漏证据。 |
 | [Windows Terminal 渲染源码](https://github.com/microsoft/terminal/blob/main/src/renderer/base/renderer.cpp)                                                                            | 对可见区域与 dirty areas 求交后绘制，支持同步输出                              | 额外符号/着色工作也应围绕实际变化行合并。`TerminalLogColorizer` 当前每次写入完成都在解析确认回调之前扫描着色，是待剖析的实际热路径。                             |

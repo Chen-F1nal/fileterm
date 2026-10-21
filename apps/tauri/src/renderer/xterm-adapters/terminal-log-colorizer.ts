@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import type { IBufferCell, IBufferLine, IDisposable, ITheme, Terminal } from '@xterm/xterm'
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 
@@ -39,6 +40,13 @@ type ColorMatch = {
   rgb: number
 }
 
+type CachedRanges = {
+  text: string
+  columns: number
+  paletteKey: string
+  ranges: Array<{ start: number; end: number; rgb: number }>
+}
+
 type CompiledRule = {
   priority: number
   rgb: number
@@ -52,6 +60,7 @@ const STYLE_MASK = 0xfc000000
 const FOREGROUND_INVERSE = 0x04000000
 const COLOR_MODE_RGB = 0x03000000
 const MAX_RECOLOR_LINES_PER_WRITE = 384
+const MAX_CACHED_COLOR_LINES = 256
 
 // Rules provide rich semantic highlighting for terminal logs, commands,
 // file listings, permissions, and numeric metrics while strictly avoiding
@@ -210,6 +219,8 @@ export class TerminalLogColorizer implements IDisposable {
   private readonly originalClear: Terminal['clear']
   private readonly originalResize: Terminal['resize']
   private readonly originals = new WeakMap<InternalBufferLine, LineOriginals>()
+  private rangeCache = new WeakMap<InternalBufferLine, CachedRanges>()
+  private rangeCacheMisses = 0
   private rules: CompiledRule[] = []
   private paletteKey = ''
   private readonly cell: IBufferCell
@@ -254,6 +265,7 @@ export class TerminalLogColorizer implements IDisposable {
       return
     }
     this.disposed = true
+    this.clearRangeCache()
     if (!this.failed) this.restoreBuffer()
     this.terminal.write = this.originalWrite
     this.terminal.reset = this.originalReset
@@ -318,6 +330,7 @@ export class TerminalLogColorizer implements IDisposable {
     // reflow the buffer and require a restore/recolor pass.
     const columnsChanged = this.terminal.cols !== cols
     if (columnsChanged) {
+      this.clearRangeCache()
       this.restoreBuffer()
     }
     const result = this.originalResize(cols, rows)
@@ -332,32 +345,35 @@ export class TerminalLogColorizer implements IDisposable {
     this.recolorRange(0, buffer.length - 1, true)
   }
 
-  private recolorRange(startY: number, endY: number, refresh: boolean): void {
-    const buffer = this.terminal.buffer.normal
-    const first = Math.max(0, Math.min(startY, endY))
-    const last = Math.min(buffer.length - 1, Math.max(startY, endY))
-    if (last < first) {
-      return
-    }
+  private readonly recolorRange = trackRendererWork(
+    'log-coloring',
+    (startY: number, endY: number, refresh: boolean): void => {
+      const buffer = this.terminal.buffer.normal
+      const first = Math.max(0, Math.min(startY, endY))
+      const last = Math.min(buffer.length - 1, Math.max(startY, endY))
+      if (last < first) {
+        return
+      }
 
-    let changedFirst = Infinity
-    let changedLast = -1
-    for (let y = first; y <= last; y += 1) {
-      if (this.recolorLine(y)) {
-        changedFirst = Math.min(changedFirst, y)
-        changedLast = y
+      let changedFirst = Infinity
+      let changedLast = -1
+      for (let y = first; y <= last; y += 1) {
+        if (this.recolorLine(y)) {
+          changedFirst = Math.min(changedFirst, y)
+          changedLast = y
+        }
+      }
+
+      if (refresh && this.terminal.buffer.active.type === 'normal') {
+        const viewportY = this.terminal.buffer.active.viewportY
+        const startRow = Math.max(0, changedFirst - viewportY)
+        const endRow = Math.min(this.terminal.rows - 1, changedLast - viewportY)
+        if (startRow <= endRow) {
+          this.terminal.refresh(startRow, endRow)
+        }
       }
     }
-
-    if (refresh && this.terminal.buffer.active.type === 'normal') {
-      const viewportY = this.terminal.buffer.active.viewportY
-      const startRow = Math.max(0, changedFirst - viewportY)
-      const endRow = Math.min(this.terminal.rows - 1, changedLast - viewportY)
-      if (startRow <= endRow) {
-        this.terminal.refresh(startRow, endRow)
-      }
-    }
-  }
+  )
 
   private recolorLine(y: number): boolean {
     const line = this.terminal.buffer.normal.getLine(y)
@@ -366,15 +382,23 @@ export class TerminalLogColorizer implements IDisposable {
       return false
     }
 
-    // Most agent output is plain text: only build a per-cell map for actual matches.
-    const matches = collectMatches(line.translateToString(true), this.rules)
-    if (matches.length === 0) return this.restorePhysicalLine(internal)
-    const columns = this.readColumns(line)
-    const ranges = matches.flatMap((match) => {
-      const start = columns[match.start]
-      const end = columns[match.end - 1]
-      return start === undefined || end === undefined ? [] : [{ start, end: end + 1, rgb: match.rgb }]
-    })
+    const text = line.translateToString(true)
+    let cached = this.rangeCache.get(internal)
+    if (!cached || cached.text !== text || cached.columns !== line.length || cached.paletteKey !== this.paletteKey) {
+      const matches = collectMatches(text, this.rules)
+      const columns = matches.length ? this.readColumns(line) : []
+      const ranges = matches.flatMap((match) => {
+        const start = columns[match.start]
+        const end = columns[match.end - 1]
+        return start === undefined || end === undefined ? [] : [{ start, end: end + 1, rgb: match.rgb }]
+      })
+      // Bound extra text/range storage without retaining BufferLine objects after xterm releases them.
+      if (this.rangeCacheMisses >= MAX_CACHED_COLOR_LINES) this.clearRangeCache()
+      this.rangeCacheMisses++
+      cached = { text, columns: line.length, paletteKey: this.paletteKey, ranges }
+      this.rangeCache.set(internal, cached)
+    }
+    const { ranges } = cached
     // Retain colors that still apply; restoring them first would force another DOM redraw.
     let changed = this.restorePhysicalLine(internal, ranges)
     for (const range of ranges) {
@@ -479,8 +503,14 @@ export class TerminalLogColorizer implements IDisposable {
   }
 
   private clearStoredOriginals(): void {
+    this.clearRangeCache()
     // WeakMap entries are collected with xterm's BufferLine objects. Restoring
     // before clearing is enough; a new BufferLine never reuses our snapshots.
     this.restoreBuffer()
+  }
+
+  private clearRangeCache(): void {
+    this.rangeCache = new WeakMap()
+    this.rangeCacheMisses = 0
   }
 }

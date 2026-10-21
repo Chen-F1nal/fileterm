@@ -9,11 +9,14 @@ import { join, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 import react from '@vitejs/plugin-react'
+import { summarizeGpu } from './helpers/terminal-renderer-environment.mjs'
 
 const require = createRequire(import.meta.url)
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const duration = Number(process.env.FILETERM_SOAK_MS || 60000)
+const renderer = process.env.FILETERM_SOAK_RENDERER || 'dom'
 assert.ok(Number.isFinite(duration) && duration >= 1000)
+assert.ok(['dom', 'webgl'].includes(renderer), 'FILETERM_SOAK_RENDERER must be dom or webgl')
 const directory = realpathSync(mkdtempSync(join(tmpdir(), 'fileterm-workspace-soak-')))
 const root = fileURLToPath(new URL('../../../../', import.meta.url)).replaceAll('\\', '/')
 const hookPath = root + 'apps/tauri/src/renderer/hooks/use-workspace-ipc-sync.ts'
@@ -28,6 +31,48 @@ const baselineSource =
         { cwd: root, encoding: 'utf8' }
       )
     : null
+
+function sampleChromiumProcesses(processInfo) {
+  if (process.platform !== 'win32') return { status: 'unavailable', reason: 'windows-only', processes: [] }
+  try {
+    return JSON.parse(
+      execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          `$entries = ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd())
+$rows = @(
+  foreach ($entry in $entries) {
+    try {
+      $proc = Get-Process -Id ([int]$entry.id) -ErrorAction Stop
+      [pscustomobject]@{
+        pid = [int]$entry.id
+        type = [string]$entry.type
+        workingSetBytes = [double]$proc.WorkingSet64
+        privateBytes = [double]$proc.PrivateMemorySize64
+        cpuSeconds = if ($null -ne $proc.CPU) { [double]$proc.CPU } else { $null }
+      }
+    } catch {}
+  }
+)
+[pscustomobject]@{
+  status = if ($rows.Count -eq $entries.Count) { 'available' } else { 'partial' }
+  processes = $rows
+  workingSetBytes = [double](($rows | Measure-Object workingSetBytes -Sum).Sum)
+  privateBytes = [double](($rows | Measure-Object privateBytes -Sum).Sum)
+  cpuSeconds = [double](($rows | Measure-Object cpuSeconds -Sum).Sum)
+} | ConvertTo-Json -Compress -Depth 4`
+        ],
+        { input: JSON.stringify(processInfo), encoding: 'utf8', windowsHide: true }
+      )
+    )
+  } catch (error) {
+    return { status: 'unavailable', reason: error.message, processes: [] }
+  }
+}
+
 writeFileSync(join(directory, 'index.html'), '<div id="root"></div><script type="module" src="/fixture.tsx"></script>')
 writeFileSync(
   join(directory, 'fixture.tsx'),
@@ -43,6 +88,7 @@ import monoBold from '${root}apps/tauri/src/renderer/assets/fonts/text/jetbrains
 import cjk from '${root}apps/tauri/src/renderer/assets/fonts/text/noto-sans-sc/NotoSansSC-Variable.ttf?url'
 import { emptyState } from '${root}apps/tauri/src/renderer/app/app-data'
 import { createTerminalOutputDelivery } from '${root}apps/tauri/src/bridge/events/terminal-output'
+import { getTerminalResourceSnapshot } from '${root}apps/tauri/src/renderer/xterm-adapters/terminal-diagnostics'
 const noop = () => {}
 const subscriptions = new Map()
 const subscribe = (name, callback) => {
@@ -56,12 +102,13 @@ const monitoring = {generation:1,revision:1,phase:'healthy',attempt:0,maxAttempt
 const metrics = {cpuPercent:8,memoryPercent:10,swapPercent:0,networkInterfaces:['all'],activeNetworkInterface:'all',networkSamples:[],fileSystemRows:[]}
 const ids = Array.from({length:10},(_,index)=>'tab-'+index)
 const snapshot = {...emptyState,activeTabId:ids[0],tabs:ids.map(id=>({id,profileId:id,title:id,sessionType:'ssh',status:'connected',layout:'terminal-file'})),sessions:Object.fromEntries(ids.map(id=>[id,{profileId:id,connected:true,remotePath:'/',remoteFiles:[],capabilities:{resourceMonitoring:true},monitoring,systemMetrics:metrics}]))}
+window.rendererEvents=[]
 window.fileterm = new Proxy({
  platform:'win32',appVersion:'soak',getSnapshot:()=>new Promise(resolve=>{window.releaseSnapshot=()=>resolve(snapshot)}),
  getUiStateItem:async()=>null,setUiStateItem:async()=>{},setUiPreferences:async()=>{},
  getUiPreferences:async()=>({terminalZoomLocked:false}),getSecuritySettings:async()=>({lockEnabled:false,idleLockMinutes:0}),
  listImportedFonts:async()=>[],listLocalDirectory:async()=>({path:'/tmp',items:[]}),isCurrentWindowMaximized:async()=>false,
- resizeTerminal:async()=>{},writeTerminal:async()=>{},writeDiagnosticLog:async()=>{},
+ resizeTerminal:async()=>{},writeTerminal:async()=>{},writeDiagnosticLog:async(_level,_scope,message)=>{try{const event=JSON.parse(message);if(event.event==='terminal-renderer'&&window.rendererEvents.length<100)window.rendererEvents.push(event)}catch{}},
  onWorkspaceSnapshot:async callback=>subscribe('snapshot',callback),
  onTerminalData:callback=>subscribe('terminal',callback),
  onTransferUpdate:callback=>subscribe('transfer',callback),
@@ -129,7 +176,7 @@ window.start = () => {
 window.stop = ()=>{stopped=true;clearTimeout(timer)}
 window.sample = () => {
  const live=window.terminals.map(ref=>ref.deref()).filter(Boolean)
- return {sent:window.sent,acked:window.acked,maxPending:window.maxPending,history:window.currentHistory?.length,maxHistory:window.maxHistory,subscriptions:Object.fromEntries([...subscriptions].map(([name,listeners])=>[name,listeners.size])),liveTerminals:live.length,terminalElements:document.querySelectorAll('.xterm').length,markers:live.reduce((sum,t)=>sum+t.markers.length,0),pendingXterm:live.reduce((sum,t)=>sum+t._core._writeBuffer._pendingData,0),liveDomNodes:document.getElementsByTagName('*').length,clicks:window.clicks}
+ return {terminalResources:getTerminalResourceSnapshot(),rendererEvents:window.rendererEvents.map(({renderer,reason,hardwareAcceleration,gpuVendor,gpuRenderer})=>({renderer,reason,hardwareAcceleration,gpuVendor,gpuRenderer})),sent:window.sent,acked:window.acked,maxPending:window.maxPending,history:window.currentHistory?.length,maxHistory:window.maxHistory,subscriptions:Object.fromEntries([...subscriptions].map(([name,listeners])=>[name,listeners.size])),liveTerminals:live.length,terminalElements:document.querySelectorAll('.xterm').length,markers:live.reduce((sum,t)=>sum+t.markers.length,0),pendingXterm:live.reduce((sum,t)=>sum+t._core._writeBuffer._pendingData,0),liveDomNodes:document.getElementsByTagName('*').length,clicks:window.clicks}
 }
 Promise.all([
  new FontFace('JetBrains Mono', 'url('+monoRegular+')',{weight:'400'}),
@@ -153,6 +200,13 @@ await build({
     react()
   ],
   logLevel: 'error',
+  define:
+    renderer === 'webgl'
+      ? {
+          'import.meta.env.DEV': 'true',
+          'import.meta.env.VITE_FILETERM_TERMINAL_RENDERER': '"webgl"'
+        }
+      : undefined,
   resolve: {
     alias: [
       { find: /^react$/, replacement: require.resolve('react') },
@@ -184,8 +238,29 @@ const server = createServer((request, response) => {
 })
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const isWebkit = process.env.PLAYWRIGHT_ENGINE === 'webkit'
-const browser = await (isWebkit ? webkit : chromium).launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH })
+const browserServer = isWebkit
+  ? null
+  : await chromium.launchServer({
+      headless: true,
+      executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
+      args: renderer === 'webgl' ? ['--enable-gpu'] : []
+    })
+const browser = isWebkit
+  ? await webkit.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH })
+  : await chromium.connect(browserServer.wsEndpoint())
+let browserCdp = null
 try {
+  browserCdp = isWebkit ? null : await browser.newBrowserCDPSession()
+  const gpu = browserCdp ? summarizeGpu((await browserCdp.send('SystemInfo.getInfo')).gpu) : null
+  console.log(
+    JSON.stringify({
+      phase: 'environment',
+      renderer,
+      engine: isWebkit ? 'WebKit' : 'Chromium',
+      browserVersion: browser.version(),
+      gpu
+    })
+  )
   const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } })
   const errors = []
   page.on('pageerror', (error) => {
@@ -206,13 +281,35 @@ try {
     'slow hydration must coalesce task progress and bound history'
   )
   const cdp = isWebkit ? null : await page.context().newCDPSession(page)
+  let previousProcessSample = null
   const sample = async () => {
     await cdp?.send('HeapProfiler.collectGarbage')
     const resource = await page.evaluate(() => window.sample())
     const memory = cdp ? await cdp.send('Runtime.getHeapUsage') : {}
     const dom = cdp ? await cdp.send('Memory.getDOMCounters') : {}
-    return { ...resource, ...memory, ...dom }
+    const { processInfo = [] } = browserCdp ? await browserCdp.send('SystemInfo.getProcessInfo') : {}
+    const trackedProcesses = [...processInfo, { id: process.pid, type: 'test-runner' }]
+    const processGroup = browserCdp
+      ? sampleChromiumProcesses(trackedProcesses)
+      : { status: 'unavailable', processes: [] }
+    const sampledAt = performance.now()
+    const elapsedSeconds = previousProcessSample ? (sampledAt - previousProcessSample.sampledAt) / 1000 : null
+    const cpuDelta = processGroup.cpuSeconds - previousProcessSample?.cpuSeconds
+    processGroup.cpuPercentOneCore =
+      elapsedSeconds && Number.isFinite(cpuDelta) && cpuDelta >= 0 ? (cpuDelta / elapsedSeconds) * 100 : null
+    processGroup.source = 'Chromium CDP processes plus Node test runner, sampled with Windows Get-Process'
+    previousProcessSample = { sampledAt, cpuSeconds: processGroup.cpuSeconds }
+    return { ...resource, ...memory, ...dom, processGroup }
   }
+  const expectedRenderer = renderer === 'webgl' ? 'webgl' : 'dom'
+  await page.waitForFunction(
+    (expected) =>
+      window.sample().terminalResources.byRenderer[expected] === 10 &&
+      (expected !== 'webgl' ||
+        window.rendererEvents.filter((event) => event.renderer === 'webgl' && event.reason === 'active').length === 10),
+    expectedRenderer,
+    { timeout: 30000 }
+  )
   console.log(JSON.stringify({ phase: 'mounted', ...(await sample()) }))
   await page.evaluate(() => window.prefill())
   console.log(JSON.stringify({ phase: 'prefilled', ...(await sample()) }))
@@ -227,6 +324,21 @@ try {
     const current = await sample()
     samples.push(current)
     console.log(JSON.stringify({ phase: 'load', elapsedMs: Math.round(performance.now() - started), ...current }))
+    assert.equal(current.terminalResources.byRenderer[expectedRenderer], 10)
+    assert.equal(current.terminalResources.byRenderer[expectedRenderer === 'dom' ? 'webgl' : 'dom'], 0)
+    if (renderer === 'webgl') {
+      const activeRenderers = current.rendererEvents.filter(
+        (event) => event.renderer === 'webgl' && event.reason === 'active'
+      )
+      assert.equal(activeRenderers.length, 10)
+      assert.ok(activeRenderers.every((event) => event.hardwareAcceleration === true))
+      assert.equal(
+        current.rendererEvents.filter((event) =>
+          ['load-failed', 'activation-failed', 'context-loss'].includes(event.reason)
+        ).length,
+        0
+      )
+    }
     assert.equal(current.terminalElements, 10)
     assert.ok(current.history <= 200, 'completed transfer history must stay bounded')
     assert.ok(current.maxPending <= 4)
@@ -240,9 +352,20 @@ try {
     await page.waitForFunction(() => window.mounted?.() && document.querySelectorAll('.xterm').length === 10)
     await page.waitForTimeout(50)
   }
+  await page.waitForFunction(
+    (expected) =>
+      window.sample().terminalResources.byRenderer[expected] === 10 &&
+      (expected !== 'webgl' ||
+        window.rendererEvents.filter((event) => event.renderer === 'webgl' && event.reason === 'active').length >= 20),
+    expectedRenderer,
+    { timeout: 30000 }
+  )
   const replaced = await sample()
   console.log(JSON.stringify({ phase: 'replaced', ...replaced }))
   assert.equal(replaced.subscriptions.terminal, 10)
+  assert.equal(replaced.terminalResources.terminals, 10)
+  assert.equal(replaced.terminalResources.instrumentedParsers, 10)
+  assert.equal(replaced.terminalResources.instrumentedRenderers, 10)
   assert.equal(replaced.subscriptions.metrics, 1)
   if (cdp) assert.equal(replaced.liveTerminals, 10, 'replaced terminals must be garbage collected')
   if (cdp)
@@ -256,6 +379,8 @@ try {
   const disposed = await sample()
   console.log(JSON.stringify({ phase: 'disposed', ...disposed }))
   assert.equal(disposed.pendingXterm, 0)
+  assert.equal(disposed.terminalResources.terminals, 0, 'diagnostics must release all terminal references')
+  assert.equal(disposed.terminalResources.byRenderer.webgl + disposed.terminalResources.byRenderer.dom, 0)
   assert.equal(disposed.markers, 0)
   assert.ok(
     Object.values(disposed.subscriptions).every((count) => count === 0),
@@ -265,7 +390,9 @@ try {
   assert.deepEqual(errors, [])
   assert.ok(samples.length > 0)
 } finally {
-  await browser.close()
+  await browserCdp?.detach()
+  if (browserServer) await browserServer.close()
+  else await browser.close()
   await new Promise((resolve) => server.close(resolve))
   rmSync(directory, { recursive: true, force: true })
 }

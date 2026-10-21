@@ -41,25 +41,3 @@ export function buildScrollingWindow(samples: NetworkSamplePoint[], visibleCount
   const padded = Array.from({ length: Math.max(0, windowSize - samples.length) }, () => ({ rx: 0, tx: 0 }))
   return [...padded, ...samples].slice(-windowSize)
 }
-
-export function areSampleWindowsEqual(left: NetworkSamplePoint[], right: NetworkSamplePoint[]) {
-  if (left === right) {
-    return true
-  }
-  if (left.length !== right.length) {
-    return false
-  }
-
-  for (let index = 0; index < left.length; index += 1) {
-    if (
-      left[index]?.rx !== right[index]?.rx ||
-      left[index]?.tx !== right[index]?.tx ||
-      left[index]?.breakBefore !== right[index]?.breakBefore ||
-      left[index]?.sampledAt !== right[index]?.sampledAt
-    ) {
-      return false
-    }
-  }
-
-  return true
-}

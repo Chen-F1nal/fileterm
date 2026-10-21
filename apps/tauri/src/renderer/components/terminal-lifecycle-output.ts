@@ -1,3 +1,5 @@
+import { createTerminalUiState } from './terminal-ui-state'
+import { trackRendererWork } from '../lib/renderer-work-log'
 import {
   observeTerminalFontMetrics,
   registerTerminalBufferRenderRecovery
@@ -75,11 +77,16 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     }
   )
 
-  const searchResultsDisposable = searchAddon.onDidChangeResults(({ resultIndex, resultCount }) => {
-    setFindMatchCount(resultCount)
-    setActiveFindIndex(resultIndex)
-    setFindMiss(resultCount === 0)
+  const uiState = createTerminalUiState({
+    setHasSelection,
+    setFindMatchCount,
+    setActiveFindIndex,
+    setFindMiss,
+    findOpenRef: runtime.findOpenRef
   })
+  const searchResultsDisposable = searchAddon.onDidChangeResults(
+    trackRendererWork('terminal-search-results', uiState.search)
+  )
 
   const osc52Disposable = terminal.parser.registerOscHandler(52, async (payload) => {
     const parsed = splitOscPayload(payload)
@@ -212,16 +219,15 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
   }
 
   const registerSessionEvents = () => {
-    const onSelectionDispose = terminal.onSelectionChange(() => {
-      const nextHasSelection = terminal.hasSelection() || Boolean(getVimVisualSelection(terminal))
-      setHasSelection(nextHasSelection)
-      logTerminalClipboard(terminal, 'selection-changed', { nextHasSelection })
-    })
+    const onSelectionDispose = terminal.onSelectionChange(
+      trackRendererWork('terminal-selection-change', () => {
+        const nextHasSelection = terminal.hasSelection() || Boolean(getVimVisualSelection(terminal))
+        uiState.selection(nextHasSelection)
+        logTerminalClipboard(terminal, 'selection-changed', { nextHasSelection })
+      })
+    )
 
-    const offData = window.fileterm?.onTerminalData(({ tabId: nextTabId, chunk }) => {
-      if (nextTabId !== tabIdRef.current) {
-        return
-      }
+    const prepareOutput = trackRendererWork('output-prepare', (chunk: string) => {
       const shouldTrimHydratedBacklog = Date.now() < suppressHydratedChunksUntilRef.current
       if (shouldTrimHydratedBacklog) {
         // IPC ordering can leave one queued batch behind an authoritative
@@ -240,9 +246,12 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       const parsed = scheduleTerminalWrite(formatTerminalChunk(terminal, visibleChunk))
       return parsed
     })
+    const offData = window.fileterm?.onTerminalData(({ tabId: nextTabId, chunk }) => {
+      if (nextTabId === tabIdRef.current) return prepareOutput(chunk)
+    })
 
     const offState = window.fileterm?.onTerminalState(
-      ({ tabId: nextTabId, summary, transcript, connected, status }) => {
+      trackRendererWork('terminal-status', ({ tabId: nextTabId, summary, transcript, connected, status }) => {
         if (nextTabId !== tabIdRef.current) {
           return
         }
@@ -285,7 +294,7 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
           inputSendFailedRef.current = false
           reconnectHintShownRef.current = false
         }
-      }
+      })
     )
 
     return () => {
@@ -305,6 +314,7 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     dispose: () => {
       screenBufferRenderDisposable.dispose()
       searchResultsDisposable.dispose()
+      uiState.dispose()
       osc52Disposable.dispose()
       disposeCanvasTextMetrics()
       resizeObserver.disconnect()

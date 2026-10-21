@@ -187,7 +187,7 @@ fn is_invalid_windows_executable(candidate: &Path) -> bool {
         return true;
     };
     let mut header = [0_u8; 2];
-    file.read_exact(&mut header).is_err() || header != [b'M', b'Z']
+    file.read_exact(&mut header).is_err() || header != *b"MZ"
 }
 
 #[cfg(not(target_os = "windows"))]

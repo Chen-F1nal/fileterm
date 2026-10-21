@@ -1,4 +1,5 @@
 mod root_listing_compatibility_tests {
+    #[cfg(unix)]
     use super::*;
 
     #[cfg(unix)]

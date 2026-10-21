@@ -33,6 +33,8 @@ pub struct LocalTerminalShellPreferencesInput {
 pub struct UiPreferences {
     pub theme: String,
     pub locale: String,
+    #[serde(default = "default_terminal_renderer")]
+    pub terminal_renderer: String,
     #[serde(default = "default_theme_config")]
     pub theme_config: ThemeConfig,
     #[serde(default)]
@@ -90,6 +92,7 @@ pub struct UiPreferences {
 pub struct UiPreferencesInput {
     pub theme: Option<String>,
     pub locale: Option<String>,
+    pub terminal_renderer: Option<String>,
     pub theme_config: Option<ThemeConfig>,
     pub custom_themes: Option<Vec<SavedTheme>>,
     pub auto_check_updates: Option<bool>,
@@ -117,6 +120,8 @@ pub struct UiPreferencesInput {
 
 const DEFAULT_UI_THEME: &str = "fileterm-dark";
 const DEFAULT_UI_LOCALE: &str = "enUS";
+const DEFAULT_TERMINAL_RENDERER: &str = "webgl";
+const INVALID_TERMINAL_RENDERER_FALLBACK: &str = "dom";
 const DEFAULT_UI_ZOOM_PERCENT: i32 = 100;
 const MIN_UI_ZOOM_PERCENT: i32 = 80;
 const MAX_UI_ZOOM_PERCENT: i32 = 200;
@@ -138,6 +143,10 @@ fn ui_locale_for_system_tag(locale: Option<&str>) -> &'static str {
 
 fn default_ui_locale() -> &'static str {
     ui_locale_for_system_tag(sys_locale::get_locale().as_deref())
+}
+
+fn default_terminal_renderer() -> String {
+    DEFAULT_TERMINAL_RENDERER.to_string()
 }
 
 fn is_light_theme_mode(theme: &str) -> bool {
@@ -472,6 +481,9 @@ fn normalize_saved_themes(themes: Vec<SavedTheme>) -> Vec<SavedTheme> {
 }
 
 fn normalize_ui_preferences(mut preferences: UiPreferences) -> UiPreferences {
+    if !matches!(preferences.terminal_renderer.as_str(), "dom" | "webgl") {
+        preferences.terminal_renderer = INVALID_TERMINAL_RENDERER_FALLBACK.to_string();
+    }
     if let Some(legacy_size) = preferences.legacy_file_list_font_size.take() {
         // The previous control used 11px as its 100% baseline. Convert saved
         // values proportionally so existing users keep a similar visual size.

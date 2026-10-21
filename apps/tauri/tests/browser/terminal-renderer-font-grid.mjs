@@ -1,18 +1,43 @@
 /* global window, document, requestAnimationFrame, FontFace, NodeFilter */
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTypeScript } from './helpers/load-typescript.mjs'
+import { summarizeGpu } from './helpers/terminal-renderer-environment.mjs'
 import { registerComparisonGridCalibration, readComparisonGridMetrics } from './helpers/terminal-grid-calibration.mjs'
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
-assert.ok(process.env.FILETERM_WEBGL_BUNDLE)
+const archiveRoot = resolve(
+  process.env.FILETERM_VALIDATION_ARCHIVE || join(root, '..', 'renderer-validation-archive', 'windows-2026-10-20')
+)
+const gridMode = process.env.FILETERM_GRID_MODE || 'comparison'
+assert.ok(['comparison', 'production'].includes(gridMode), 'FILETERM_GRID_MODE must be comparison or production')
+const webglBundle = resolve(root + 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js')
+const addonVersion = JSON.parse(readFileSync(resolve(dirname(webglBundle), '../package.json'))).version
+assert.equal(addonVersion, '0.19.0')
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
-const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH })
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
+  args: ['--enable-gpu']
+})
+const output = resolve(
+  process.env.FILETERM_GRID_OUTPUT || join(archiveRoot, 'results', 'terminal-renderer-font-grid.json')
+)
+const screenshotDirectory = resolve(process.env.FILETERM_RENDERER_SCREENSHOT_DIR || join(archiveRoot, 'screenshots'))
+const screenshot = resolve(
+  process.env.FILETERM_GRID_SCREENSHOT || join(screenshotDirectory, 'terminal-renderer-font-grid.png')
+)
+mkdirSync(dirname(output), { recursive: true })
+mkdirSync(dirname(screenshot), { recursive: true })
 try {
+  const browserCdp = await browser.newBrowserCDPSession()
+  const { gpu: rawGpu } = await browserCdp.send('SystemInfo.getInfo')
+  const gpu = summarizeGpu(rawGpu)
+  const browserVersion = browser.version()
   const page = await browser.newPage({ viewport: { width: 1800, height: 1000 }, deviceScaleFactor: 1 })
   const cdp = await page.context().newCDPSession(page)
   const errors = []
@@ -39,22 +64,25 @@ try {
   for (const path of [
     'node_modules/@xterm/xterm/lib/xterm.js',
     'node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js',
-    'node_modules/@xterm/addon-fit/lib/addon-fit.js'
+    'node_modules/@xterm/addon-fit/lib/addon-fit.js',
+    'node_modules/@xterm/addon-search/lib/addon-search.js'
   ])
     await page.addScriptTag({ path: root + path })
-  await page.addScriptTag({ path: resolve(process.env.FILETERM_WEBGL_BUNDLE) })
+  await page.addScriptTag({ path: webglBundle })
   for (const [file, symbol] of [
     ['xterm-adapters/terminal-options', 'getTerminalCompatibilityOptions'],
     ['xterm-adapters/terminal-emoji-widths', 'registerTerminalEmojiWidths'],
     ['xterm-adapters/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
     ['xterm-adapters/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
     ['xterm-adapters/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
+    ['xterm-adapters/terminal-webgl-grid', 'registerTerminalWebglGrid'],
     ['xterm-adapters/terminal-render-recovery', 'observeTerminalFontMetrics']
   ])
     await loadTypeScript(page, root + 'apps/tauri/src/renderer/' + file + '.ts', symbol)
   await page.addScriptTag({
     content: `window.registerComparisonGridCalibration=${registerComparisonGridCalibration};window.readComparisonGridMetrics=${readComparisonGridMetrics};`
   })
+  await page.evaluate((mode) => (window.gridMode = mode), gridMode)
   const control = await page.evaluate(async () => {
     window.settle = async () => {
       for (let i = 0; i < 8; i++) await new Promise(requestAnimationFrame)
@@ -78,13 +106,16 @@ try {
       terminal.loadAddon(new window.Unicode11Addon.Unicode11Addon())
       terminal.unicode.activeVersion = '11'
       const fit = new window.FitAddon.FitAddon()
+      const search = new window.SearchAddon.SearchAddon({ highlightLimit: 2000 })
       terminal.loadAddon(fit)
+      terminal.loadAddon(search)
       const disposables = [window.registerTerminalEmojiWidths(terminal)]
       terminal.open(host)
       if (backend === 'webgl') terminal.loadAddon(new window.WebglAddon.WebglAddon())
       const uncalibrated = window.readComparisonGridMetrics(terminal)
-      const calibration = window.registerComparisonGridCalibration(terminal, backend)
-      disposables.push(calibration)
+      if (window.gridMode === 'comparison')
+        disposables.push(window.registerComparisonGridCalibration(terminal, backend))
+      else if (backend === 'webgl') disposables.push(window.registerTerminalWebglGrid(terminal))
       if (backend === 'dom')
         for (const name of [
           'registerTerminalSelectionRenderer',
@@ -97,6 +128,7 @@ try {
         host,
         terminal,
         fit,
+        search,
         uncalibrated,
         dispose() {
           disposables.reverse().forEach((item) => item.dispose())
@@ -114,7 +146,7 @@ try {
   )
   const check = async (label) => {
     const result = await page.evaluate(async (label) => {
-      const lines = ['|123456789|', '|中文，。|', '|e\u0301🧪✻|', '|▢────────────|']
+      const lines = ['|123456789|', '|中文，。|', '|e\u0301🧪✻|', '|▢────────────|', '|FileTerm search marker|']
       for (const { terminal, fit } of window.runtimes) {
         fit.fit()
         terminal.reset()
@@ -125,6 +157,24 @@ try {
         label,
         runtimes: window.runtimes.map(({ backend, host, terminal, fit }) => {
           const grid = window.readComparisonGridMetrics(terminal)
+          const renderer = terminal._core._renderService._renderer.value
+          const gl = renderer._gl
+          const gpuSurface = gl
+            ? {
+                width: gl.drawingBufferWidth,
+                height: gl.drawingBufferHeight,
+                viewport: Array.from(gl.getParameter(gl.VIEWPORT)),
+                nonIntegerGlyphs: renderer._charAtlas.pages
+                  .flatMap((page) => page.glyphs)
+                  .filter(
+                    (glyph) =>
+                      !Number.isInteger(glyph.size.x) ||
+                      !Number.isInteger(glyph.size.y) ||
+                      !Number.isInteger(glyph.texturePosition.x) ||
+                      !Number.isInteger(glyph.texturePosition.y)
+                  ).length
+              }
+            : null
           terminal.select(1, 1, 4)
           const selection = terminal.getSelection()
           terminal.clearSelection()
@@ -171,6 +221,7 @@ try {
           return {
             backend,
             grid,
+            gpuSurface,
             screenWidth: rect.width,
             screenHeight: rect.height,
             fit: fit.proposeDimensions(),
@@ -183,24 +234,43 @@ try {
       }
     }, label)
     const [dom, gl] = result.runtimes
-    for (const key of [
-      'cols',
-      'rows',
-      'cellWidth',
-      'cellHeight',
-      'canvasWidth',
-      'canvasHeight',
-      'deviceCellWidth',
-      'deviceCellHeight',
-      'measuredWidth'
-    ])
+    for (const key of gridMode === 'production'
+      ? ['measuredWidth']
+      : [
+          'cols',
+          'rows',
+          'cellWidth',
+          'cellHeight',
+          'canvasWidth',
+          'canvasHeight',
+          'deviceCellWidth',
+          'deviceCellHeight',
+          'measuredWidth'
+        ])
       assert.ok(
         Math.abs(dom.grid[key] - gl.grid[key]) < 1e-7,
         `${label} ${key}: ${JSON.stringify({ dom: dom.grid, gl: gl.grid })}`
       )
-    assert.deepEqual(dom.fit, gl.fit)
-    assert.deepEqual(dom.widths, gl.widths)
+    if (gridMode === 'comparison') assert.deepEqual(dom.fit, gl.fit)
+    if (gridMode === 'production') {
+      assert.equal(gl.gpuSurface.nonIntegerGlyphs, 0, `${label}: glyph atlas pixels must be integer`)
+      assert.ok(Number.isInteger(gl.grid.deviceCellWidth), `${label}: atlas cell width must be integer`)
+      assert.ok(Number.isInteger(gl.grid.deviceCellHeight), `${label}: atlas cell height must be integer`)
+    }
+    const contentWidths = (rows) =>
+      rows.map((row) => {
+        let end = row.length
+        while (end > 0 && row[end - 1][0] === '') end--
+        return row.slice(0, end)
+      })
+    assert.deepEqual(contentWidths(dom.widths), contentWidths(gl.widths))
     for (const runtime of result.runtimes) {
+      if (gridMode === 'production' && runtime.gpuSurface)
+        assert.deepEqual(
+          runtime.gpuSurface.viewport,
+          [0, 0, runtime.gpuSurface.width, runtime.gpuSurface.height],
+          `${label}: WebGL viewport must cover the backing buffer`
+        )
       assert.equal(runtime.selection, '中文', label)
       assert.deepEqual(
         runtime.hits.map((hit) => hit[0]),
@@ -248,6 +318,8 @@ try {
           { family, size }
         )
         results.push(await check(`DPR ${dpr} ${family} ${size}px`))
+        if (gridMode === 'production' && dpr === 1.25 && family.includes('Grid Mono') && size === 14)
+          await page.screenshot({ path: screenshot.replace(/\.png$/i, '-125pct.png') })
       }
   }
   const late = await page.evaluate(async (font) => {
@@ -293,16 +365,77 @@ try {
     await window.settle()
   })
   results.push(await check('restored default font and DPI'))
-  const screenshot = process.env.FILETERM_GRID_SCREENSHOT || '/tmp/fileterm-renderer-font-grid.png'
+  const resizeResults = []
+  for (const width of [620, 777, 940]) {
+    await page.evaluate(async (width) => {
+      for (const { host, fit } of window.runtimes) {
+        host.style.width = `${width}px`
+        fit.fit()
+      }
+      await window.settle()
+    }, width)
+    resizeResults.push(await check(`window resize ${width}px`))
+  }
+  const searchResults = await page.evaluate(() =>
+    window.runtimes.map(({ backend, search }) => ({ backend, found: search.findNext('search marker') }))
+  )
+  assert.deepEqual(
+    searchResults.map(({ found }) => found),
+    [true, true]
+  )
+  const replay = 'FileTerm replay 中文 🧪'
+  const replayResults = await page.evaluate(async (replay) => {
+    const write = (terminal, value) => new Promise((resolve) => terminal.write(value, resolve))
+    for (const { terminal } of window.runtimes) {
+      terminal.reset()
+      await write(terminal, replay)
+    }
+    await window.settle()
+    return window.runtimes.map(({ backend, terminal }) => ({
+      backend,
+      text: terminal.buffer.active.getLine(0).translateToString(true)
+    }))
+  }, replay)
+  assert.deepEqual(
+    replayResults.map(({ text }) => text),
+    [replay, replay]
+  )
   await page.screenshot({ path: screenshot })
   await page.evaluate(() => window.runtimes.forEach((runtime) => runtime.dispose()))
   assert.deepEqual(errors, [])
   writeFileSync(
-    process.env.FILETERM_GRID_OUTPUT || '/tmp/fileterm-renderer-font-grid.json',
-    JSON.stringify({ control, late, results, screenshot }, null, 2) + '\n'
+    output,
+    JSON.stringify(
+      {
+        environment: {
+          engine: 'Playwright Chromium headless',
+          browserVersion,
+          gpu,
+          gridCalibration:
+            gridMode === 'production'
+              ? 'native renderer grids; WebGL integer atlas; DOM metrics unchanged'
+              : 'existing test-only normalization; production DOM unchanged',
+          imeInput: { status: 'not-supported-by-headless' }
+        },
+        control,
+        late,
+        results,
+        resizeResults,
+        searchResults,
+        replayResults,
+        screenshot: relative(dirname(output), screenshot).replaceAll('\\', '/')
+      },
+      null,
+      2
+    ) + '\n'
   )
   console.log(
-    JSON.stringify({ cases: results.length, control: control.map((grid) => grid.cellWidth), late, screenshot })
+    JSON.stringify({
+      cases: results.length,
+      control: control.map((grid) => grid.cellWidth),
+      late,
+      screenshot: relative(dirname(output), screenshot).replaceAll('\\', '/')
+    })
   )
 } finally {
   await browser.close()

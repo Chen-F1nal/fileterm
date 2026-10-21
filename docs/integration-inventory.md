@@ -6,13 +6,14 @@
 
 ### 已采用包
 
-| 包                       | 当前用途                                    | 实现位置                                               | 维护结论                                                                                      |
-| ------------------------ | ------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `@xterm/xterm`           | 终端主体渲染、输入、selection、控制序列解析 | `apps/tauri/src/renderer/components/terminal-view.tsx` | 实时 PTY 数据必须原样交给 xterm 解析，renderer 不改写 `\r` / `\n` 控制流。                    |
-| `@xterm/addon-fit`       | 根据容器尺寸计算行列数                      | `apps/tauri/src/renderer/components/terminal-view.tsx` | 配合 `ResizeObserver` 使用；resize 后必须把同一套 `cols/rows` 同步给后端 PTY。                |
-| `@xterm/addon-search`    | 终端内搜索                                  | `apps/tauri/src/renderer/components/terminal-view.tsx` | 绑定 `Ctrl+Shift+F` 的终端搜索 UI；`Ctrl+F` 保留给远程 CLI，支持上一条/下一条、大小写和正则。 |
-| `@xterm/addon-unicode11` | Unicode 11 宽字符支持                       | `apps/tauri/src/renderer/components/terminal-view.tsx` | 用于中文、Emoji、Powerline / Oh My Zsh 字符宽度计算，减少光标错位。                           |
-| `@xterm/addon-web-links` | HTTP/HTTPS 链接识别                         | `apps/tauri/src/renderer/components/terminal-view.tsx` | 终端输出中的链接可点击并通过浏览器打开。                                                      |
+| 包                       | 当前用途                                    | 实现位置                                                        | 维护结论                                                                                      |
+| ------------------------ | ------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `@xterm/xterm`           | 终端主体渲染、输入、selection、控制序列解析 | `apps/tauri/src/renderer/components/terminal-view.tsx`          | 实时 PTY 数据必须原样交给 xterm 解析，renderer 不改写 `\r` / `\n` 控制流。                    |
+| `@xterm/addon-fit`       | 根据容器尺寸计算行列数                      | `apps/tauri/src/renderer/components/terminal-view.tsx`          | 配合 `ResizeObserver` 使用；resize 后必须把同一套 `cols/rows` 同步给后端 PTY。                |
+| `@xterm/addon-search`    | 终端内搜索                                  | `apps/tauri/src/renderer/components/terminal-view.tsx`          | 绑定 `Ctrl+Shift+F` 的终端搜索 UI；`Ctrl+F` 保留给远程 CLI，支持上一条/下一条、大小写和正则。 |
+| `@xterm/addon-unicode11` | Unicode 11 宽字符支持                       | `apps/tauri/src/renderer/components/terminal-view.tsx`          | 用于中文、Emoji、Powerline / Oh My Zsh 字符宽度计算，减少光标错位。                           |
+| `@xterm/addon-web-links` | HTTP/HTTPS 链接识别                         | `apps/tauri/src/renderer/components/terminal-view.tsx`          | 终端输出中的链接可点击并通过浏览器打开。                                                      |
+| `@xterm/addon-webgl`     | 可选 WebGL 终端渲染                         | `apps/tauri/src/renderer/components/terminal-lifecycle-core.ts` | Windows、macOS、Linux 默认 WebGL，也可选择 DOM；加载或运行失败时回退 DOM。                    |
 
 ### 当前终端实例配置
 
@@ -64,12 +65,11 @@ FileTerm 当前采用“拖拽期间冻结列数，稳定后同步真实宽度�
 
 ### 未采用或已撤回项
 
-| 包 / 能力                | 当前状态           | 原因                                                                                                                 |
-| ------------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `@xterm/addon-webgl`     | 已撤回，不默认加载 | 本轮验证中会放大 selection、resize、TUI 重绘问题。先保证 PTY 控制流和尺寸同步正确，再单独评估硬件加速。              |
-| `@xterm/addon-canvas`    | 未采用             | WebGL 未默认启用，因此暂不需要 Canvas fallback。                                                                     |
-| `@xterm/addon-clipboard` | 未采用             | 当前复制/粘贴走 Tauri 暴露的剪贴板 API 与 xterm 自身 paste/selection 行为。                                          |
-| `xterm-addon-zmodem`     | 未采用             | SSH shell 仍不把 `rz/sz` 二进制流混入终端通道；串口文件传输由 Rust 的独立 `zmodem2` 适配器负责，不依赖 xterm addon。 |
+| 包 / 能力                | 当前状态 | 原因                                                                                                                 |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `@xterm/addon-canvas`    | 未采用   | WebGL 加载或激活失败时直接回退到 DOM renderer，因此暂不需要 Canvas fallback。                                        |
+| `@xterm/addon-clipboard` | 未采用   | 当前复制/粘贴走 Tauri 暴露的剪贴板 API 与 xterm 自身 paste/selection 行为。                                          |
+| `xterm-addon-zmodem`     | 未采用   | SSH shell 仍不把 `rz/sz` 二进制流混入终端通道；串口文件传输由 Rust 的独立 `zmodem2` 适配器负责，不依赖 xterm addon。 |
 
 ### 回归文档
 

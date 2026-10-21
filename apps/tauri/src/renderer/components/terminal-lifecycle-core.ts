@@ -1,5 +1,7 @@
+import { registerTerminalDiagnostics } from '../xterm-adapters/terminal-diagnostics'
 import { getTerminalCompatibilityOptions } from '../xterm-adapters/terminal-options'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IDisposable } from '@xterm/xterm'
+import type { WebglAddon } from '@xterm/addon-webgl'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -9,9 +11,11 @@ import { isClinkAutosuggestHelpUrl } from '../app/terminal-transcript'
 import { registerTerminalEmojiWidths } from '../xterm-adapters/terminal-emoji-widths'
 import { t } from '../i18n'
 import { getConfiguredMonoFontFamily } from '../app/font-metrics'
+import { getTerminalRendererPreference, supportsTerminalRenderer } from '../app/terminal-renderer-preference'
 import { getTerminalLogColorPalette, TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { registerTerminalForegroundAdapter } from '../xterm-adapters/terminal-foreground-adapter'
 import { registerTerminalRenderCacheLimits } from '../xterm-adapters/terminal-render-cache'
+import { registerTerminalWebglGrid } from '../xterm-adapters/terminal-webgl-grid'
 import { scaleTerminalFontSizeForUiZoom } from '../app/ui-zoom'
 import {
   getTerminalFontSize,
@@ -26,6 +30,69 @@ import { registerTerminalSelectionRenderer } from '../xterm-adapters/terminal-se
 import { registerTerminalSymbolGlyphRenderer } from '../xterm-adapters/terminal-symbol-glyph-renderer'
 import { createTerminalInputWriteQueue } from './terminal-input-write-queue'
 import type { TerminalLifecycleOptions, TerminalLifecycleRuntime } from './terminal-lifecycle-types'
+import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
+
+type WebglAddonRuntime = WebglAddon & { _renderer?: { _gl?: WebGL2RenderingContext } }
+type TerminalRendererView = Terminal & {
+  _core?: { _renderService?: { _renderer?: { value?: unknown } } }
+}
+
+function hasBlockGlyph(
+  terminal: Terminal,
+  start: number,
+  end: number,
+  cell: ReturnType<Terminal['buffer']['active']['getNullCell']>
+) {
+  const buffer = terminal.buffer.active
+  for (let row = Math.max(0, start); row <= Math.min(end, terminal.rows - 1); row++) {
+    const line = buffer.getLine(buffer.viewportY + row)
+    if (!line) continue
+    for (let column = 0; column < Math.min(terminal.cols, line.length); column++) {
+      const codepoint = line.getCell(column, cell)?.getCode() ?? 0
+      if (codepoint >= 0x2580 && codepoint <= 0x259f) return true
+    }
+  }
+  return false
+}
+
+function releaseWebglAddon(addon: WebglAddonRuntime) {
+  const gl = addon._renderer?._gl
+  try {
+    addon.dispose()
+  } finally {
+    // shortcut: addon-webgl 0.19.0 retains context after dispose; remove when upstream releases it explicitly.
+    try {
+      gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    } catch {
+      // The context may already be lost by the time the fallback runs.
+    }
+  }
+}
+
+function getWebglDetails(addon: WebglAddonRuntime) {
+  const gl = addon._renderer?._gl
+  if (!gl || gl.isContextLost()) return { gpuVendor: null, gpuRenderer: null, hardwareAcceleration: null }
+  const debug = gl.getExtension('WEBGL_debug_renderer_info')
+  const gpuRenderer = debug ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : null
+  const gpuVendor = debug ? String(gl.getParameter(debug.UNMASKED_VENDOR_WEBGL)) : null
+  const hardwareAcceleration = gpuRenderer
+    ? !/swiftshader|llvmpipe|software|warp|basic render driver/i.test(gpuRenderer)
+    : null
+  return { gpuVendor, gpuRenderer, hardwareAcceleration }
+}
+
+function logTerminalRenderer(renderer: 'dom' | 'webgl', reason: string, tabId: string, addon?: WebglAddonRuntime) {
+  const browser = {
+    chromiumVersion: navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] ?? null,
+    edgeVersion: navigator.userAgent.match(/Edg\/([\d.]+)/)?.[1] ?? null
+  }
+  const gpu = addon ? getWebglDetails(addon) : null
+  writeDiagnosticLog(
+    'INFO',
+    DIAGNOSTIC_SCOPES.performance,
+    JSON.stringify({ event: 'terminal-renderer', tabId, renderer, reason, browser, ...gpu })
+  )
+}
 
 let lastFocusedTerminal: Terminal | null = null
 let terminalUnderPointer: Terminal | null = null
@@ -83,10 +150,131 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   terminal.unicode.activeVersion = '11'
   const emojiWidths = registerTerminalEmojiWidths(terminal)
   terminal.open(host)
-  const renderCacheLimits = registerTerminalRenderCacheLimits(terminal)
-  const selectionRenderer = registerTerminalSelectionRenderer(terminal)
-  const symbolGlyphRenderer = registerTerminalSymbolGlyphRenderer(terminal)
-  const blockGlyphRenderer = registerTerminalBlockGlyphRenderer(terminal)
+  const terminalDiagnostics = registerTerminalDiagnostics(
+    terminal,
+    options.pendingWriteRef,
+    options.renderedTranscriptRef,
+    options.tabIdRef
+  )
+  let renderCacheLimits = registerTerminalRenderCacheLimits(terminal)
+  let domRendererAdapters: IDisposable[] = []
+  let webglAddon: WebglAddonRuntime | null = null
+  let webglContextLoss: IDisposable | null = null
+  let webglGrid: IDisposable | null = null
+  let blockGlyphFallback: IDisposable | null = null
+  let blockGlyphFallbackRequested = false
+  let disposed = false
+  const enableDomRendererAdapters = () => {
+    if (domRendererAdapters.length) return
+    domRendererAdapters = [
+      registerTerminalSelectionRenderer(terminal),
+      registerTerminalSymbolGlyphRenderer(terminal),
+      registerTerminalBlockGlyphRenderer(terminal)
+    ]
+  }
+  const disableDomRendererAdapters = () => {
+    domRendererAdapters
+      .splice(0)
+      .reverse()
+      .forEach((adapter) => adapter.dispose())
+  }
+  const refreshRendererAdapters = () => {
+    renderCacheLimits.dispose()
+    renderCacheLimits = registerTerminalRenderCacheLimits(terminal)
+    terminalDiagnostics.refreshRenderer()
+    terminal.refresh(0, Math.max(0, terminal.rows - 1))
+  }
+  const fitRendererGrid = () => {
+    if (host.clientWidth > 0 && host.clientHeight > 0) fitAddon.fit()
+  }
+  const fallbackToDom = (
+    reason: 'load-failed' | 'activation-failed' | 'context-loss' | 'block-glyph-compatibility'
+  ) => {
+    blockGlyphFallback?.dispose()
+    blockGlyphFallback = null
+    const addon = webglAddon
+    webglAddon = null
+    webglContextLoss?.dispose()
+    webglContextLoss = null
+    webglGrid?.dispose()
+    webglGrid = null
+    if (addon) {
+      try {
+        releaseWebglAddon(addon)
+      } catch {
+        // An addon teardown failure must not prevent the DOM fallback.
+      }
+    }
+    if (disposed) return
+    enableDomRendererAdapters()
+    refreshRendererAdapters()
+    fitRendererGrid()
+    logTerminalRenderer('dom', reason, options.tabIdRef.current)
+  }
+  const rendererOverride = import.meta.env.DEV ? import.meta.env.VITE_FILETERM_TERMINAL_RENDERER : undefined
+  const requestedRenderer =
+    rendererOverride === 'dom' || rendererOverride === 'webgl' ? rendererOverride : getTerminalRendererPreference()
+  const shouldUseWebgl = supportsTerminalRenderer(window.fileterm?.platform) && requestedRenderer === 'webgl'
+  if (shouldUseWebgl) {
+    enableDomRendererAdapters()
+    const blockCell = terminal.buffer.active.getNullCell()
+    blockGlyphFallback = terminal.onRender(({ start, end }) => {
+      if (blockGlyphFallbackRequested || !hasBlockGlyph(terminal, start, end, blockCell)) return
+      blockGlyphFallbackRequested = true
+      queueMicrotask(() => {
+        if (!disposed && webglAddon) fallbackToDom('block-glyph-compatibility')
+      })
+    })
+    logTerminalRenderer('dom', 'webgl-loading', options.tabIdRef.current)
+    void import('@xterm/addon-webgl')
+      .then(({ WebglAddon: WebglAddonConstructor }) => {
+        if (disposed) return
+        if (blockGlyphFallbackRequested) {
+          fallbackToDom('block-glyph-compatibility')
+          return
+        }
+        const addon = new WebglAddonConstructor() as WebglAddonRuntime
+        disableDomRendererAdapters()
+        try {
+          terminal.loadAddon(addon)
+          const activeRenderer = (terminal as TerminalRendererView)._core?._renderService?._renderer?.value
+          if (activeRenderer !== addon._renderer || !addon._renderer?._gl || addon._renderer._gl.isContextLost()) {
+            throw new Error('renderer-not-active')
+          }
+          webglAddon = addon
+          webglGrid = registerTerminalWebglGrid(terminal)
+          webglContextLoss = addon.onContextLoss(() => fallbackToDom('context-loss'))
+          refreshRendererAdapters()
+          fitRendererGrid()
+          logTerminalRenderer('webgl', 'active', options.tabIdRef.current, addon)
+        } catch {
+          blockGlyphFallback?.dispose()
+          blockGlyphFallback = null
+          webglContextLoss?.dispose()
+          webglContextLoss = null
+          webglGrid?.dispose()
+          webglGrid = null
+          webglAddon = null
+          try {
+            releaseWebglAddon(addon)
+          } catch {
+            // The original DOM renderer remains the safe fallback if activation is partial.
+          }
+          enableDomRendererAdapters()
+          refreshRendererAdapters()
+          fitRendererGrid()
+          logTerminalRenderer(
+            'dom',
+            blockGlyphFallbackRequested ? 'block-glyph-compatibility' : 'activation-failed',
+            options.tabIdRef.current
+          )
+        }
+      })
+      .catch(() => fallbackToDom('load-failed'))
+  } else {
+    enableDomRendererAdapters()
+    if (import.meta.env.DEV) logTerminalRenderer('dom', 'preference', options.tabIdRef.current)
+  }
   options.terminalRef.current = terminal
   options.searchAddonRef.current = searchAddon
   const foregroundAdapter = registerTerminalForegroundAdapter(terminal)
@@ -280,15 +468,29 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     isTerminalUnderPointer: () => terminalUnderPointer === terminal,
     clearGlobalTerminalState: () => clearTerminalGlobalState(terminal),
     disposeCore: () => {
+      disposed = true
+      blockGlyphFallback?.dispose()
+      blockGlyphFallback = null
+      webglContextLoss?.dispose()
+      webglContextLoss = null
+      webglGrid?.dispose()
+      webglGrid = null
+      if (webglAddon) {
+        try {
+          releaseWebglAddon(webglAddon)
+        } catch {
+          // Terminal disposal must continue even if the experimental renderer fails to tear down.
+        }
+        webglAddon = null
+      }
+      terminalDiagnostics.dispose()
       terminalInputWriteQueue.dispose()
       terminalTextarea?.removeEventListener('focus', markTerminalFocused)
       terminalLogColorizer.dispose()
       renderCacheLimits.dispose()
+      disableDomRendererAdapters()
       emojiWidths.dispose()
       foregroundAdapter.dispose()
-      blockGlyphRenderer.dispose()
-      selectionRenderer.dispose()
-      symbolGlyphRenderer.dispose()
       options.terminalLogColorizerRef.current = null
       options.fitAddonRef.current = null
       options.searchAddonRef.current = null

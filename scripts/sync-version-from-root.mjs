@@ -54,7 +54,8 @@ function normalizeLineEndings(value, lineEnding) {
 
 async function writeFileWithExistingLineEndings(targetPath, raw, value) {
   const lineEnding = raw.includes('\r\n') ? '\r\n' : '\n'
-  await writeFile(targetPath, normalizeLineEndings(value, lineEnding), 'utf8')
+  const next = normalizeLineEndings(value, lineEnding)
+  if (next !== raw) await writeFile(targetPath, next, 'utf8')
 }
 
 function updateCargoPackageVersion(raw) {

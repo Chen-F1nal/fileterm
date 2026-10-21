@@ -160,3 +160,42 @@ test('progress distinguishes blocked parsing, pending ACKs and rejected ACKs wit
   assert.equal(progress.ackFailures, 1)
   assert.equal(progress.lastAcknowledgedDeliveryId, undefined)
 })
+
+test('ACK age and round-trip timing are bounded and distinguish native reply waiting from parsing', async () => {
+  const isolated = {}
+  let now = 100
+  vm.runInNewContext(
+    ts.transpileModule(readFileSync(new URL('../src/bridge/events/terminal-output.ts', import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+    }).outputText,
+    { exports: isolated, performance: { now: () => now } }
+  )
+  const completions = []
+  const deliver = isolated.createTerminalOutputDelivery(
+    new Set([() => {}]),
+    () => new Promise((resolve) => completions.push(resolve)),
+    () => {}
+  )
+  deliver({ tabId: 'secret', chunk: 'private output', deliveryId: 1 })
+  await tick()
+  now = 350
+  let progress = isolated.getTerminalOutputProgress()
+  assert.equal(progress.pendingBatches, 0)
+  assert.equal(progress.trackedPendingAcks, 1)
+  assert.equal(progress.oldestTrackedAckAgeMs, 250)
+  completions.shift()()
+  await tick()
+  progress = isolated.getTerminalOutputProgress()
+  assert.equal(progress.trackedPendingAcks, 0)
+  assert.equal(progress.lastAckElapsedMs, 250)
+  assert.equal(progress.maxAckElapsedMs, 250)
+  for (let id = 2; id < 102; id++) deliver({ tabId: 'secret', chunk: '', deliveryId: id })
+  await tick()
+  progress = isolated.getTerminalOutputProgress()
+  assert.equal(progress.pendingAcknowledgements, 100)
+  assert.equal(progress.trackedPendingAcks, 64, 'diagnostics must not create an unbounded tracker')
+  assert.ok(!JSON.stringify(progress).includes('secret'))
+  completions.splice(0).forEach((resolve) => resolve())
+  await tick()
+  assert.equal(isolated.getTerminalOutputProgress().trackedPendingAcks, 0)
+})

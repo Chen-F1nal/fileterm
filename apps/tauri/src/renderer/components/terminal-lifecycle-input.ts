@@ -1,5 +1,6 @@
 import { isTerminalResponseSequence, stripHydratedTerminalResponses } from '../xterm-adapters/terminal-responses'
 import { createTerminalInputCompatibility } from '../xterm-adapters/terminal-input-compat'
+import { trackRendererWork } from '../lib/renderer-work-log'
 import type { TerminalLifecycleInputHandlers, TerminalLifecycleRuntime } from './terminal-lifecycle-types'
 import {
   describeTerminalInput,
@@ -157,60 +158,71 @@ export function registerTerminalInputHandlers(runtime: TerminalLifecycleRuntime)
     return true
   })
 
-  const onDataDispose = terminal.onData((data) => {
-    inputCompatibility.markDataEmitted(data)
+  const onDataDispose = terminal.onData(
+    trackRendererWork('terminal-input', (data: string) => {
+      // Windows ConPTY may ask for the cursor position (`ESC[6n`) before the
+      // renderer has finished mounting. xterm answers with a terminal
+      // response, but the normal disconnected guard below would discard it.
+      // Forward only protocol responses while the PTY is still connecting;
+      // ordinary user input remains blocked until the backend reports ready.
+      const rawTerminalData = data
+      const isStartupTerminalResponse =
+        !connectedRef.current &&
+        connectingRef.current &&
+        isTerminalResponseSequence(rawTerminalData, String.fromCharCode(27))
+      if (replayingTranscriptRef.current) {
+        data = stripHydratedTerminalResponses(data)
+      }
+      if (isStartupTerminalResponse) {
+        writeTerminalInput(rawTerminalData, (error: unknown) => {
+          console.debug('[TerminalView] startup terminal response was not accepted', error)
+        })
+        return
+      }
+      // Query replies are parser output, including in background tabs and during IME composition.
+      // Do not let React UI updates or user-input filters interrupt the terminal protocol.
+      if (
+        connectedRef.current &&
+        !serialTransferBusyRef.current &&
+        isTerminalResponseSequence(data, String.fromCharCode(27))
+      ) {
+        writeTerminalInput(data)
+        return
+      }
+      if (!isActiveRef.current || !data) {
+        return
+      }
 
-    // Windows ConPTY may ask for the cursor position (`ESC[6n`) before the
-    // renderer has finished mounting. xterm answers with a terminal
-    // response, but the normal disconnected guard below would discard it.
-    // Forward only protocol responses while the PTY is still connecting;
-    // ordinary user input remains blocked until the backend reports ready.
-    const rawTerminalData = data
-    const isStartupTerminalResponse =
-      !connectedRef.current &&
-      connectingRef.current &&
-      isTerminalResponseSequence(rawTerminalData, String.fromCharCode(27))
-    if (replayingTranscriptRef.current) {
-      data = stripHydratedTerminalResponses(data)
-    }
-    if (isStartupTerminalResponse) {
-      writeTerminalInput(rawTerminalData, (error: unknown) => {
-        console.debug('[TerminalView] startup terminal response was not accepted', error)
-      })
-      return
-    }
-    if (!isActiveRef.current || !data) {
-      return
-    }
+      inputCompatibility.markDataEmitted(data)
+      const compositionData = inputCompatibility.filterCompositionData(data)
+      if (compositionData === null) {
+        return
+      }
+      data = compositionData
 
-    const compositionData = inputCompatibility.filterCompositionData(data)
-    if (compositionData === null) {
-      return
-    }
-    data = compositionData
+      // The serial transfer worker owns the port while a protocol is active.
+      // Drop xterm input before it reaches the backend so quick sends, paste,
+      // and ordinary terminal typing cannot interleave protocol frames.
+      if (serialTransferBusyRef.current) {
+        return
+      }
 
-    // The serial transfer worker owns the port while a protocol is active.
-    // Drop xterm input before it reaches the backend so quick sends, paste,
-    // and ordinary terminal typing cannot interleave protocol frames.
-    if (serialTransferBusyRef.current) {
-      return
-    }
-
-    // When disconnected, intercept Enter to trigger reconnect instead of
-    // forwarding to the (dead) PTY. Ignore while a reconnect is in flight.
-    if (!connectedRef.current) {
-      if (data.includes('\r') || data.includes('\n')) requestReconnect()
-      return
-    }
-    const isFocusTrackingEvent = isFocusTrackingSequence(data)
-    if (!isFocusTrackingEvent) {
-      clearEphemeralHighlight()
-      setContextMenu(null)
-    } else {
-      logTerminalClipboard(terminal, 'focus-tracking-preserved-selection', { data })
-    }
-    writeTerminalInput(data)
-  })
+      // When disconnected, intercept Enter to trigger reconnect instead of
+      // forwarding to the (dead) PTY. Ignore while a reconnect is in flight.
+      if (!connectedRef.current) {
+        if (data.includes('\r') || data.includes('\n')) requestReconnect()
+        return
+      }
+      const isFocusTrackingEvent = isFocusTrackingSequence(data)
+      if (!isFocusTrackingEvent) {
+        clearEphemeralHighlight()
+        setContextMenu(null)
+      } else {
+        logTerminalClipboard(terminal, 'focus-tracking-preserved-selection', { data })
+      }
+      writeTerminalInput(data)
+    })
+  )
 
   return {
     onTerminalInputCapture: inputCompatibility.onTerminalInputCapture,

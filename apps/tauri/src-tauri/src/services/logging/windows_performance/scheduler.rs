@@ -34,27 +34,34 @@ pub(super) fn status() -> Value {
 }
 
 pub(super) fn observe(scope: &str, message: &str) {
-    if scope != "renderer:performance" || message.len() > 16 * 1024 {
-        return;
-    }
     let Some(sender) = TRIGGER.get() else {
         return;
     };
-    if serde_json::from_str::<Value>(message)
-        .ok()
-        .is_some_and(|report| {
-            matches!(
-                report["event"].as_str(),
-                Some("event-loop-gap" | "terminal-output-parse")
-            )
-        })
-    {
+    if is_renderer_stall_warning(scope, message) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
         let _ = sender.try_send(now);
     }
+}
+
+fn is_renderer_stall_warning(scope: &str, message: &str) -> bool {
+    scope == "renderer:performance"
+        && message.len() <= 16 * 1024
+        && serde_json::from_str::<Value>(message)
+            .ok()
+            .is_some_and(|report| {
+                matches!(
+                    report["event"].as_str(),
+                    Some(
+                        "event-loop-gap"
+                            | "terminal-output-parse"
+                            | "renderer-long-frame"
+                            | "renderer-progress-slow"
+                    )
+                )
+            })
 }
 
 pub(super) fn start(ui_tid: u32, version: String) {
@@ -344,4 +351,40 @@ fn helper_report() -> Value {
     // Thread handles remain alive through capture; release all of them on helper exit.
     drop(threads);
     report
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_renderer_stall_warning;
+
+    #[test]
+    fn renderer_stall_warnings_trigger_scheduler_capture() {
+        for event in [
+            "event-loop-gap",
+            "terminal-output-parse",
+            "renderer-long-frame",
+            "renderer-progress-slow",
+        ] {
+            assert!(is_renderer_stall_warning(
+                "renderer:performance",
+                &format!(r#"{{"event":"{event}"}}"#)
+            ));
+        }
+        assert!(!is_renderer_stall_warning(
+            "renderer:workspace",
+            r#"{"event":"renderer-long-frame"}"#
+        ));
+        assert!(!is_renderer_stall_warning(
+            "renderer:performance",
+            r#"{"event":"renderer-health"}"#
+        ));
+        assert!(!is_renderer_stall_warning(
+            "renderer:performance",
+            "not json"
+        ));
+        assert!(!is_renderer_stall_warning(
+            "renderer:performance",
+            &" ".repeat(16 * 1024 + 1)
+        ));
+    }
 }

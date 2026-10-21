@@ -20,9 +20,11 @@ import {
   type OverviewSectionId,
   type S3BackupConfig,
   type SshConnectionDefaults,
+  type TerminalRenderer,
   type WebDavSyncConfig
 } from '@fileterm/core'
 import type { ManagerDropPosition } from '../../../common/manager-drag'
+import { getTerminalRendererPreference } from '../../../../app/terminal-renderer-preference'
 import {
   createAiProviderDraft,
   type AiFeedback,
@@ -41,6 +43,9 @@ export function useSettingsModalState(initialTab: SettingsTab) {
   const [isSavingUpdatePreference, setIsSavingUpdatePreference] = useState(false)
   const [updatePreferenceError, setUpdatePreferenceError] = useState<string | null>(null)
   const [terminalZoomLocked, setTerminalZoomLocked] = useState(false)
+  const [terminalRenderer, setTerminalRenderer] = useState<TerminalRenderer>(getTerminalRendererPreference)
+  const [isSavingTerminalRendererPreference, setIsSavingTerminalRendererPreference] = useState(false)
+  const [terminalRendererPreferenceError, setTerminalRendererPreferenceError] = useState<string | null>(null)
   const [isSavingTerminalZoomPreference, setIsSavingTerminalZoomPreference] = useState(false)
   const [terminalZoomPreferenceError, setTerminalZoomPreferenceError] = useState<string | null>(null)
   const [uiZoomLocked, setUiZoomLocked] = useState(false)
@@ -166,6 +171,12 @@ export function useSettingsModalState(initialTab: SettingsTab) {
     setUpdatePreferenceError,
     terminalZoomLocked,
     setTerminalZoomLocked,
+    terminalRenderer,
+    setTerminalRenderer,
+    isSavingTerminalRendererPreference,
+    setIsSavingTerminalRendererPreference,
+    terminalRendererPreferenceError,
+    setTerminalRendererPreferenceError,
     isSavingTerminalZoomPreference,
     setIsSavingTerminalZoomPreference,
     terminalZoomPreferenceError,

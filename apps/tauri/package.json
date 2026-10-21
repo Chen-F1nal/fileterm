@@ -1,6 +1,6 @@
 {
   "name": "@fileterm/tauri",
-  "version": "2.3.1-beta.10",
+  "version": "2.3.1-beta.11",
   "private": true,
   "type": "module",
   "description": "Modern remote workspace for SSH, SFTP, and FTP.",
@@ -30,8 +30,8 @@
     "release:linux:arm64": "node ./scripts/run-tauri.mjs build --target aarch64-unknown-linux-gnu --config src-tauri/tauri.release.linux.conf.json"
   },
   "dependencies": {
-    "@fileterm/core": "2.3.1-beta.10",
-    "@fileterm/shared": "2.3.1-beta.10",
+    "@fileterm/core": "2.3.1-beta.11",
+    "@fileterm/shared": "2.3.1-beta.11",
     "@monaco-editor/react": "4.7.0",
     "@tanstack/react-virtual": "^3.14.3",
     "@xterm/addon-fit": "^0.11.0",
@@ -53,6 +53,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@tauri-apps/cli": "^2.5.0",
+    "@xterm/addon-webgl": "0.19.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"
   }

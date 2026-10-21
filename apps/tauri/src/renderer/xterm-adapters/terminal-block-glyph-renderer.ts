@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import type { IBufferCell, Terminal } from '@xterm/xterm'
 import { drawBoxDrawingGlyph, isBoxDrawingGlyph } from './box-drawing'
 
@@ -329,7 +330,7 @@ function replaceBlockGlyphs(
 export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
   const sourceBackgrounds = new WeakMap<HTMLElement, SourceBackground>()
   const reusableCell = terminal.buffer.active.getNullCell()
-  const renderRows = (start: number, end: number) => {
+  const renderRows = trackRendererWork('block-layout', (start: number, end: number) => {
     const element = terminal.element
     const screen = element?.querySelector<HTMLElement>('.xterm-screen')
     const rows = element?.querySelector<HTMLElement>('.xterm-rows')?.children
@@ -414,7 +415,7 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
       }
     }
     for (const update of updates) update()
-  }
+  })
 
   const renderAllRows = () => renderRows(0, terminal.rows - 1)
   // xterm batches scroll/resize into onRender; their immediate events still have stale DOM rows.

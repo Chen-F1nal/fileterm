@@ -21,6 +21,9 @@ export function createTerminalOutputDelivery(
   let lastReport = -Infinity
   let busySince = 0
   let lastParsedAt: number | undefined
+  const pendingAcks = new Map<number, number>()
+  let lastAckElapsedMs: number | undefined
+  let maxAckElapsedMs = 0
   const progress = {
     receivedBatches: 0,
     parsedBatches: 0,
@@ -40,7 +43,13 @@ export function createTerminalOutputDelivery(
     pendingAcknowledgements:
       progress.parsedBatches - progress.acknowledgedBatches - progress.ackFailures - progress.untrackedBatches,
     busyForMs: pendingBatches ? Math.round(performance.now() - busySince) : 0,
-    sinceLastParsedMs: lastParsedAt === undefined ? undefined : Math.round(performance.now() - lastParsedAt)
+    sinceLastParsedMs: lastParsedAt === undefined ? undefined : Math.round(performance.now() - lastParsedAt),
+    trackedPendingAcks: pendingAcks.size,
+    oldestTrackedAckAgeMs: pendingAcks.size
+      ? Math.round(performance.now() - Math.min(...pendingAcks.values()))
+      : undefined,
+    lastAckElapsedMs,
+    maxAckElapsedMs
   })
   readProgress = snapshot
   return (payload: TerminalOutputDelivery) => {
@@ -73,6 +82,8 @@ export function createTerminalOutputDelivery(
               event: 'terminal-output-parse',
               progress: snapshot(),
               elapsedMs: Math.round(elapsedMs),
+              deliveryId: payload.deliveryId,
+              batchCharacters: payload.chunk.length,
               pendingCharacters,
               pendingBatches,
               listenerCount: listeners.size,
@@ -91,6 +102,8 @@ export function createTerminalOutputDelivery(
           progress.untrackedBatches++
           return
         }
+        const ackStarted = performance.now()
+        if (pendingAcks.size < 64) pendingAcks.set(deliveryId, ackStarted)
         return Promise.resolve()
           .then(() => acknowledge(deliveryId))
           .then(
@@ -102,6 +115,11 @@ export function createTerminalOutputDelivery(
               progress.ackFailures++
             }
           )
+          .finally(() => {
+            pendingAcks.delete(deliveryId)
+            lastAckElapsedMs = Math.round(performance.now() - ackStarted)
+            maxAckElapsedMs = Math.max(maxAckElapsedMs, lastAckElapsedMs)
+          })
       })
       .catch(() => undefined)
   }

@@ -9,6 +9,7 @@ import { getLocale, setLocale, t } from './i18n'
 import { resolveRendererPlatform } from './lib/renderer-platform'
 import { applyThemeVariables, type ThemeMode } from './app/theme-config'
 import { applyUiZoomPercent } from './app/ui-zoom'
+import { setTerminalRendererPreference } from './app/terminal-renderer-preference'
 import { MainWindowReveal } from './lib/main-window-reveal'
 import './styles/index.css'
 import { installRendererErrorLogging, reportRendererError } from './lib/renderer-error-log'
@@ -102,6 +103,7 @@ void createTauriApi()
         return undefined
       })
       .then(async (initialUiPreferences) => {
+        setTerminalRendererPreference(initialUiPreferences?.terminalRenderer ?? 'webgl')
         const searchParams = new URLSearchParams(window.location.search)
         const queryTheme = searchParams.get('theme')
         const isThemeMode = (val: unknown): val is ThemeMode =>

@@ -29,7 +29,8 @@ export async function loadTypeScript(page, path, symbol) {
       if (!cache[name]) { cache[name] = {}; modules[name](cache[name], require); }
       return cache[name];
     };
-    window[${JSON.stringify(symbol)}] = require(${JSON.stringify(entry)})[${JSON.stringify(symbol)}];
+    const exports = require(${JSON.stringify(entry)});
+    for (const symbol of ${JSON.stringify(Array.isArray(symbol) ? symbol : [symbol])}) window[symbol] = exports[symbol];
   })()`
   })
 }
