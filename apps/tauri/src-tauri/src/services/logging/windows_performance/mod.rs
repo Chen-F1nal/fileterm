@@ -18,7 +18,7 @@ mod scheduler_threads;
 pub(crate) mod webview_processes;
 #[cfg(all(target_os = "windows", feature = "windows-scheduler-fixture"))]
 pub(crate) mod webview_processes {
-    pub(crate) fn track(_: &tauri::WebviewWindow<tauri::Wry>) {}
+    pub(crate) fn track<T>(_: &T) {}
 
     pub(super) fn snapshot() -> (Vec<u32>, serde_json::Value) {
         (
