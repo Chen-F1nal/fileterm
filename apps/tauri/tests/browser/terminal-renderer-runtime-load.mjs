@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { summarizeGpu } from './helpers/terminal-renderer-environment.mjs'
+import { installWebglTextureTrace } from './helpers/webgl-texture-trace.mjs'
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
 const require = createRequire(import.meta.url)
@@ -16,6 +17,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const batches = Number(process.env.FILETERM_RUNTIME_BATCHES || 3000)
 const soakMs = Number(process.env.FILETERM_RUNTIME_SOAK_MS || 0)
 const truecolor = process.env.FILETERM_RUNTIME_TRUECOLOR === '1'
+const gpuProbe = process.env.FILETERM_RUNTIME_GPU_PROBE === '1'
 const clearCycles = Number(process.env.FILETERM_RUNTIME_CLEAR_CYCLES || 0)
 assert.ok(Number.isInteger(clearCycles) && clearCycles >= 0 && clearCycles <= 1000)
 assert.ok(Number.isInteger(batches) && batches >= 100 && batches <= 20000)
@@ -106,6 +108,7 @@ try {
           }
         }
       })
+      if (gpuProbe) await page.addInitScript(installWebglTextureTrace)
       await page.goto(url, { waitUntil: 'networkidle' })
       await page.evaluate(async (backend) => {
         await document.fonts.ready
@@ -286,6 +289,31 @@ try {
       assert.ok(resources.normalBufferRows <= 6000 + 80)
       assert.equal(resources.pendingXtermCharacters, 0)
       assert.match(resources.lastLine, /Working/)
+      const textureProbe =
+        gpuProbe && backend === 'webgl'
+          ? await page.evaluate(async () => {
+              const terminal = window.runtime.terminal
+              const read = () => {
+                const renderer = terminal._core._renderService._renderer.value
+                const pages = renderer._charAtlas.pages.length
+                const slots = renderer._glyphRenderer.value._atlasTextures.map((slot, index) => ({
+                  index,
+                  active: index < pages,
+                  ...window.webglTextureTrace.describe(slot.texture)
+                }))
+                return { pages, slots, ...window.webglTextureTrace.snapshot() }
+              }
+              const before = read()
+              terminal.options.fontSize += 2
+              window.runtime.fitAddon.fit()
+              terminal.reset()
+              await new Promise((resolve) =>
+                terminal.write('Working GPU cache probe ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\r\n', resolve)
+              )
+              await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+              return { before, after: read() }
+            })
+          : null
       await page.evaluate(() => {
         window.runtime.disposeCore()
         window.runtime = null
@@ -296,11 +324,19 @@ try {
       assert.equal(disposedResources.terminals, 0)
       await cdp.send('HeapProfiler.collectGarbage')
       const disposed = await measure()
+      const textureDispose = gpuProbe ? await page.evaluate(() => window.webglTextureTrace.snapshot()) : null
+      if (textureDispose) assert.deepEqual(textureDispose, { textures: 0, bytes: 0, unknownTextures: 0 })
+      if (textureProbe) {
+        assert.equal(textureProbe.before.unknownTextures, 0)
+        assert.equal(textureProbe.after.unknownTextures, 0)
+      }
       assert.deepEqual(errors, [])
       const result = {
         backend,
         truecolor,
         atlasClearProbe,
+        textureProbe,
+        textureDispose,
         browser: browser.version(),
         gpu: summarizeGpu(gpu),
         load,
