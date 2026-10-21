@@ -8,6 +8,22 @@ import { getTerminalResourceSnapshot } from '../xterm-adapters/terminal-diagnost
 /** Detect recovered stalls without relying on an exception or animation frames. */
 export function installRendererPerformanceLogging(): () => void {
   resetRendererWork()
+  let diagnosticsReady = false
+  const reportReady = () => {
+    if (diagnosticsReady || !window.fileterm) return
+    diagnosticsReady = true
+    writeDiagnosticLog(
+      'INFO',
+      DIAGNOSTIC_SCOPES.performance,
+      JSON.stringify({
+        event: 'renderer-diagnostics-ready',
+        schemaVersion: 2,
+        version: window.fileterm?.appVersion,
+        platform: window.fileterm?.platform
+      })
+    )
+  }
+  reportReady()
   const interactions = observeInteractionPerformance()
   let lastFrameReport = -Infinity
   const frames = observeRendererFrames(() => {
@@ -27,6 +43,7 @@ export function installRendererPerformanceLogging(): () => void {
   })
   let lastSlowReport = -Infinity
   let previous = performance.now()
+  const timeOriginUnixMs = Number.isFinite(performance.timeOrigin) ? performance.timeOrigin : undefined
   const started = previous
   let lastReport = -Infinity
   let lastHealthReport = previous
@@ -71,8 +88,10 @@ export function installRendererPerformanceLogging(): () => void {
     }
   }
   const timer = window.setInterval(() => {
+    reportReady()
     const now = performance.now()
-    const elapsed = now - previous
+    const lastHeartbeatAtMs = previous
+    const elapsed = now - lastHeartbeatAtMs
     previous = now
     if (!document.hidden) maxEventLoopGapMs = Math.max(maxEventLoopGapMs, elapsed)
     const terminalOutput = getTerminalOutputProgress()
@@ -84,7 +103,7 @@ export function installRendererPerformanceLogging(): () => void {
       !!output?.pendingBatches && Math.min(output.sinceLastParsedMs ?? Infinity, output.busyForMs ?? 0) >= 5000
     if (
       !document.hidden &&
-      (outputStalled || (interaction.maxDurationMs ?? 0) >= 1000) &&
+      (outputStalled || (interaction.maxInputDelayMs ?? 0) >= 250 || (interaction.maxDurationMs ?? 0) >= 1000) &&
       now - lastSlowReport >= 30000
     ) {
       lastSlowReport = now
@@ -132,7 +151,7 @@ export function installRendererPerformanceLogging(): () => void {
       frames.reset()
       resetRendererWork()
     }
-    if (document.hidden || elapsed < 4000 || now - lastReport < 30000) return
+    if (document.hidden || elapsed < 2000 || now - lastReport < 30000) return
     lastReport = now
     writeDiagnosticLog(
       'WARN',
@@ -145,6 +164,11 @@ export function installRendererPerformanceLogging(): () => void {
         elapsedMs: Math.round(elapsed),
         expectedIntervalMs: 1000,
         delayedByMs: Math.max(0, Math.round(elapsed - 1000)),
+        lastHeartbeatAtUnixMs:
+          timeOriginUnixMs === undefined ? undefined : Math.round(timeOriginUnixMs + lastHeartbeatAtMs),
+        expectedNextHeartbeatAtUnixMs:
+          timeOriginUnixMs === undefined ? undefined : Math.round(timeOriginUnixMs + lastHeartbeatAtMs + 1000),
+        resumedAtUnixMs: timeOriginUnixMs === undefined ? undefined : Math.round(timeOriginUnixMs + now),
         focused: document.hasFocus(),
         version: window.fileterm?.appVersion,
         platform: window.fileterm?.platform

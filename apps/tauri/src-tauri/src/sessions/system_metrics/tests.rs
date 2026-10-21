@@ -2,7 +2,6 @@
 mod tests {
     use super::{
         append_pty_prompt_window, build_freebsd_metrics_command, build_posix_metrics_command,
-        build_posix_monitor_fallback_script,
         build_pty_login_shell_command,
         build_windows_metrics_command, build_windows_streaming_metrics_command,
         build_windows_streaming_metrics_exec_command, classify_posix_probe_body,
@@ -12,6 +11,8 @@ mod tests {
         is_retryable_exec_channel_open_error,
         EXEC_CHANNEL_OPEN_RETRY_ATTEMPTS, EXEC_CHANNEL_OPEN_RETRY_DELAY, EXEC_COMMAND_OUTPUT_CAP,
     };
+    #[cfg(unix)]
+    use super::build_posix_monitor_fallback_script;
     use base64::Engine;
     use std::time::Duration;
 

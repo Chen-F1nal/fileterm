@@ -31,12 +31,14 @@ vm.runInNewContext(
 test('unchanged palettes avoid history scans while real changes recolor and dispose restores ANSI', () => {
   const cell = {}
   let reads = 0
+  let cellReads = 0
   let refreshes = 0
   const line = {
     length: 4,
     _data: new Uint32Array([105, 0, 0, 110, 0, 0, 102, 0, 0, 111, 0, 0]),
     translateToString: () => 'info',
     getCell(column, target) {
+      cellReads++
       assert.equal(target, cell, 'reuse a cell instead of allocating one per column')
       target.getWidth = () => 1
       target.getChars = () => String.fromCharCode(this._data[column * 3])
@@ -86,16 +88,32 @@ test('unchanged palettes avoid history scans while real changes recolor and disp
   assert.equal(line._data[1], 0x03aabbcc)
   assert.equal(refreshes, 1)
   for (let index = 0; index < 100; index++) terminal.write('unchanged row')
+  assert.equal(cellReads, 4, 'unchanged text reuses its regex matches and cell mapping')
   assert.equal(refreshes, 1, 'unchanged semantic colors must not refresh the DOM again')
+  for (const text of ['warn', 'info']) {
+    line.translateToString = () => text
+    for (let col = 0; col < text.length; col++) {
+      line._data[col * 3] = text.charCodeAt(col)
+      line._data[col * 3 + 1] = 0
+    }
+    terminal.write(text)
+  }
+  assert.equal(cellReads, 12, 'changed text invalidates cached matches and cell mapping')
   reads = 0
   for (let index = 0; index < 100; index++) colorizer.setPalette({ ...palette, info: '#aabbcc' })
   assert.equal(reads, 0)
   colorizer.setPalette({ ...palette, info: '#123456' })
+  assert.equal(cellReads, 16, 'changed palette invalidates cached colors')
   assert.ok(reads > 0)
   assert.equal(line._data[1], 0x03123456)
   colorizer.setPalette({ ...palette, info: 'invalid' })
   assert.equal(line._data[1], 0, 'removing a rule restores the original foreground')
+  for (let index = 0; index < 600; index++) {
+    colorizer.setPalette({ ...palette, info: '#' + index.toString(16).padStart(6, '0') })
+    assert.ok(colorizer.rangeCacheMisses <= 256, 'text/range cache cannot grow with the full history')
+  }
   colorizer.dispose()
+  assert.equal(colorizer.rangeCacheMisses, 0)
   assert.equal(line._data[1], 0)
 })
 

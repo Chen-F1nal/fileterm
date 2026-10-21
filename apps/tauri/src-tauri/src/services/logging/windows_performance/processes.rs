@@ -79,6 +79,7 @@ fn filetime(value: FILETIME) -> u64 {
     (u64::from(value.dwHighDateTime) << 32) | u64::from(value.dwLowDateTime)
 }
 
+#[cfg(not(feature = "windows-scheduler-fixture"))]
 pub(super) fn creation_time(pid: u32) -> Result<u64, u32> {
     let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
     if process.is_null() {

@@ -1,4 +1,4 @@
-import type { AppIconVariant, FileTermDesktopApi } from '@fileterm/core'
+import type { AppIconVariant, FileTermDesktopApi, TerminalRenderer } from '@fileterm/core'
 import { MAX_UI_ZOOM_PERCENT, MIN_UI_ZOOM_PERCENT, UI_ZOOM_PERCENT_STEP } from '@fileterm/core'
 import { DropdownSelect } from '../../../common/dropdown-select'
 import { RadioCardGroup } from '../../../common/radio-card-group'
@@ -16,6 +16,10 @@ type InterfaceDisplaySettingsContext = {
   t: LocaleMessages
   desktopApi: FileTermDesktopApi | undefined
   terminalZoomLocked: boolean
+  terminalRenderer: TerminalRenderer
+  isSavingTerminalRendererPreference: boolean
+  terminalRendererPreferenceError: string | null
+  saveTerminalRendererPreference(nextValue: TerminalRenderer): void
   isSavingTerminalZoomPreference: boolean
   terminalZoomPreferenceError: string | null
   setTerminalZoomLockPreference(nextValue: boolean): void
@@ -51,6 +55,10 @@ export function InterfaceDisplaySettingsSections() {
     t,
     desktopApi,
     terminalZoomLocked,
+    terminalRenderer,
+    isSavingTerminalRendererPreference,
+    terminalRendererPreferenceError,
+    saveTerminalRendererPreference,
     isSavingTerminalZoomPreference,
     terminalZoomPreferenceError,
     setTerminalZoomLockPreference,
@@ -95,6 +103,30 @@ export function InterfaceDisplaySettingsSections() {
       <section className="settings-section">
         <h3>{t.terminalDisplaySettings}</h3>
         <p className="settings-tools-hint">{t.terminalDisplaySettingsHint}</p>
+        {desktopApi?.platform === 'win32' ? (
+          <>
+            <div
+              aria-busy={isSavingTerminalRendererPreference}
+              className="theme-config-control"
+              inert={isSavingTerminalRendererPreference}
+            >
+              <span className="theme-config-label">{t.terminalRenderer}</span>
+              <DropdownSelect
+                ariaLabel={t.terminalRenderer}
+                className="theme-config-select"
+                disabled={isSavingTerminalRendererPreference}
+                onChange={(value) => saveTerminalRendererPreference(value as TerminalRenderer)}
+                options={[
+                  { value: 'dom', label: 'DOM' },
+                  { value: 'webgl', label: 'WebGL' }
+                ]}
+                value={terminalRenderer}
+              />
+            </div>
+            <p className="settings-tools-hint">{t.terminalRendererHint}</p>
+            {terminalRendererPreferenceError ? <p className="modal-error">{terminalRendererPreferenceError}</p> : null}
+          </>
+        ) : null}
         <div
           aria-busy={isSavingTerminalZoomPreference}
           className="overview-preference-list"

@@ -29,6 +29,7 @@ export function useSettingsModalEffects({
     setAutoCheckUpdates,
     setUpdateChannel,
     setTerminalZoomLocked,
+    setTerminalRenderer,
     setUiZoomLocked,
     setLocalTerminalShells,
     setLocalTerminalShellDrafts,
@@ -129,6 +130,7 @@ export function useSettingsModalEffects({
       setAutoCheckUpdates(preferences.autoCheckUpdates)
       setUpdateChannel(preferences.updateChannel)
       setTerminalZoomLocked(preferences.terminalZoomLocked)
+      setTerminalRenderer(preferences.terminalRenderer)
       setUiZoomLocked(preferences.uiZoomLocked)
       setLocalTerminalShells({ ...DEFAULT_LOCAL_TERMINAL_SHELLS, ...preferences.localTerminalShells })
       setLocalTerminalShellDrafts({ ...DEFAULT_LOCAL_TERMINAL_SHELLS, ...preferences.localTerminalShells })

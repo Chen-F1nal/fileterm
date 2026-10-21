@@ -1,28 +1,38 @@
 /* global window, document, requestAnimationFrame */
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { spawn } from 'node:child_process'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
+import { cpus, release, tmpdir, totalmem, version } from 'node:os'
+import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { loadTypeScript } from './helpers/load-typescript.mjs'
+import { summarizeGpu } from './helpers/terminal-renderer-environment.mjs'
 import { registerComparisonGridCalibration, readComparisonGridMetrics } from './helpers/terminal-grid-calibration.mjs'
 
-// Experimental only: the addon stays outside the application dependency graph.
+// The application only bundles this dev dependency when the Windows renderer test flag is set.
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
-assert.ok(process.env.FILETERM_WEBGL_BUNDLE, 'Set FILETERM_WEBGL_BUNDLE to the unpacked 0.19.0 addon bundle')
-const webglBundle = resolve(process.env.FILETERM_WEBGL_BUNDLE)
+const gridMode = process.env.FILETERM_GRID_MODE || 'comparison'
+assert.ok(['comparison', 'production'].includes(gridMode), 'FILETERM_GRID_MODE must be comparison or production')
+const webglBundle = resolve(root + 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js')
 const addonVersion = JSON.parse(readFileSync(resolve(dirname(webglBundle), '../package.json'))).version
 assert.equal(addonVersion, '0.19.0')
-const output = resolve(process.env.FILETERM_COMPARISON_OUTPUT || '/tmp/fileterm-renderer-comparison.json')
-const batchCount = Number(process.env.FILETERM_BATCH_COUNT || 4000)
+const output = resolve(process.env.FILETERM_COMPARISON_OUTPUT || join(tmpdir(), 'fileterm-renderer-comparison.json'))
+const screenshotDirectory = join(tmpdir(), 'fileterm-renderer-validation')
+mkdirSync(screenshotDirectory, { recursive: true })
+mkdirSync(dirname(output), { recursive: true })
+const normalBatchCount = Number(process.env.FILETERM_BATCH_COUNT || 4000)
+// shortcut: keep the 6x Windows probe under its 180s browser timeout; raise it with the timeout if it completes faster.
+const throttledBatchCount = Number(process.env.FILETERM_THROTTLED_BATCH_COUNT || 200)
 const repeats = Number(process.env.FILETERM_COMPARISON_REPEATS || 3)
 const slowdowns = (process.env.FILETERM_COMPARISON_SLOWDOWNS || '1,6').split(',').map(Number)
-assert.ok(Number.isInteger(batchCount) && batchCount >= 200)
+assert.ok(Number.isInteger(normalBatchCount) && normalBatchCount >= 200)
+assert.ok(Number.isInteger(throttledBatchCount) && throttledBatchCount >= 200)
 assert.ok(Number.isInteger(repeats) && repeats > 0)
 assert.ok(slowdowns.every((rate) => Number.isFinite(rate) && rate >= 1))
-assert.equal(process.platform, 'darwin', 'RSS sampler uses macOS ps; adapt it before testing another platform')
+assert.equal(process.platform, 'win32', 'Windows process-tree sampling is required for this comparison')
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const results = []
@@ -32,16 +42,217 @@ const percentile = (values, fraction) => {
   return sorted[Math.ceil(sorted.length * fraction) - 1]
 }
 
-async function run(mode, slowdown, repetition) {
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH
-  })
+function createHostProcessSampler() {
+  const script = String.raw`
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+public sealed class FileTermProcessEntry {
+  public int ProcessId;
+  public int ParentProcessId;
+  public string Name;
+}
+
+public static class FileTermProcessSnapshot {
+  private const uint SnapshotProcesses = 0x00000002;
+  private static readonly IntPtr InvalidHandle = new IntPtr(-1);
+
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  private struct ProcessEntry32 {
+    public uint Size;
+    public uint Usage;
+    public uint ProcessId;
+    public UIntPtr DefaultHeapId;
+    public uint ModuleId;
+    public uint Threads;
+    public uint ParentProcessId;
+    public int BasePriority;
+    public uint Flags;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string Name;
+  }
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
+  [DllImport("kernel32.dll", EntryPoint = "Process32FirstW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)]
+  private static extern bool Process32First(IntPtr snapshot, ref ProcessEntry32 entry);
+  [DllImport("kernel32.dll", EntryPoint = "Process32NextW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)]
+  private static extern bool Process32Next(IntPtr snapshot, ref ProcessEntry32 entry);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool CloseHandle(IntPtr handle);
+
+  public static List<FileTermProcessEntry> GetEntries() {
+    IntPtr snapshot = CreateToolhelp32Snapshot(SnapshotProcesses, 0);
+    if (snapshot == InvalidHandle) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    try {
+      var entries = new List<FileTermProcessEntry>();
+      var entry = new ProcessEntry32 { Size = (uint)Marshal.SizeOf(typeof(ProcessEntry32)) };
+      if (!Process32First(snapshot, ref entry)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+      do {
+        entries.Add(new FileTermProcessEntry {
+          ProcessId = (int)entry.ProcessId,
+          ParentProcessId = (int)entry.ParentProcessId,
+          Name = entry.Name
+        });
+        entry.Size = (uint)Marshal.SizeOf(typeof(ProcessEntry32));
+      } while (Process32Next(snapshot, ref entry));
+      return entries;
+    } finally {
+      CloseHandle(snapshot);
+    }
+  }
+}
+'@
+while (($line = [Console]::In.ReadLine()) -ne $null) {
+  if ($line -eq 'quit') { break }
   try {
+    $request = $line | ConvertFrom-Json
+    $rootPid = [int]$request.rootPid
+    $cdpTypes = @{}
+    foreach ($item in $request.cdpProcesses) { $cdpTypes[[int]$item.id] = [string]$item.type }
+    $all = [FileTermProcessSnapshot]::GetEntries()
+    $children = @{}
+    foreach ($item in $all) {
+      $parent = [int]$item.ParentProcessId
+      if (-not $children.ContainsKey($parent)) { $children[$parent] = [System.Collections.Generic.List[int]]::new() }
+      $children[$parent].Add([int]$item.ProcessId)
+    }
+    $queue = [System.Collections.Generic.Queue[int]]::new()
+    $ids = [System.Collections.Generic.List[int]]::new()
+    $queue.Enqueue($rootPid)
+    while ($queue.Count -gt 0) {
+      $id = $queue.Dequeue()
+      $ids.Add($id)
+      foreach ($child in $children[$id]) { $queue.Enqueue($child) }
+    }
+    $byPid = @{}
+    foreach ($item in $all) { $byPid[[int]$item.ProcessId] = $item }
+    $rows = @(
+      foreach ($id in $ids) {
+        $item = $byPid[$id]
+        if (-not $item) { continue }
+        $type = [string]$cdpTypes[$id]
+        if ($id -eq $rootPid) { $type = 'browser' }
+        elseif (-not $type) { $type = 'other' }
+        try {
+          $proc = Get-Process -Id $id -ErrorAction Stop
+          [pscustomobject]@{
+            pid = $id
+            type = $type
+            parentPid = [int]$item.ParentProcessId
+            processName = [string]$item.Name
+            creationTime = $proc.StartTime.ToUniversalTime().Ticks
+            workingSetBytes = [double]$proc.WorkingSet64
+            privateBytes = [double]$proc.PrivateMemorySize64
+            cpuSeconds = if ($null -ne $proc.CPU) { [double]$proc.CPU } else { $null }
+          }
+        } catch {
+          [pscustomobject]@{
+            pid = $id
+            type = $type
+            parentPid = [int]$item.ParentProcessId
+            processName = [string]$item.Name
+            creationTime = $null
+            workingSetBytes = $null
+            privateBytes = $null
+            cpuSeconds = $null
+          }
+        }
+      }
+    )
+    $payload = @{ status = 'available'; rootPid = $rootPid; processes = $rows }
+  } catch {
+    $payload = @{ status = 'unavailable'; reason = 'process-query-failed'; processes = @() }
+  }
+  [Console]::Out.WriteLine(($payload | ConvertTo-Json -Compress -Depth 4))
+  [Console]::Out.Flush()
+}
+`
+  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    stdio: ['pipe', 'pipe', 'ignore'],
+    windowsHide: true
+  })
+  const output = createInterface({ input: child.stdout })
+  let closed = false
+  let pending
+  const unavailable = (reason = 'sampler-error') => ({ status: 'unavailable', reason, processes: [] })
+  const settle = (value) => {
+    if (!pending) return
+    clearTimeout(pending.timer)
+    pending.resolve(value)
+    pending = undefined
+  }
+
+  output.on('line', (line) => {
+    try {
+      settle(JSON.parse(line))
+    } catch {
+      settle(unavailable('invalid-sampler-output'))
+    }
+  })
+  child.on('error', () => {
+    closed = true
+    settle(unavailable())
+  })
+  child.on('close', () => {
+    closed = true
+    settle(unavailable())
+  })
+
+  return {
+    sample(rootPid, cdpProcesses) {
+      if (!Number.isInteger(rootPid)) return Promise.resolve(unavailable('browser-root-pid-missing'))
+      if (closed) return Promise.resolve(unavailable())
+      const startedAt = performance.now()
+      return new Promise((resolve) => {
+        pending = {
+          resolve: (value) => resolve({ ...value, sampleDurationMs: performance.now() - startedAt }),
+          timer: setTimeout(() => settle(unavailable('sampler-timeout')), 10000)
+        }
+        child.stdin.write(`${JSON.stringify({ rootPid, cdpProcesses })}\n`, (error) => {
+          if (error) settle(unavailable())
+        })
+      })
+    },
+    async dispose() {
+      if (closed) return
+      child.stdin.end('quit\n')
+      await new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          child.kill()
+          resolve()
+        }, 1000)
+        child.once('close', () => {
+          clearTimeout(timer)
+          resolve()
+        })
+      })
+    }
+  }
+}
+
+const maximum = (values) => {
+  const measured = values.filter(Number.isFinite)
+  return measured.length ? Math.max(...measured) : null
+}
+
+async function run(mode, slowdown, repetition) {
+  const batchCount = slowdown > 1 ? throttledBatchCount : normalBatchCount
+  const browserServer = await chromium.launchServer({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
+    args: ['--enable-gpu']
+  })
+  const browserProcessId = browserServer.process()?.pid ?? null
+  let browser
+  const processSampler = createHostProcessSampler()
+  try {
+    browser = await chromium.connect(browserServer.wsEndpoint())
     const browserCdp = await browser.newBrowserCDPSession()
-    const { gpu } = await browserCdp.send('SystemInfo.getInfo')
-    assert.match(gpu.auxAttributes.glRenderer, /Apple/)
-    assert.doesNotMatch(gpu.auxAttributes.glRenderer, /SwiftShader|llvmpipe|software/i)
+    const { gpu: rawGpu } = await browserCdp.send('SystemInfo.getInfo')
+    const gpu = summarizeGpu(rawGpu)
     const page = await browser.newPage({ viewport: { width: 1600, height: 1200 }, deviceScaleFactor: 1 })
     const errors = []
     page.on('pageerror', (error) => errors.push(error.message))
@@ -68,7 +279,7 @@ async function run(mode, slowdown, repetition) {
     // Load the same JS in both arms so bundle parsing does not bias setup memory.
     await page.addScriptTag({ path: webglBundle })
     for (const [file, symbol] of [
-      ['bridge/events/terminal-output', 'createTerminalOutputDelivery'],
+      ['bridge/events/terminal-output', ['createTerminalOutputDelivery', 'getTerminalOutputProgress']],
       ['renderer/xterm-adapters/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
       ['renderer/xterm-adapters/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
       ['renderer/xterm-adapters/terminal-selection-renderer', 'registerTerminalSelectionRenderer'],
@@ -76,7 +287,8 @@ async function run(mode, slowdown, repetition) {
       ['renderer/xterm-adapters/terminal-render-cache', 'registerTerminalRenderCacheLimits'],
       ['renderer/xterm-adapters/terminal-log-colorizer', 'TerminalLogColorizer'],
       ['renderer/xterm-adapters/terminal-emoji-widths', 'registerTerminalEmojiWidths'],
-      ['renderer/xterm-adapters/terminal-options', 'getTerminalCompatibilityOptions']
+      ['renderer/xterm-adapters/terminal-options', 'getTerminalCompatibilityOptions'],
+      ['renderer/xterm-adapters/terminal-webgl-grid', 'registerTerminalWebglGrid']
     ])
       await loadTypeScript(page, root + 'apps/tauri/src/' + file + '.ts', symbol)
     const actions = ts.transpileModule(
@@ -92,6 +304,7 @@ async function run(mode, slowdown, repetition) {
     await page.addScriptTag({
       content: `window.registerComparisonGridCalibration=${registerComparisonGridCalibration};window.readComparisonGridMetrics=${readComparisonGridMetrics};`
     })
+    await page.evaluate((gridMode) => (window.gridMode = gridMode), gridMode)
     await page.evaluate(async (mode) => {
       const ref = (current) => ({ current })
       const frame = () => new Promise((resolve) => requestAnimationFrame(resolve))
@@ -137,14 +350,9 @@ async function run(mode, slowdown, repetition) {
           if (terminal._core._renderService._renderer.value !== addon._renderer || !addon._renderer._gl) {
             throw new Error('WebGL addon did not replace the renderer')
           }
-          const gl = addon._renderer._gl
-          const debug = gl.getExtension('WEBGL_debug_renderer_info')
-          const renderer = debug && gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
-          if (!/Apple/.test(renderer) || /SwiftShader|llvmpipe|software/i.test(renderer)) {
-            throw new Error('Expected hardware WebGL: ' + renderer)
-          }
         }
-        adapters.push(window.registerComparisonGridCalibration(terminal, mode))
+        if (window.gridMode === 'comparison') adapters.push(window.registerComparisonGridCalibration(terminal, mode))
+        else if (mode === 'webgl') adapters.push(window.registerTerminalWebglGrid(terminal))
         if (mode === 'dom') {
           if (!terminal.element.querySelector('.xterm-rows')) throw new Error('DOM renderer missing')
           adapters.push(window.registerTerminalSelectionRenderer(terminal))
@@ -186,10 +394,24 @@ async function run(mode, slowdown, repetition) {
       }
       window.snapshot = () => {
         const pages = addons.flatMap((addon) => addon._renderer?._charAtlas?.pages.map((page) => page.canvas) ?? [])
+        const gl = addons[0]?._renderer?._gl
+        const debug = gl?.getExtension('WEBGL_debug_renderer_info')
         return {
           grid: terminals[0] ? window.readComparisonGridMetrics(terminals[0].terminalRef.current) : null,
+          webglContext: gl
+            ? {
+                vendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
+                renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
+                version: gl.getParameter(gl.VERSION),
+                contextLost: gl.isContextLost(),
+                viewport: Array.from(gl.getParameter(gl.VIEWPORT)),
+                bufferWidth: gl.drawingBufferWidth,
+                bufferHeight: gl.drawingBufferHeight
+              }
+            : null,
           sent: window.sent,
           acknowledged: window.acknowledged,
+          outputProgress: window.getTerminalOutputProgress(),
           pendingCharacters: terminals.reduce((sum, state) => sum + state.pendingWriteRef.current.length, 0),
           pendingCompletions: terminals.reduce(
             (sum, state) => sum + state.pendingWriteCompletionsRef.current.length,
@@ -292,20 +514,22 @@ async function run(mode, slowdown, repetition) {
     await cdp.send('HeapProfiler.collectGarbage')
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: slowdown })
     const sample = async () => {
-      const { processInfo } = await browserCdp.send('SystemInfo.getProcessInfo')
-      const pids = processInfo.map((process) => process.id)
-      const rss = new Map(
-        execFileSync('ps', ['-o', 'pid=,rss=', '-p', pids.join(',')], { encoding: 'utf8' })
-          .trim()
-          .split('\n')
-          .map((line) => line.trim().split(/\s+/).map(Number))
-      )
+      const { processInfo: cdpProcesses } = await browserCdp.send('SystemInfo.getProcessInfo')
+      const processTree = await processSampler.sample(browserProcessId, cdpProcesses)
+      if (
+        processTree.status === 'available' &&
+        !processTree.processes.some((entry) => entry.pid === browserProcessId && entry.type === 'browser')
+      ) {
+        processTree.status = 'invalid-root'
+        processTree.reason = 'browser-server-process-not-in-sampled-tree'
+      }
       const { metrics } = await cdp.send('Performance.getMetrics')
       const heap = await cdp.send('Runtime.getHeapUsage')
       return {
         at: performance.now(),
         heap,
-        processes: processInfo.map((process) => ({ ...process, rssKiB: rss.get(process.id) ?? 0 })),
+        cdpProcesses,
+        processTree,
         metrics: Object.fromEntries(metrics.map(({ name, value }) => [name, value])),
         page: await page.evaluate(() => window.snapshot())
       }
@@ -358,24 +582,69 @@ async function run(mode, slowdown, repetition) {
     assert.equal(end.page.pendingCharacters, 0)
     assert.equal(end.page.pendingCompletions, 0)
     assert.equal(end.page.pendingXterm, 0)
+    if (gridMode === 'production' && end.page.webglContext) {
+      const context = end.page.webglContext
+      assert.deepEqual(context.viewport, [0, 0, context.bufferWidth, context.bufferHeight])
+    }
+    assert.equal(end.page.outputProgress.parsedBatches - baseline.page.outputProgress.parsedBatches, batchCount)
+    assert.equal(
+      end.page.outputProgress.acknowledgedBatches - baseline.page.outputProgress.acknowledgedBatches,
+      batchCount
+    )
+    assert.equal(end.page.outputProgress.pendingAcknowledgements, 0)
+    assert.equal(end.page.outputProgress.parseFailures, 0)
+    assert.equal(end.page.outputProgress.ackFailures, 0)
     assert.equal(end.page.contextLosses, 0)
     assert.equal(end.page.coloringFailures, 0)
     assert.deepEqual(errors, [])
     assert.ok(baseline.page.historyLines.every((length) => length === 6010))
     const cpu = {}
-    for (const process of end.processes) {
-      const previous = baseline.processes.find((entry) => entry.id === process.id)
-      cpu[process.type] = (cpu[process.type] ?? 0) + process.cpuTime - (previous?.cpuTime ?? 0)
+    const memoryTotalMiB = (value, key, type) => {
+      const processes = value.processTree.processes.filter(
+        (process) => !type || process.type.toLowerCase() === type.toLowerCase()
+      )
+      const measured = processes.filter((process) => Number.isFinite(process[key]))
+      return measured.length ? measured.reduce((sum, process) => sum + process[key], 0) / 1048576 : null
     }
-    const rssTotal = (value, type) =>
-      value.processes
-        .filter((process) => !type || process.type === type)
-        .reduce((sum, process) => sum + process.rssKiB / 1024, 0)
+    const memoryMissingCount = (value, key) =>
+      value.processTree.processes.filter((process) => !Number.isFinite(process[key])).length
     const elapsedMs = end.at - baseline.at
+    const baselineTree = new Map(baseline.processTree.processes.map((process) => [process.pid, process]))
+    const processTreeCpuSeconds =
+      end.processTree.status === 'available' && baseline.processTree.status === 'available'
+        ? end.processTree.processes.reduce((sum, process) => {
+            const previous = baselineTree.get(process.pid)
+            if (
+              process.cpuSeconds === null ||
+              previous?.cpuSeconds === null ||
+              previous?.cpuSeconds === undefined ||
+              previous.creationTime !== process.creationTime
+            )
+              return sum
+            const delta = Math.max(0, process.cpuSeconds - previous.cpuSeconds)
+            cpu[process.type] = (cpu[process.type] ?? 0) + delta
+            return sum + delta
+          }, 0)
+        : null
+    const processTreeCpuUnmeasuredCount =
+      end.processTree.status === 'available' && baseline.processTree.status === 'available'
+        ? end.processTree.processes.filter((process) => {
+            const previous = baselineTree.get(process.pid)
+            return (
+              process.cpuSeconds === null ||
+              previous?.cpuSeconds === null ||
+              previous?.cpuSeconds === undefined ||
+              previous.creationTime !== process.creationTime
+            )
+          }).length
+        : null
     await cdp.send('HeapProfiler.collectGarbage')
     const retained = await sample()
     // Keep visual verification outside the measured phase.
-    const screenshot = output.replace(/\.json$/, '') + `-${mode}-${slowdown}-${repetition}.png`
+    const screenshot = join(
+      screenshotDirectory,
+      `${basename(output).replace(/\.json$/i, '')}-${mode}-${slowdown}-${repetition}.png`
+    )
     await page.screenshot({ path: screenshot })
     await page.evaluate(() => window.disposeTerminals())
     await page.waitForTimeout(1000)
@@ -384,26 +653,49 @@ async function run(mode, slowdown, repetition) {
     assert.ok(disposed.page.domNodes < 100)
     return {
       mode,
-      gridCalibration: 'webgl-device-pixel-grid',
+      gridCalibration:
+        gridMode === 'production' ? 'native-renderer-grids-integer-webgl-atlas' : 'webgl-device-pixel-grid',
       screenshot,
       slowdown,
       repetition,
-      chrome: browser.version(),
-      gpu: gpu.auxAttributes.glRenderer,
+      browserVersion: browser.version(),
+      browserProcessId,
+      gpu,
+      rendererContext: end.page.webglContext,
       batchCount,
       outputBytes: await page.evaluate(() => window.bytes),
       elapsedMs,
       cpuSeconds: cpu,
       totalCpuSeconds: Object.values(cpu).reduce((sum, value) => sum + value, 0),
+      processTreeCpuSeconds,
+      processTreeCpuUnmeasuredCount,
+      processTreeCpuPercentOneCore:
+        processTreeCpuSeconds === null ? null : (processTreeCpuSeconds / (elapsedMs / 1000)) * 100,
       taskSeconds: end.metrics.TaskDuration - baseline.metrics.TaskDuration,
       layoutSeconds: end.metrics.LayoutDuration - baseline.metrics.LayoutDuration,
-      baselineRssMiB: rssTotal(baseline),
-      peakRssMiB: Math.max(...samples.map((value) => rssTotal(value))),
-      endRssMiB: rssTotal(end),
-      retainedRssMiB: rssTotal(retained),
-      disposedRssMiB: rssTotal(disposed),
-      peakRendererRssMiB: Math.max(...samples.map((value) => rssTotal(value, 'renderer'))),
-      peakGpuRssMiB: Math.max(...samples.map((value) => rssTotal(value, 'GPU'))),
+      styleRecalculationSeconds: Number.isFinite(end.metrics.RecalcStyleDuration)
+        ? end.metrics.RecalcStyleDuration - baseline.metrics.RecalcStyleDuration
+        : null,
+      paintSeconds: Number.isFinite(end.metrics.PaintDuration)
+        ? end.metrics.PaintDuration - baseline.metrics.PaintDuration
+        : null,
+      peakPendingAcknowledgements: maximum(samples.map((value) => value.page.outputProgress.pendingAcknowledgements)),
+      peakPendingParseBatches: maximum(samples.map((value) => value.page.outputProgress.pendingBatches)),
+      maxAcknowledgementWaitMs: maximum(samples.map((value) => value.page.outputProgress.maxAckElapsedMs)),
+      maxSinceLastParseMs: maximum(samples.map((value) => value.page.outputProgress.sinceLastParsedMs)),
+      processTreeStatus: end.processTree.status,
+      baselineWorkingSetMiB: memoryTotalMiB(baseline, 'workingSetBytes'),
+      baselineWorkingSetUnmeasuredProcesses: memoryMissingCount(baseline, 'workingSetBytes'),
+      peakWorkingSetMiB: maximum(samples.map((value) => memoryTotalMiB(value, 'workingSetBytes'))),
+      endWorkingSetMiB: memoryTotalMiB(end, 'workingSetBytes'),
+      endWorkingSetUnmeasuredProcesses: memoryMissingCount(end, 'workingSetBytes'),
+      retainedWorkingSetMiB: memoryTotalMiB(retained, 'workingSetBytes'),
+      disposedWorkingSetMiB: memoryTotalMiB(disposed, 'workingSetBytes'),
+      peakPrivateBytesMiB: maximum(samples.map((value) => memoryTotalMiB(value, 'privateBytes'))),
+      peakRendererWorkingSetMiB: maximum(samples.map((value) => memoryTotalMiB(value, 'workingSetBytes', 'renderer'))),
+      peakBrowserWorkingSetMiB: maximum(samples.map((value) => memoryTotalMiB(value, 'workingSetBytes', 'browser'))),
+      peakGpuWorkingSetMiB: maximum(samples.map((value) => memoryTotalMiB(value, 'workingSetBytes', 'gpu'))),
+      maxProcessSamplerMs: maximum(samples.map((value) => value.processTree.sampleDurationMs)),
       baselineHeapMiB: baseline.metrics.JSHeapUsedSize / 1048576,
       peakHeapMiB: Math.max(...samples.map((value) => value.metrics.JSHeapUsedSize / 1048576)),
       retainedHeapMiB: retained.metrics.JSHeapUsedSize / 1048576,
@@ -438,7 +730,9 @@ async function run(mode, slowdown, repetition) {
       inputs
     }
   } finally {
-    await browser.close()
+    await processSampler.dispose()
+    await browser?.close()
+    await browserServer.close()
   }
 }
 
@@ -451,10 +745,32 @@ for (const slowdown of slowdowns) {
         (row) => row.repetition === repetition && row.slowdown === slowdown && row.mode !== mode
       )
       if (peer)
-        for (const key of ['measuredWidth', 'cellWidth', 'cellHeight', 'canvasWidth', 'canvasHeight', 'cols', 'rows'])
+        for (const key of gridMode === 'production'
+          ? ['measuredWidth', 'cols', 'rows']
+          : ['measuredWidth', 'cellWidth', 'cellHeight', 'canvasWidth', 'canvasHeight', 'cols', 'rows'])
           assert.equal(result.baseline.grid[key], peer.baseline.grid[key], `paired grid ${key}`)
       results.push(result)
-      writeFileSync(output, JSON.stringify({ addonVersion, results }, null, 2) + '\n')
+      writeFileSync(
+        output,
+        JSON.stringify(
+          {
+            addonVersion,
+            environment: {
+              engine: 'Playwright Chromium headless',
+              platform: process.platform,
+              osRelease: release(),
+              osVersion: version(),
+              architecture: process.arch,
+              logicalCpuCount: cpus().length,
+              totalMemoryBytes: totalmem(),
+              gpuSource: 'Chromium CDP SystemInfo.getInfo per comparison run'
+            },
+            results
+          },
+          null,
+          2
+        ) + '\n'
+      )
       console.log(
         JSON.stringify({
           event: 'result',

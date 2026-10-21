@@ -2145,6 +2145,7 @@ export const MAX_UI_ZOOM_PERCENT = 200
 export const UI_ZOOM_PERCENT_STEP = 10
 
 export type AppIconVariant = 'classic' | 'material' | 'clean'
+export type TerminalRenderer = 'dom' | 'webgl'
 
 /** Session tabs grouped under a host list, or every tab in one row. */
 export type TabBarLayout = 'host-groups' | 'single-row'
@@ -2155,6 +2156,7 @@ export const DEFAULT_COMPACT_TAB_BAR = false
 export interface UiPreferences {
   theme: ThemeMode
   locale: 'zhCN' | 'enUS'
+  terminalRenderer: TerminalRenderer
   themeConfig: ThemeConfig
   filetermThemeResetAppVersion: string | null
   customThemes: SavedTheme[]
@@ -2184,6 +2186,7 @@ export interface UiPreferences {
 export interface UiPreferencesInput {
   theme?: UiPreferences['theme']
   locale?: UiPreferences['locale']
+  terminalRenderer?: UiPreferences['terminalRenderer']
   themeConfig?: ThemeConfig
   customThemes?: SavedTheme[]
   autoCheckUpdates?: boolean

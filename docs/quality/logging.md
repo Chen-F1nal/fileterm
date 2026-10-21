@@ -76,20 +76,31 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 | `renderer-health` / `renderer:performance`       | DEBUG；可见页面每分钟                                                                | `uptimeMs`、可用时的 `usedJSHeapBytes` / `totalJSHeapBytes`、`ipcCallbackCount`、`terminalCount`、`domNodeCount`、本分钟 `maxEventLoopGapMs`；支持 Long Tasks API 时包含任务数、总时长和最大时长；应用版本与平台 | 隐藏页面不采样；JS heap 不代表 WebView 进程内存。可选字段可能不存在                  |
 | `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `tokioAliveTasks`、`tokioGlobalQueueDepth`、`sessions`、`workers`、`workerQueuedCommands`、`sessionLogWriters`                                                                                                   | 只记录数量；使用非等待锁，锁忙时相应值为 `null`。全局就绪队列不包含所有 IO 等待任务  |
 | `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `transferTasks`、`transferRuns`、`transferProgressSamples`、`terminalOutput.windows`、`terminalOutput.inFlight`、`terminalOutput.queuedBatches`、`terminalOutput.queuedBytes`、`terminalOutput.queuedTabs`       | 只记录数量；锁忙时相应值为 `null`，不是累计历史数或内存字节数                        |
-| `event-loop-gap` / `renderer:performance`        | WARN；可见页面的 1 秒心跳间隔达到 4 秒，最多每 30 秒一次                             | `elapsedMs`、页面是否聚焦、应用版本与平台                                                                                                                                                                        | 在 renderer 恢复后才能记录；不能单独证明键盘输入或按钮响应耗时                       |
+| `event-loop-gap` / `renderer:performance`        | WARN；可见页面的 1 秒心跳间隔达到 2 秒，最多每 30 秒一次                             | `elapsedMs`、预期/恢复时间锚点、页面是否聚焦、应用版本与平台                                                                                                                                                     | 在 renderer 恢复后才能记录；时间锚点只界定心跳缺口，不能证明阻塞起点或原因           |
 | `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
+| `terminal-renderer` / `renderer:performance`     | INFO；终端 renderer 初始化、WebGL 加载/激活或 DOM 回退时                             | `renderer`、`reason`、Chromium/Edge 版本、GPU vendor/renderer、硬件加速启发式结果                                                                                                                                | 当前只由 Windows 开发版 WebGL 测试开关请求 WebGL；GPU 字符串不可用时字段为 `null`    |
 | `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口/标签标识、累计跳过字节数与 `since_last_ack_ms`                                                                                                     | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
 
 当前排查分支（尚未发布，beta.9 不含以下新增字段）补充：
 
 - `renderer-health.terminalOutput`：当前窗口订阅的累计接收、解析结束、确认数量，解析/确认失败数，最近接收、解析结束、解析成功和确认的 delivery ID；以及待解析批数/字符数、待确认数、连续繁忙时长和距上次解析结束的时间。没有订阅时为 `null`；计数在重新订阅时重置，ID 不是按顺序完成的水位。解析结束包含失败，需结合 `parseFailures` 和 `lastSuccessfulDeliveryId`。不带原始正文或 tab 名称。
-- `renderer-health.interaction`：Event Timing 支持状态、采样数量、最大输入派发延迟和最大事件至下一次绘制耗时。只汇总 `keydown` / `click`，采集阈值为 16ms，浏览器耗时有精度取整；样本数量不是全部操作次数，耗时也不包含远端命令响应。API 不支持时标记 `supported=false`，省略耗时。
-- `renderer-progress-slow`：可见页面待解析且连续至少 5 秒无解析结束，或交互采样耗时达到 1 秒时，由既有每秒心跳触发 WARN，最多每 30 秒一次。带上述两份摘要，不新增定时器、逐批日志或逐次交互日志；`event-loop-gap` 与慢解析告警也携带输出进度。
+- `renderer-health.interaction`：Event Timing 支持状态、采样数量、最大输入派发延迟和最大事件至下一次绘制耗时，以及各自事件类型和事件开始 Unix 毫秒。只汇总 `keydown` / `click` / `pointerdown` / `pointerup` / `beforeinput` / `input` / `compositionstart` / `compositionupdate` / `compositionend` / `paste`；采集阈值为 16ms，浏览器耗时有精度取整；样本数量不是全部操作次数，耗时也不包含远端命令响应。API 不支持时标记 `supported=false`，省略耗时。不会记录按键值或文本，也不逐次采样高频 `pointermove`。
+- `renderer-progress-slow`：可见页面待解析且连续至少 5 秒无解析结束、输入派发延迟达到 250ms，或事件至下一次绘制耗时达到 1 秒时，由既有每秒心跳触发 WARN，最多每 30 秒一次。带上述摘要，不新增定时器、逐批日志或逐次交互日志；`event-loop-gap` 与慢解析告警也携带输出进度。
 - 原生 `window display queue saturated` / `renderer backpressure` 的 `progress`，以及健康报告的 `native.terminalOutput.windowProgress`：窗口、已分配批次数、最近确认 ID/距确认时间、待确认批数及最早 ID、队列批数/字节数。原生告警不等待 renderer 心跳，仍沿用 30 秒限频；健康报告最多展开 16 个窗口，其余计入 `omittedWindows`。锁忙字段为 `null`，不能当作零。`issuedBatches` 是分配 ID 的计数，不保证通道发送成功。
 
 以上无需管理员权限，不记录按键值、输入内容或终端正文。页面彻底停住时，Event Timing 与 renderer 日志需恢复后才能上报；用已有原生过载告警交叉判断，不能把没有交互采样理解成响应正常。
 
 ### 解析、绘制与内存占用的补充采集
+
+#### schemaVersion 2：命名回调与终端上下文
+
+2026-10-21 排查代码在 bridge 就绪后记录一次 `renderer-diagnostics-ready`（INFO），包含 `schemaVersion=2`、版本与平台。bridge 异步初始化时复用每秒心跳延后提交，不新增定时器；这是日志能力标记，不是长任务验收通过标记。
+
+`work.schemaVersion=2` 增加选区/搜索事件、按帧 UI 发布、终端状态、workspace snapshot、session metrics、remote files 和 transfer 的命名阶段。事件回调与 React updater 分开计时，二者可能嵌套，耗时不能相加。`activeWork` 最多返回最内层八个同步阶段，`recentFailures` 最多四个抛错阶段，均只包含名称和单调时钟时间，不保留参数、异常对象或终端内容。xterm 会捕获监听器异常并在另一个 timer 中重抛，最近失败记录可在同步栈退出后提供线索；它不是完整因果跟踪，Promise 拒绝不算同步异常，分钟/可见性重置也会清除记录。
+
+`renderer:error` 同时附带 `work` 和 `terminalResources`。资源摘要新增 `byRenderer`（DOM/WebGL/unknown）以及最多八个 `perTerminal` 项，包含内部 tab ID、后端、普通/备用屏行数和待解析/待写字符数。超出时 `terminalsTruncated=true`，总计仍覆盖当前模块注册的全部终端。`terminal-renderer` 初始化/回退事件新增内部 `tabId`，用于对应后端与积压；没有连接名称、主机地址、输入或输出正文。
+
+`maxEventLoopGapMs` 是心跳回调之间的间隔，一秒心跳下约 1000ms 并非一秒阻塞；卡顿告警应结合 `expectedIntervalMs` / `delayedByMs`、长任务、命名阶段与解析/ACK 进度。9855ms 的心跳间隔约比预期间隔多 8855ms，不能单独证明期间只有一个连续长任务。
 
 排查分支进一步在健康报告、心跳卡顿和进度缓慢告警中记录以下摘要；安装包含此改动的构建后自动启用，旧日志无法回溯补采。
 
@@ -100,7 +111,7 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 - `cellStorageBytesEstimate` 按 xterm 6 每单元三个 Uint32 估算已使用行的基础网格；不含字符串、容量余量、对象和原生/GPU 内存。`canvasBackingBytesEstimate` 按最多 512 个 canvas 的宽×高×4 估算单份 RGBA 存储，超限标记 `canvasEstimateTruncated`；不含纹理副本、合成器和驱动分配。二者都不能解释全部 WebView RSS。
 - `terminalOutput` 增加 `trackedPendingAcks`、`oldestTrackedAckAgeMs`、`lastAckElapsedMs` 和累计 `maxAckElapsedMs`。最多跟踪 64 个待确认 ID；超过上限时最早年龄只代表已跟踪样本，不保证覆盖全部 ACK。耗时从前端排程确认到调用完成，含微任务和 IPC 等待，不能直接等同 Rust 处理时间。慢解析日志另带 `deliveryId`、`batchCharacters`，便于对应同批输出。
 
-`event-loop-gap` 另带 `expectedIntervalMs=1000` 和 `delayedByMs`，区分心跳间隔与额外延迟。以上只留有限数量的数字/固定阶段名称，不逐字符或逐批写日志；终端关闭时注销诊断引用。仍不采集完整 CPU profile、GC 事件或原生堆快照，无法据此独立证明泄漏、唯一阻塞函数或全部内存归属。
+`event-loop-gap` 另带 `expectedIntervalMs=1000`、`delayedByMs`、`lastHeartbeatAtUnixMs`、`expectedNextHeartbeatAtUnixMs` 和 `resumedAtUnixMs`，用于标定恢复后发现的心跳缺口；预期时间是近似下界，不是已知阻塞起点。以上只留有限数量的数字/固定阶段名称，不逐字符或逐批写日志；终端关闭时注销诊断引用。仍不采集完整 CPU profile、GC 事件或原生堆快照，无法据此独立证明泄漏、唯一阻塞函数或全部内存归属。
 
 `renderer-health.maxEventLoopGapMs` 包含心跳定时器本身的 1,000ms 间隔，
 约 1,002ms 不能解释成阻塞了 1 秒；需要结合长任务和 `event-loop-gap` 判断。
@@ -159,7 +170,7 @@ Windows 构建在日志初始化后启动一个独立原生采样线程，立即
 - 最多采样 32 个进程，`count` 保留实际匹配数量，超出时 `truncated=true`。退出、权限不足或 API
   不支持会记录对应 `*ErrorCode`，不作为 0 CPU/0 内存；退出进程的采样状态会清理，句柄及时关闭。
 
-对照同一时间的 `renderer-health`、`event-loop-gap`、`terminal-output-parse`：若页面心跳中断而
+对照同一时间的 `renderer-health`、`event-loop-gap`、`renderer-long-frame`、`renderer-progress-slow` 和 `terminal-output-parse`：若页面心跳中断而
 原生日志继续，可进一步看 WebView2 的 CPU、内存与策略变化；策略 masks 不能证明线程被调度到
 小核。实际核心驻留和调度等待由下面的短时 ETW 诊断补充。这里不改变绑核、业务线程优先级或
 节能策略，不采集用户名、命令行、窗口标题、终端内容或凭据，也不写独立的无限增长日志文件。
@@ -167,7 +178,7 @@ Windows 构建在日志初始化后启动一个独立原生采样线程，立即
 ### 自动线程调度采集
 
 Windows 启动约 10 秒后，原生侧只检查并回收孤儿会话，不启动全局 ETW 跟踪。
-仅既有 `event-loop-gap` / `terminal-output-parse` 告警触发一次 3 秒采集，采集起点至少相隔
+仅既有 `event-loop-gap` / `terminal-output-parse` / `renderer-long-frame` / `renderer-progress-slow` 告警触发一次 3 秒采集，采集起点至少相隔
 30 秒；触发队列最多一项，`collectionMode=warning-triggered`。正常使用没有周期 ETW 采集，
 原有每分钟进程健康日志保持不变。页面完全冻结且未恢复时可能没有新的告警；恢复后的 WARN
 只能触发后续窗口，不能还原已经错过的卡顿。无需用户手动启动 WPR；用户只需发送 `app.log` 与 `app.log.1`，

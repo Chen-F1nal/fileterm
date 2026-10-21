@@ -53,7 +53,17 @@ function fixture(writer) {
   const diagnostic = load('../src/renderer/lib/diagnostic-log.ts')
   const reporter = load('../src/renderer/lib/renderer-error-log.ts', {
     './diagnostic-log': diagnostic,
-    './renderer-work-log': { getRendererWorkSnapshot: () => ({ phases: {}, recentSlowWork: [] }) }
+    './renderer-work-log': {
+      getRendererWorkSnapshot: () => ({
+        schemaVersion: 2,
+        phases: {},
+        recentSlowWork: [],
+        recentFailures: [{ phase: 'terminal-ui-publish' }]
+      })
+    },
+    '../xterm-adapters/terminal-diagnostics': {
+      getTerminalResourceSnapshot: () => ({ byRenderer: { dom: 1, webgl: 0, unknown: 0 } })
+    }
   })
   const boundary = load('../src/renderer/features/common/error-boundary.tsx', {
     react: { Component: class {} },
@@ -91,6 +101,8 @@ test('the actual error boundary persists error and component stacks with runtime
   assert.equal(report.version, '2.2.20')
   assert.equal(report.platform, 'win32')
   assert.equal(report.window, 'file-editor')
+  assert.equal(report.work.recentFailures[0].phase, 'terminal-ui-publish')
+  assert.equal(report.terminalResources.byRenderer.dom, 1)
   assert.ok(!f.calls[0][2].includes('do-not-log'))
 })
 

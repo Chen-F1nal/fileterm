@@ -12,6 +12,7 @@ pub fn app_get_ui_preferences(app: AppHandle) -> Result<UiPreferences, AppError>
         Ok(UiPreferences {
             theme: DEFAULT_UI_THEME.to_string(),
             locale: default_ui_locale().to_string(),
+            terminal_renderer: default_terminal_renderer(),
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: default_auto_check_updates(),
@@ -71,6 +72,9 @@ pub fn app_set_ui_preferences(
     }
     if let Some(locale) = input.locale {
         preferences.locale = locale;
+    }
+    if let Some(terminal_renderer) = input.terminal_renderer {
+        preferences.terminal_renderer = terminal_renderer;
     }
     if let Some(theme_config) = input.theme_config {
         let theme_variant = theme_config.variant.clone();
@@ -336,6 +340,7 @@ pub fn app_toggle_terminal_zoom_lock(app: AppHandle) -> Result<UiPreferences, Ap
         UiPreferencesInput {
             theme: None,
             locale: None,
+            terminal_renderer: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,
@@ -372,6 +377,7 @@ pub fn app_toggle_ui_zoom_lock(app: AppHandle) -> Result<UiPreferences, AppError
         UiPreferencesInput {
             theme: None,
             locale: None,
+            terminal_renderer: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,
@@ -415,6 +421,7 @@ pub fn app_adjust_ui_zoom(app: AppHandle, operation: &str) -> Result<UiPreferenc
         UiPreferencesInput {
             theme: None,
             locale: None,
+            terminal_renderer: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,

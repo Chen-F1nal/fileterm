@@ -190,6 +190,7 @@ export function useTerminalViewActions({
   }
 
   const closeFind = () => {
+    findOpenRef.current = false
     setFindOpen(false)
     setFindQuery('')
     setFindMiss(false)
@@ -315,6 +316,7 @@ export function useTerminalViewActions({
 
   const openFind = () => {
     setContextMenu(null)
+    findOpenRef.current = true
     setFindOpen(true)
     setFindMiss(false)
   }

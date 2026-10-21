@@ -4,7 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-test('interaction timing aggregates only keyboard/click durations and cleans up', () => {
+test('interaction timing aggregates keyboard, pointer, text and IME timing without contents', () => {
   let consume
   let disconnected = false
   const document = { hidden: false }
@@ -19,6 +19,7 @@ test('interaction timing aggregates only keyboard/click durations and cleans up'
     {
       exports,
       document,
+      performance: { timeOrigin: 100000 },
       PerformanceObserver: class {
         static supportedEntryTypes = ['event']
         constructor(callback) {
@@ -35,16 +36,22 @@ test('interaction timing aggregates only keyboard/click durations and cleans up'
   )
   const metrics = exports.observeInteractionPerformance()
   const entry = { name: 'keydown', startTime: 10, processingStart: 510, duration: 1008, key: 'private' }
-  consume({ getEntries: () => [entry, { ...entry, name: 'pointermove', duration: 9000 }] })
-  assert.equal(metrics.snapshot().samples, 1)
+  const composition = { name: 'compositionend', startTime: 20, processingStart: 30, duration: 1200, data: 'private' }
+  consume({ getEntries: () => [entry, composition, { ...entry, name: 'pointermove', duration: 9000 }] })
+  assert.equal(metrics.snapshot().samples, 2)
   assert.equal(metrics.snapshot().maxInputDelayMs, 500)
-  assert.equal(metrics.snapshot().maxDurationMs, 1008)
+  assert.equal(metrics.snapshot().maxInputDelayEventName, 'keydown')
+  assert.equal(metrics.snapshot().maxInputDelayStartedAtUnixMs, 100010)
+  assert.equal(metrics.snapshot().maxDurationMs, 1200)
+  assert.equal(metrics.snapshot().maxDurationEventName, 'compositionend')
+  assert.equal(metrics.snapshot().maxDurationStartedAtUnixMs, 100020)
   assert.ok(!JSON.stringify(metrics.snapshot()).includes('private'))
   document.hidden = true
   consume({ getEntries: () => [{ ...entry, duration: 5000 }] })
-  assert.equal(metrics.snapshot().maxDurationMs, 1008)
+  assert.equal(metrics.snapshot().maxDurationMs, 1200)
   metrics.reset()
   assert.equal(metrics.snapshot().samples, 0)
+  assert.equal(metrics.snapshot().maxDurationEventName, undefined)
   metrics.dispose()
   assert.equal(disconnected, true)
 })

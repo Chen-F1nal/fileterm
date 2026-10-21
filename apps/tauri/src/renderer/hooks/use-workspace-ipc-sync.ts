@@ -1,3 +1,4 @@
+import { trackRendererWork } from '../lib/renderer-work-log'
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 import type {
   UseWorkspaceIpcSyncOptions,
@@ -13,8 +14,11 @@ export type {
   WorkspaceSplitPaneRequest,
   WorkspacePaneFocusRequest
 } from './workspace-ipc-sync-types'
-import { applyMonitoringUpdate, mergeMonitoringSnapshot } from './workspace-monitoring'
-import { retainTransferHistory, updateTransferHistory } from '../features/transfers/transfer-history'
+import {
+  applyMonitoringUpdate as updateMonitoring,
+  mergeMonitoringSnapshot as mergeMonitoring
+} from './workspace-monitoring'
+import { retainTransferHistory, updateTransferHistory as updateTransfers } from '../features/transfers/transfer-history'
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import {
   type LocalFileItem,
@@ -26,8 +30,13 @@ import {
 import { emptyState, localPreviewFiles, previewLocalPath, previewState } from '../app/app-data'
 import { withParentRow } from '../app/app-utils'
 import { t } from '../i18n'
+import { setTerminalRendererPreference } from '../app/terminal-renderer-preference'
 import { resolveRendererPlatform } from '../lib/renderer-platform'
 import type { ThemeMode } from './use-theme-mode'
+
+const updateTransferHistory = trackRendererWork('transfer-update', updateTransfers)
+const applyMonitoringUpdate = trackRendererWork('session-metrics', updateMonitoring)
+const mergeMonitoringSnapshot = trackRendererWork('workspace-snapshot', mergeMonitoring)
 
 function isThemeMode(val: unknown): val is ThemeMode {
   return (
@@ -187,24 +196,26 @@ export function useWorkspaceIpcSync({
 
   const applyRemoteFilesUpdate = useCallback(({ tabId, path, files }: RemoteFilesUpdate) => {
     startTransition(() => {
-      setWorkspace((current) => {
-        const currentSession = current.sessions[tabId]
-        if (!currentSession || currentSession.remotePath !== path) {
-          return current
-        }
+      setWorkspace(
+        trackRendererWork('remote-files', (current: WorkspaceSnapshot) => {
+          const currentSession = current.sessions[tabId]
+          if (!currentSession || currentSession.remotePath !== path) {
+            return current
+          }
 
-        return {
-          ...current,
-          sessions: {
-            ...current.sessions,
-            [tabId]: {
-              ...currentSession,
-              remoteFiles: files,
-              remoteFilesLoading: false
+          return {
+            ...current,
+            sessions: {
+              ...current.sessions,
+              [tabId]: {
+                ...currentSession,
+                remoteFiles: files,
+                remoteFilesLoading: false
+              }
             }
           }
-        }
-      })
+        })
+      )
     })
   }, [])
 
@@ -245,6 +256,7 @@ export function useWorkspaceIpcSync({
     }
 
     return desktopApi.onUiPreferencesChanged((preferences) => {
+      setTerminalRendererPreference(preferences.terminalRenderer)
       lastPersistedUiPreferencesRef.current = syncedUiPreferencesFrom(preferences)
       if (isThemeMode(preferences.theme)) {
         onThemeModeChangeRef.current(preferences.theme)
@@ -285,6 +297,7 @@ export function useWorkspaceIpcSync({
         if (canceled) {
           return
         }
+        setTerminalRendererPreference(preferences.terminalRenderer)
         lastPersistedUiPreferencesRef.current = syncedUiPreferencesFrom(preferences)
         setCanPersistUiPreferences(true)
         if (isThemeMode(preferences.theme)) {
@@ -546,23 +559,25 @@ export function useWorkspaceIpcSync({
     }
 
     const snapshotListenerRegistration = desktopApi
-      .onWorkspaceSnapshot((snapshot) => {
-        if (canceled) {
-          return
-        }
-        logWorkspaceDiagnostic(
-          'DEBUG',
-          `workspace snapshot event received workspace_revision=${typeof snapshot.workspaceRevision === 'number' ? snapshot.workspaceRevision : 'none'} sessions=${Object.keys(snapshot.sessions).length} active_tab_id=${snapshot.activeTabId ?? 'none'}`
-        )
-        const applied = applySnapshot(snapshot)
-        receivedSnapshotEvent = applied || receivedSnapshotEvent
-        if (applied) {
-          for (const tabId of lastMetricsDiagnosticAtByTab.keys()) {
-            if (!snapshot.sessions[tabId]) lastMetricsDiagnosticAtByTab.delete(tabId)
+      .onWorkspaceSnapshot(
+        trackRendererWork('workspace-snapshot-event', (snapshot) => {
+          if (canceled) {
+            return
           }
-        }
-        finishHydration()
-      })
+          logWorkspaceDiagnostic(
+            'DEBUG',
+            `workspace snapshot event received workspace_revision=${typeof snapshot.workspaceRevision === 'number' ? snapshot.workspaceRevision : 'none'} sessions=${Object.keys(snapshot.sessions).length} active_tab_id=${snapshot.activeTabId ?? 'none'}`
+          )
+          const applied = applySnapshot(snapshot)
+          receivedSnapshotEvent = applied || receivedSnapshotEvent
+          if (applied) {
+            for (const tabId of lastMetricsDiagnosticAtByTab.keys()) {
+              if (!snapshot.sessions[tabId]) lastMetricsDiagnosticAtByTab.delete(tabId)
+            }
+          }
+          finishHydration()
+        })
+      )
       .then((unsubscribe) => {
         if (canceled) {
           unsubscribe()
@@ -593,61 +608,67 @@ export function useWorkspaceIpcSync({
       })
     ])
     const unsubscribeSessionMetrics = isMainWorkspaceWindow
-      ? desktopApi.onSessionMetrics((payload) => {
-          if (canceled) {
-            return
-          }
-          receivedMetricsEventCount += 1
-          const now = performance.now()
-          const lastDiagnosticAt = lastMetricsDiagnosticAtByTab.get(payload.tabId)
-          const shouldLogMetricsEvent = lastDiagnosticAt === undefined || now - lastDiagnosticAt >= 10_000
-          if (shouldLogMetricsEvent) {
-            lastMetricsDiagnosticAtByTab.set(payload.tabId, now)
-            logWorkspaceDiagnostic(
-              'DEBUG',
-              `session metrics event received count=${receivedMetricsEventCount} tab_id=${payload.tabId} mode=${payload.mode ?? 'replace'} has_system_metrics=${payload.systemMetrics !== undefined} hydrated=${hydrated} generation=${payload.monitoring?.generation ?? 'none'} revision=${payload.monitoring?.revision ?? 'none'}`
-            )
-          }
-          if (!hydrated) {
-            pendingMetrics.push(payload)
-            logWorkspaceDiagnostic(
-              'DEBUG',
-              `session metrics event queued tab_id=${payload.tabId} reason=workspace-not-hydrated pending_count=${pendingMetrics.length}`
-            )
-            return
-          }
-          applySessionMetrics(payload)
-          if (shouldLogMetricsEvent) {
-            logWorkspaceDiagnostic(
-              'DEBUG',
-              `session metrics update scheduled count=${receivedMetricsEventCount} tab_id=${payload.tabId} mode=${payload.mode ?? 'replace'} generation=${payload.monitoring?.generation ?? 'none'} revision=${payload.monitoring?.revision ?? 'none'}`
-            )
-          }
-        })
+      ? desktopApi.onSessionMetrics(
+          trackRendererWork('session-metrics-event', (payload) => {
+            if (canceled) {
+              return
+            }
+            receivedMetricsEventCount += 1
+            const now = performance.now()
+            const lastDiagnosticAt = lastMetricsDiagnosticAtByTab.get(payload.tabId)
+            const shouldLogMetricsEvent = lastDiagnosticAt === undefined || now - lastDiagnosticAt >= 10_000
+            if (shouldLogMetricsEvent) {
+              lastMetricsDiagnosticAtByTab.set(payload.tabId, now)
+              logWorkspaceDiagnostic(
+                'DEBUG',
+                `session metrics event received count=${receivedMetricsEventCount} tab_id=${payload.tabId} mode=${payload.mode ?? 'replace'} has_system_metrics=${payload.systemMetrics !== undefined} hydrated=${hydrated} generation=${payload.monitoring?.generation ?? 'none'} revision=${payload.monitoring?.revision ?? 'none'}`
+              )
+            }
+            if (!hydrated) {
+              pendingMetrics.push(payload)
+              logWorkspaceDiagnostic(
+                'DEBUG',
+                `session metrics event queued tab_id=${payload.tabId} reason=workspace-not-hydrated pending_count=${pendingMetrics.length}`
+              )
+              return
+            }
+            applySessionMetrics(payload)
+            if (shouldLogMetricsEvent) {
+              logWorkspaceDiagnostic(
+                'DEBUG',
+                `session metrics update scheduled count=${receivedMetricsEventCount} tab_id=${payload.tabId} mode=${payload.mode ?? 'replace'} generation=${payload.monitoring?.generation ?? 'none'} revision=${payload.monitoring?.revision ?? 'none'}`
+              )
+            }
+          })
+        )
       : () => undefined
     const unsubscribeTransferUpdate = isMainWorkspaceWindow
-      ? desktopApi.onTransferUpdate((transfer) => {
-          if (canceled) {
-            return
-          }
-          if (!hydrated) {
-            pendingTransfers = updateTransferHistory(pendingTransfers, transfer)
-            return
-          }
-          processTransferUpdate(transfer)
-        })
+      ? desktopApi.onTransferUpdate(
+          trackRendererWork('transfer-update-event', (transfer) => {
+            if (canceled) {
+              return
+            }
+            if (!hydrated) {
+              pendingTransfers = updateTransferHistory(pendingTransfers, transfer)
+              return
+            }
+            processTransferUpdate(transfer)
+          })
+        )
       : () => undefined
     const unsubscribeRemoteFilesChanged = isMainWorkspaceWindow
-      ? desktopApi.onRemoteFilesChanged((payload) => {
-          if (canceled) {
-            return
-          }
-          if (!hydrated) {
-            pendingRemoteFiles.push(payload)
-            return
-          }
-          applyRemoteFilesUpdate(payload)
-        })
+      ? desktopApi.onRemoteFilesChanged(
+          trackRendererWork('remote-files-event', (payload) => {
+            if (canceled) {
+              return
+            }
+            if (!hydrated) {
+              pendingRemoteFiles.push(payload)
+              return
+            }
+            applyRemoteFilesUpdate(payload)
+          })
+        )
       : () => undefined
 
     const hydrateWorkspace = async () => {

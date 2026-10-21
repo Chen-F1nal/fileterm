@@ -78,7 +78,7 @@ pub fn ensure_portable_marker() -> Result<Option<PathBuf>, AppError> {
         let Some(executable) = std::env::current_exe().ok() else {
             return Ok(None);
         };
-        return ensure_portable_marker_for_executable(&executable);
+        ensure_portable_marker_for_executable(&executable)
     }
 
     #[cfg(not(target_os = "windows"))]

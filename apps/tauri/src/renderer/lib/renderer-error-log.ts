@@ -1,5 +1,6 @@
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from './diagnostic-log'
 import { getRendererWorkSnapshot } from './renderer-work-log'
+import { getTerminalResourceSnapshot } from '../xterm-adapters/terminal-diagnostics'
 
 type ErrorSource = 'react-boundary' | 'window-error' | 'unhandled-rejection' | 'bootstrap'
 
@@ -52,7 +53,7 @@ export function reportRendererError(source: ErrorSource, error: unknown, compone
     writeDiagnosticLog(
       'ERROR',
       DIAGNOSTIC_SCOPES.error,
-      JSON.stringify({ ...details, work: getRendererWorkSnapshot() }),
+      JSON.stringify({ ...details, work: getRendererWorkSnapshot(), terminalResources: getTerminalResourceSnapshot() }),
       api
     )
   } catch {

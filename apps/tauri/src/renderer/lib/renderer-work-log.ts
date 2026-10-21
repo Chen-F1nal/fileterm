@@ -7,10 +7,24 @@ export type RendererWorkPhase =
   | 'symbol-layout'
   | 'block-layout'
   | 'selection-layout'
+  | 'terminal-search-results'
+  | 'terminal-selection-change'
+  | 'terminal-ui-publish'
+  | 'terminal-status'
+  | 'workspace-snapshot'
+  | 'session-metrics'
+  | 'remote-files'
+  | 'transfer-update'
+  | 'workspace-snapshot-event'
+  | 'session-metrics-event'
+  | 'remote-files-event'
+  | 'transfer-update-event'
 
 type WorkSummary = { calls: number; totalElapsedMs: number; maxElapsedMs: number }
 const phases = new Map<RendererWorkPhase, WorkSummary>()
 const recentSlowWork: Array<{ phase: RendererWorkPhase; startedAtMs: number; elapsedMs: number }> = []
+const activeWork: Array<{ phase: RendererWorkPhase; startedAtMs: number }> = []
+const recentFailures: Array<{ phase: RendererWorkPhase; startedAtMs: number; elapsedMs: number }> = []
 
 /** Synchronous elapsed time, inclusive of nested callbacks; never terminal contents or CPU samples. */
 export function trackRendererWork<Args extends unknown[], Result>(
@@ -19,9 +33,19 @@ export function trackRendererWork<Args extends unknown[], Result>(
 ): (...args: Args) => Result {
   return function (this: unknown, ...args: Args): Result {
     const started = performance.now()
+    activeWork.push({ phase, startedAtMs: Math.round(started) })
     try {
       return work.apply(this, args)
+    } catch (error) {
+      recentFailures.push({
+        phase,
+        startedAtMs: Math.round(started),
+        elapsedMs: Math.round(performance.now() - started)
+      })
+      if (recentFailures.length > 4) recentFailures.shift()
+      throw error
     } finally {
+      activeWork.pop()
       const elapsed = performance.now() - started
       const summary = phases.get(phase) ?? { calls: 0, totalElapsedMs: 0, maxElapsedMs: 0 }
       summary.calls++
@@ -38,6 +62,7 @@ export function trackRendererWork<Args extends unknown[], Result>(
 
 export function getRendererWorkSnapshot() {
   return {
+    schemaVersion: 2,
     sampledAtMs: Math.round(performance.now()),
     timeOriginUnixMs: Number.isFinite(performance.timeOrigin) ? Math.round(performance.timeOrigin) : undefined,
     phases: Object.fromEntries(
@@ -50,11 +75,14 @@ export function getRendererWorkSnapshot() {
         }
       ])
     ),
-    recentSlowWork: [...recentSlowWork]
+    recentSlowWork: [...recentSlowWork],
+    activeWork: activeWork.slice(-8).map((entry) => ({ ...entry })),
+    recentFailures: recentFailures.map((entry) => ({ ...entry }))
   }
 }
 
 export function resetRendererWork() {
   phases.clear()
   recentSlowWork.length = 0
+  recentFailures.length = 0
 }

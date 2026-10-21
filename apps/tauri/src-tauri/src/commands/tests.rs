@@ -606,6 +606,7 @@ mod ui_preferences_tests {
 
     use super::{
         default_app_icon, default_local_terminal_shells, default_overview_section_order,
+        default_terminal_renderer,
         default_compact_tab_bar, default_tab_bar_layout, default_ui_locale,
         default_resource_monitoring_metric_order, default_resource_monitoring_metrics,
         default_theme_config, default_update_channel, normalize_local_terminal_shells,
@@ -754,6 +755,7 @@ mod ui_preferences_tests {
 
         let preferences = normalize_ui_preferences(legacy);
 
+        assert_eq!(preferences.terminal_renderer, "webgl");
         assert_eq!(preferences.ui_zoom_percent, 140);
         assert!(preferences.ui_zoom_locked);
         let serialized = serde_json::to_value(preferences).expect("preferences should serialize");
@@ -772,6 +774,7 @@ mod ui_preferences_tests {
         let preferences = normalize_ui_preferences(UiPreferences {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
+            terminal_renderer: "dom".to_string(),
             theme_config: default_theme_config(),
             custom_themes: vec![
                 SavedTheme {
@@ -831,6 +834,7 @@ mod ui_preferences_tests {
         let preferences = normalize_ui_preferences(UiPreferences {
             theme: "fileterm-light".to_string(),
             locale: "zhCN".to_string(),
+            terminal_renderer: "dom".to_string(),
             theme_config: custom_theme,
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -868,6 +872,7 @@ mod ui_preferences_tests {
         let preferences = normalize_ui_preferences(UiPreferences {
             theme: "unknown-theme".to_string(),
             locale: "unknown-locale".to_string(),
+            terminal_renderer: "invalid".to_string(),
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
@@ -900,6 +905,7 @@ mod ui_preferences_tests {
 
         assert_eq!(preferences.theme, "fileterm-dark");
         assert_eq!(preferences.locale, default_ui_locale());
+        assert_eq!(preferences.terminal_renderer, "dom");
         assert_eq!(preferences.update_channel, "beta");
         assert_eq!(preferences.tab_bar_layout, "single-row");
         assert!(preferences.overview_show_recent);
@@ -974,6 +980,7 @@ mod ui_preferences_tests {
         let preferences = normalize_ui_preferences(UiPreferences {
             theme: "default-light".to_string(),
             locale: "enUS".to_string(),
+            terminal_renderer: "webgl".to_string(),
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
@@ -1007,6 +1014,7 @@ mod ui_preferences_tests {
 
         assert_eq!(preferences.theme, "default-light");
         assert_eq!(preferences.locale, "enUS");
+        assert_eq!(preferences.terminal_renderer, "webgl");
         assert_eq!(preferences.update_channel, "beta");
         assert!(!preferences.auto_check_updates);
         assert!(preferences.terminal_zoom_locked);
@@ -1030,6 +1038,7 @@ mod ui_preferences_tests {
         let preferences = normalize_ui_preferences(UiPreferences {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
+            terminal_renderer: "dom".to_string(),
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -1088,6 +1097,7 @@ mod ui_preferences_tests {
         let preferences = normalize_ui_preferences(UiPreferences {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
+            terminal_renderer: "dom".to_string(),
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -1136,6 +1146,7 @@ mod ui_preferences_tests {
         let preferences = normalize_ui_preferences(UiPreferences {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
+            terminal_renderer: "dom".to_string(),
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -1239,6 +1250,7 @@ mod ui_preferences_tests {
 
         assert!(preferences.auto_check_updates);
         assert_eq!(preferences.update_channel, "beta");
+        assert_eq!(preferences.terminal_renderer, "webgl");
         assert!(preferences.overview_show_stats);
         assert!(preferences.overview_show_recent);
         assert!(preferences.overview_show_all_connections);
@@ -1261,6 +1273,11 @@ mod ui_preferences_tests {
             preferences.local_terminal_shells.linux,
             local_terminal_shell_defaults.linux
         );
+    }
+
+    #[test]
+    fn new_install_terminal_renderer_defaults_to_dom() {
+        assert_eq!(default_terminal_renderer(), "dom");
     }
 
     #[test]
@@ -1289,6 +1306,7 @@ mod ui_preferences_tests {
         assert!(!legacy.compact_tab_bar);
 
         let input: UiPreferencesInput = serde_json::from_value(serde_json::json!({
+            "terminalRenderer": "dom",
             "autoCheckUpdates": false,
             "showMacosMenuBarIcon": false,
             "updateChannel": "beta",
@@ -1302,6 +1320,7 @@ mod ui_preferences_tests {
             "localTerminalShells": { "win32": "pwsh.exe" }
         }))
         .expect("renderer preference input should deserialize");
+        assert_eq!(input.terminal_renderer.as_deref(), Some("dom"));
         assert_eq!(input.auto_check_updates, Some(false));
         assert_eq!(input.show_macos_menu_bar_icon, Some(false));
         assert_eq!(input.update_channel.as_deref(), Some("beta"));
@@ -1331,6 +1350,7 @@ mod ui_preferences_tests {
         let preferences = serde_json::to_value(UiPreferences {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
+            terminal_renderer: "dom".to_string(),
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
@@ -1365,6 +1385,7 @@ mod ui_preferences_tests {
         assert_eq!(preferences["autoCheckUpdates"], false);
         assert_eq!(preferences["showMacosMenuBarIcon"], false);
         assert_eq!(preferences["updateChannel"], "beta");
+        assert_eq!(preferences["terminalRenderer"], "dom");
         assert_eq!(preferences["tabBarLayout"], "host-groups");
         assert_eq!(preferences["compactTabBar"], true);
         assert_eq!(preferences["overviewShowStats"], false);

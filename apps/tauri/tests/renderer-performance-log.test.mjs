@@ -4,7 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-function fixture({ supportsLongTasks = false } = {}) {
+function fixture({ supportsLongTasks = false, bridgeReady = true } = {}) {
   let now = 0
   let callback
   let reset
@@ -41,7 +41,7 @@ function fixture({ supportsLongTasks = false } = {}) {
     {
       exports,
       document,
-      performance: { now: () => now, memory: { usedJSHeapSize: 1234, totalJSHeapSize: 4567 } },
+      performance: { now: () => now, timeOrigin: 100000, memory: { usedJSHeapSize: 1234, totalJSHeapSize: 4567 } },
       PerformanceObserver: supportsLongTasks
         ? class {
             static supportedEntryTypes = ['longtask']
@@ -57,7 +57,9 @@ function fixture({ supportsLongTasks = false } = {}) {
           }
         : undefined,
       window: {
-        fileterm: { appVersion: '2.2.31', platform: 'win32' },
+        get fileterm() {
+          return bridgeReady ? { appVersion: '2.2.31', platform: 'win32' } : undefined
+        },
         __TAURI_INTERNALS__: { callbacks: new Map([[1, () => {}]]) },
         setInterval: (listener, interval) => {
           assert.equal(interval, 1000)
@@ -111,7 +113,12 @@ function fixture({ supportsLongTasks = false } = {}) {
     }
   )
   const dispose = exports.installRendererPerformanceLogging()
+  const startup = calls.length ? JSON.parse(calls.shift()[2]) : null
   return {
+    startup,
+    makeBridgeReady: () => {
+      bridgeReady = true
+    },
     calls,
     emitLongFrame: () => longFrameCallback(),
     setWork: (value) => {
@@ -140,6 +147,14 @@ function fixture({ supportsLongTasks = false } = {}) {
   }
 }
 
+test('startup identifies the installed diagnostics schema without waiting for a stall', () => {
+  const f = fixture()
+  assert.equal(f.startup.event, 'renderer-diagnostics-ready')
+  assert.equal(f.startup.schemaVersion, 2)
+  assert.equal(f.startup.platform, 'win32')
+  f.dispose()
+})
+
 test('recovered foreground stalls log WARN without an exception and are rate limited', () => {
   const f = fixture()
   f.tick(1000)
@@ -148,12 +163,27 @@ test('recovered foreground stalls log WARN without an exception and are rate lim
   assert.equal(f.calls[0][0], 'WARN')
   assert.equal(f.calls[0][1], 'renderer:performance')
   assert.equal(JSON.parse(f.calls[0][2]).elapsedMs, 5000)
+  assert.equal(JSON.parse(f.calls[0][2]).lastHeartbeatAtUnixMs, 101000)
+  assert.equal(JSON.parse(f.calls[0][2]).expectedNextHeartbeatAtUnixMs, 102000)
+  assert.equal(JSON.parse(f.calls[0][2]).resumedAtUnixMs, 106000)
   f.tick(5000)
   assert.equal(f.calls.length, 1)
   f.tick(30000)
   assert.equal(f.calls.length, 2)
   f.dispose()
   assert.equal(f.cleared, true)
+})
+
+test('two-second heartbeat gaps are logged with the expected wake and recovery times', () => {
+  const f = fixture()
+  f.tick(2000)
+  const gap = JSON.parse(f.calls[0][2])
+  assert.equal(gap.event, 'event-loop-gap')
+  assert.equal(gap.delayedByMs, 1000)
+  assert.equal(gap.lastHeartbeatAtUnixMs, 100000)
+  assert.equal(gap.expectedNextHeartbeatAtUnixMs, 101000)
+  assert.equal(gap.resumedAtUnixMs, 102000)
+  f.dispose()
 })
 
 test('long frames report immediately with context and at most once per thirty seconds', () => {
@@ -239,6 +269,16 @@ test('stalled output and slow interactions report bounded summaries on the exist
   f.dispose()
 })
 
+test('input dispatch delay alone triggers a slow interaction warning', () => {
+  const f = fixture()
+  f.setInteraction({ supported: true, samples: 1, maxInputDelayMs: 300, maxDurationMs: 400 })
+  f.tick(1000)
+  const report = JSON.parse(f.calls[0][2])
+  assert.equal(report.event, 'renderer-progress-slow')
+  assert.equal(report.interaction.maxInputDelayMs, 300)
+  f.dispose()
+})
+
 test('new output after a long idle period is not mistaken for a stalled parse', () => {
   const f = fixture()
   f.setOutput({ pendingBatches: 1, busyForMs: 100, sinceLastParsedMs: 60000 })
@@ -261,5 +301,18 @@ test('minute health and a coincident stall share evidence before summaries reset
   assert.equal(health.terminalResources.terminals, 10)
   f.tick(60000)
   assert.deepEqual(JSON.parse(f.calls[2][2]).work.phases, {})
+  f.dispose()
+})
+
+test('startup marker waits for the asynchronously initialized bridge and emits only once', () => {
+  const f = fixture({ bridgeReady: false })
+  assert.equal(f.startup, null)
+  f.tick(1000)
+  assert.equal(f.calls.length, 0)
+  f.makeBridgeReady()
+  f.tick(1000)
+  assert.equal(JSON.parse(f.calls[0][2]).event, 'renderer-diagnostics-ready')
+  f.tick(1000)
+  assert.equal(f.calls.length, 1)
   f.dispose()
 })

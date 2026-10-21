@@ -52,12 +52,34 @@ test('phase timing preserves this, return values, exceptions and async parsing w
   assert.equal(snapshot.phases['xterm-parse'].totalElapsedMs, 20, 'async waiting is not synchronous parsing time')
   assert.equal(snapshot.phases['xterm-parse'].calls, 2)
   assert.equal(snapshot.phases['xterm-render'].maxElapsedMs, 30)
+  assert.equal(snapshot.recentFailures[0].phase, 'xterm-render')
+  assert.equal(snapshot.activeWork.length, 0)
   assert.ok(!JSON.stringify(snapshot).includes('secret'))
   for (let index = 0; index < 20; index++) work.trackRendererWork('symbol-layout', () => advance(20))()
   assert.equal(work.getRendererWorkSnapshot().recentSlowWork.length, 6)
   work.resetRendererWork()
   assert.equal(Object.keys(work.getRendererWorkSnapshot().phases).length, 0)
   assert.equal(work.getRendererWorkSnapshot().recentSlowWork.length, 0)
+  assert.equal(work.getRendererWorkSnapshot().recentFailures.length, 0)
+})
+
+test('named callback failures survive emitter unwinding without retaining errors or payloads', () => {
+  const { work } = workFixture()
+  let active
+  const inner = work.trackRendererWork('terminal-search-results', () => {
+    active = work.getRendererWorkSnapshot().activeWork.map((entry) => entry.phase)
+    throw new Error('private output')
+  })
+  const outer = work.trackRendererWork('xterm-parse', inner)
+  assert.throws(() => outer('secret payload'), /private output/)
+  assert.deepEqual([...active], ['xterm-parse', 'terminal-search-results'])
+  const snapshot = work.getRendererWorkSnapshot()
+  assert.equal(snapshot.activeWork.length, 0)
+  assert.equal(snapshot.recentFailures[0].phase, 'terminal-search-results')
+  assert.ok(!JSON.stringify(snapshot).includes('private'))
+  assert.ok(!JSON.stringify(snapshot).includes('secret'))
+  for (let i = 0; i < 20; i++) assert.throws(() => inner())
+  assert.equal(work.getRendererWorkSnapshot().recentFailures.length, 4)
 })
 
 test('terminal resources are numeric, version guarded and released with exact methods restored', () => {
@@ -74,8 +96,14 @@ test('terminal resources are numeric, version guarded and released with exact me
     advance(20)
   }
   const renderer = { renderRows }
+  const renderListeners = new Set()
   const terminal = {
     cols: 80,
+    element: { querySelector: () => ({}) },
+    onRender(listener) {
+      renderListeners.add(listener)
+      return { dispose: () => renderListeners.delete(listener) }
+    },
     buffer: { normal: { length: 100 }, alternate: { length: 20 } },
     _core: {
       _inputHandler: parser,
@@ -86,7 +114,8 @@ test('terminal resources are numeric, version guarded and released with exact me
   const registration = diagnostics.registerTerminalDiagnostics(
     terminal,
     { current: 'secret' },
-    { current: 'secret log' }
+    { current: 'secret log' },
+    { current: 'tab-safe' }
   )
   assert.equal(parser.parse('private response'), 'private response')
   renderer.renderRows()
@@ -96,11 +125,28 @@ test('terminal resources are numeric, version guarded and released with exact me
   assert.equal(snapshot.pendingWriteCharacters, 6)
   assert.equal(snapshot.instrumentedParsers, 1)
   assert.equal(snapshot.instrumentedRenderers, 1)
+  assert.equal(snapshot.byRenderer.dom, 1)
+  assert.equal(snapshot.perTerminal[0].tabId, 'tab-safe')
   assert.ok(!JSON.stringify(snapshot).includes('secret'))
+  const webglRenderRows = function () {
+    assert.equal(this, webglRenderer)
+    advance(15)
+  }
+  const webglRenderer = { renderRows: webglRenderRows, _gl: {} }
+  terminal._core._renderService._renderer.value = webglRenderer
+  registration.refreshRenderer()
+  webglRenderer.renderRows()
+  assert.equal(diagnostics.getTerminalResourceSnapshot().instrumentedRenderers, 1)
+  assert.equal(diagnostics.getTerminalResourceSnapshot().byRenderer.webgl, 1)
+  terminal._core._renderService._renderer.value = renderer
+  registration.refreshRenderer()
+  renderer.renderRows()
   registration.dispose()
   registration.dispose()
   assert.equal(parser.parse, parse)
   assert.equal(renderer.renderRows, renderRows)
+  assert.equal(webglRenderer.renderRows, webglRenderRows)
+  assert.equal(renderListeners.size, 0)
   assert.equal(diagnostics.getTerminalResourceSnapshot().terminals, 0)
   const fallback = diagnostics.registerTerminalDiagnostics({ ...terminal, _core: {} }, { current: '' }, { current: '' })
   assert.equal(diagnostics.getTerminalResourceSnapshot().unknownXtermQueues, 1)

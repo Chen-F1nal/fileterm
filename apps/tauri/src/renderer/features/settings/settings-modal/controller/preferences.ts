@@ -7,6 +7,7 @@ import {
   type UiPreferences
 } from '@fileterm/core'
 import { t } from '../../../../i18n'
+import { setTerminalRendererPreference as setActiveTerminalRendererPreference } from '../../../../app/terminal-renderer-preference'
 import { LOCAL_TERMINAL_SHELL_CONFIGS, localTerminalShellOptionsFor } from '../constants'
 import type { SettingsModalState } from './state'
 
@@ -24,6 +25,12 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     setUpdatePreferenceError,
     terminalZoomLocked,
     setTerminalZoomLocked,
+    terminalRenderer,
+    setTerminalRenderer,
+    isSavingTerminalRendererPreference,
+    setIsSavingTerminalRendererPreference,
+    terminalRendererPreferenceError,
+    setTerminalRendererPreferenceError,
     isSavingTerminalZoomPreference,
     setIsSavingTerminalZoomPreference,
     terminalZoomPreferenceError,
@@ -193,6 +200,28 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
         setTerminalZoomPreferenceError(t.terminalZoomPreferenceSaveFailed)
       })
       .finally(() => setIsSavingTerminalZoomPreference(false))
+  }
+
+  const saveTerminalRendererPreference = (nextValue: UiPreferences['terminalRenderer']) => {
+    if (!desktopApi || isSavingTerminalRendererPreference || nextValue === terminalRenderer) return
+
+    const previousValue = terminalRenderer
+    setTerminalRenderer(nextValue)
+    setActiveTerminalRendererPreference(nextValue)
+    setTerminalRendererPreferenceError(null)
+    setIsSavingTerminalRendererPreference(true)
+    void desktopApi
+      .setUiPreferences({ terminalRenderer: nextValue })
+      .then((preferences) => {
+        setTerminalRenderer(preferences.terminalRenderer)
+        setActiveTerminalRendererPreference(preferences.terminalRenderer)
+      })
+      .catch(() => {
+        setTerminalRenderer(previousValue)
+        setActiveTerminalRendererPreference(previousValue)
+        setTerminalRendererPreferenceError(t.terminalRendererPreferenceSaveFailed)
+      })
+      .finally(() => setIsSavingTerminalRendererPreference(false))
   }
 
   const setUiZoomLockPreference = (nextValue: boolean) => {
@@ -386,6 +415,10 @@ export function useSettingsPreferencesController({ state }: { state: SettingsMod
     setConnectionDefault,
     connectionDefaultsError,
     terminalZoomLocked,
+    terminalRenderer,
+    isSavingTerminalRendererPreference,
+    terminalRendererPreferenceError,
+    saveTerminalRendererPreference,
     isSavingTerminalZoomPreference,
     terminalZoomPreferenceError,
     setTerminalZoomLockPreference,

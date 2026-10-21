@@ -2,7 +2,7 @@ import type { Terminal } from '@xterm/xterm'
 import { trackRendererWork } from '../lib/renderer-work-log'
 
 type Parser = { parse(data: string | Uint8Array, promiseResult?: boolean): void | Promise<boolean> }
-type Renderer = { renderRows(start: number, end: number): void }
+type Renderer = { renderRows(start: number, end: number): void; _gl?: unknown }
 type DiagnosticTerminal = Terminal & {
   _core?: {
     _inputHandler?: Parser
@@ -20,6 +20,8 @@ const readers = new Set<
     pendingXtermCharacters: number | null
     parserInstrumented: boolean
     rendererInstrumented: boolean
+    tabId: string | null
+    renderer: 'dom' | 'webgl' | 'unknown'
   }
 >()
 
@@ -27,18 +29,32 @@ const readers = new Set<
 export function registerTerminalDiagnostics(
   terminal: Terminal,
   pendingWrite: { current: string },
-  transcript: { current: string }
+  transcript: { current: string },
+  tabId?: { current: string }
 ) {
   const core = (terminal as DiagnosticTerminal)._core
   const parser = core?._inputHandler
-  const renderer = core?._renderService?._renderer?.value
   const originalParse = typeof parser?.parse === 'function' ? parser.parse : undefined
-  const originalRender = typeof renderer?.renderRows === 'function' ? renderer.renderRows : undefined
   const parse = originalParse && trackRendererWork('xterm-parse', originalParse)
-  const render = originalRender && trackRendererWork('xterm-render', originalRender)
   if (parser && parse) parser.parse = parse
-  if (renderer && render) renderer.renderRows = render
+  let renderer: Renderer | undefined
+  let originalRender: Renderer['renderRows'] | undefined
+  let render: Renderer['renderRows'] | undefined
+  const refreshRenderer = () => {
+    const nextRenderer = core?._renderService?._renderer?.value
+    if (renderer === nextRenderer) return
+    if (renderer && render && originalRender && renderer.renderRows === render) renderer.renderRows = originalRender
+    renderer = nextRenderer
+    originalRender = typeof renderer?.renderRows === 'function' ? renderer.renderRows : undefined
+    render = originalRender && trackRendererWork('xterm-render', originalRender)
+    if (renderer && render) renderer.renderRows = render
+  }
+  refreshRenderer()
+  const rendererSubscription = terminal.onRender(refreshRenderer)
   const read = () => ({
+    tabId: tabId?.current ?? null,
+    renderer: (renderer?._gl ? 'webgl' : terminal.element?.querySelector('.xterm-rows') ? 'dom' : 'unknown') as
+      'dom' | 'webgl' | 'unknown',
     normalBufferRows: terminal.buffer.normal.length,
     alternateBufferRows: terminal.buffer.alternate.length,
     // xterm 6 uses three Uint32 words per cell; this excludes strings, capacity slack and native/GPU memory.
@@ -53,9 +69,11 @@ export function registerTerminalDiagnostics(
   })
   readers.add(read)
   return {
+    refreshRenderer,
     dispose() {
       readers.delete(read)
       if (parser && parser.parse === parse && originalParse) parser.parse = originalParse
+      rendererSubscription.dispose()
       if (renderer && renderer.renderRows === render && originalRender) renderer.renderRows = originalRender
     }
   }
@@ -64,6 +82,16 @@ export function registerTerminalDiagnostics(
 export function getTerminalResourceSnapshot() {
   const totals = {
     terminals: readers.size,
+    byRenderer: { dom: 0, webgl: 0, unknown: 0 },
+    perTerminal: [] as Array<{
+      tabId: string | null
+      renderer: string
+      normalBufferRows: number
+      alternateBufferRows: number
+      pendingWriteCharacters: number
+      pendingXtermCharacters: number | null
+    }>,
+    terminalsTruncated: readers.size > 8,
     normalBufferRows: 0,
     alternateBufferRows: 0,
     cellStorageBytesEstimate: 0,
@@ -76,6 +104,16 @@ export function getTerminalResourceSnapshot() {
   }
   for (const read of readers) {
     const value = read()
+    totals.byRenderer[value.renderer]++
+    if (totals.perTerminal.length < 8)
+      totals.perTerminal.push({
+        tabId: value.tabId,
+        renderer: value.renderer,
+        normalBufferRows: value.normalBufferRows,
+        alternateBufferRows: value.alternateBufferRows,
+        pendingWriteCharacters: value.pendingWriteCharacters,
+        pendingXtermCharacters: value.pendingXtermCharacters
+      })
     totals.normalBufferRows += value.normalBufferRows
     totals.alternateBufferRows += value.alternateBufferRows
     totals.cellStorageBytesEstimate += value.cellStorageBytesEstimate
