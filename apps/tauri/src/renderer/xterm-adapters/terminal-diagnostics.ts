@@ -2,7 +2,8 @@ import type { Terminal } from '@xterm/xterm'
 import { trackRendererWork } from '../lib/renderer-work-log'
 
 type Parser = { parse(data: string | Uint8Array, promiseResult?: boolean): void | Promise<boolean> }
-type Renderer = { renderRows(start: number, end: number): void; _gl?: unknown }
+type GlyphAtlas = { pages: Array<{ canvas: { width: number; height: number } }> }
+type Renderer = { renderRows(start: number, end: number): void; _gl?: unknown; _charAtlas?: GlyphAtlas }
 type DiagnosticTerminal = Terminal & {
   _core?: {
     _inputHandler?: Parser
@@ -22,6 +23,7 @@ const readers = new Set<
     rendererInstrumented: boolean
     tabId: string | null
     renderer: 'dom' | 'webgl' | 'unknown'
+    atlas: GlyphAtlas | undefined
   }
 >()
 
@@ -53,6 +55,7 @@ export function registerTerminalDiagnostics(
   const rendererSubscription = terminal.onRender(refreshRenderer)
   const read = () => ({
     tabId: tabId?.current ?? null,
+    atlas: renderer?._gl ? renderer._charAtlas : undefined,
     renderer: (renderer?._gl ? 'webgl' : terminal.element?.querySelector('.xterm-rows') ? 'dom' : 'unknown') as
       'dom' | 'webgl' | 'unknown',
     normalBufferRows: terminal.buffer.normal.length,
@@ -88,10 +91,15 @@ export function getTerminalResourceSnapshot() {
       renderer: string
       normalBufferRows: number
       alternateBufferRows: number
+      webglAtlasPages: number | null
       pendingWriteCharacters: number
       pendingXtermCharacters: number | null
     }>,
     terminalsTruncated: readers.size > 8,
+    uniqueWebglAtlasPages: 0,
+    uniqueWebglAtlasBytesEstimate: 0,
+    unknownWebglAtlases: 0,
+    webglAtlasEstimateTruncated: false,
     normalBufferRows: 0,
     alternateBufferRows: 0,
     cellStorageBytesEstimate: 0,
@@ -102,13 +110,26 @@ export function getTerminalResourceSnapshot() {
     instrumentedParsers: 0,
     instrumentedRenderers: 0
   }
+  const atlases = new Set<GlyphAtlas>()
   for (const read of readers) {
     const value = read()
     totals.byRenderer[value.renderer]++
+    const pages = value.atlas?.pages
+    const atlasKnown = Array.isArray(pages)
+    if (value.renderer === 'webgl' && !atlasKnown) totals.unknownWebglAtlases++
+    if (value.atlas && atlasKnown && !atlases.has(value.atlas)) {
+      atlases.add(value.atlas)
+      totals.uniqueWebglAtlasPages += pages.length
+      totals.webglAtlasEstimateTruncated ||= pages.length > 64
+      // Off-DOM CPU atlas canvases can dominate visible canvas storage; shared atlases count once.
+      for (const { canvas } of pages.slice(0, 64))
+        totals.uniqueWebglAtlasBytesEstimate += canvas.width * canvas.height * 4
+    }
     if (totals.perTerminal.length < 8)
       totals.perTerminal.push({
         tabId: value.tabId,
         renderer: value.renderer,
+        webglAtlasPages: atlasKnown ? pages.length : value.renderer === 'webgl' ? null : 0,
         normalBufferRows: value.normalBufferRows,
         alternateBufferRows: value.alternateBufferRows,
         pendingWriteCharacters: value.pendingWriteCharacters,

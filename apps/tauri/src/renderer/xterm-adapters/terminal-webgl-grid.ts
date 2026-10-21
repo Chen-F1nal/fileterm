@@ -2,6 +2,7 @@ import type { IDisposable, Terminal } from '@xterm/xterm'
 
 type WebglGridRenderer = {
   _gl?: WebGL2RenderingContext
+  _charAtlas?: object
   _setCanvasDevicePixelDimensions(width: number, height: number): void
   _glyphRenderer: { value: { handleResize(): void } }
   _clearModel(clearGlyphRenderer: boolean): void
@@ -13,7 +14,9 @@ type GridTerminal = {
   }
 }
 
-/** Keep WebGL backing resizes in sync without changing its integer raster grid. */
+const webglTerminals = new Set<{ terminal: Terminal; renderer: WebglGridRenderer }>()
+
+/** Keep backing resizes and shared glyph coordinates coherent without changing the raster grid. */
 export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
   const core = (terminal as unknown as GridTerminal)._core
   const renderer = core?._renderService?._renderer?.value
@@ -49,8 +52,27 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
     throw error
   }
 
+  const registration = { terminal, renderer }
+  const originalClearAtlas = terminal.clearTextureAtlas
+  const clearAtlas = function (this: Terminal) {
+    const atlas = renderer._charAtlas
+    originalClearAtlas.call(this)
+    if (!atlas) return
+    // xterm shares atlases but only invalidates the caller's cached glyph coordinates.
+    for (const peer of webglTerminals) {
+      if (peer !== registration && peer.renderer._charAtlas === atlas) {
+        peer.renderer._clearModel(true)
+        peer.terminal.refresh(0, Math.max(0, peer.terminal.rows - 1))
+      }
+    }
+  }
+  terminal.clearTextureAtlas = clearAtlas
+  webglTerminals.add(registration)
+
   return {
     dispose() {
+      webglTerminals.delete(registration)
+      if (terminal.clearTextureAtlas === clearAtlas) terminal.clearTextureAtlas = originalClearAtlas
       if (renderer._setCanvasDevicePixelDimensions === resizeBacking)
         renderer._setCanvasDevicePixelDimensions = originalBackingResize
     }

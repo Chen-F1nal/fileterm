@@ -17,6 +17,7 @@
 | `terminal-transcript-replay.ts`                               | 避免历史截断后从半段控制序列开始回放                                           |
 | `terminal-responses.ts`                                       | 终端查询回包识别及历史回放的合成回包过滤                                       |
 | `terminal-vim-selection.ts`                                   | Vim 接管鼠标后，从 buffer 恢复 Visual 选区用于复制                             |
+| `terminal-webgl-grid.ts`                                      | WebGL backing resize 同步与共享字形图集清理后的跨终端失效                      |
 | `terminal-render-recovery.ts`                                 | 字体/DPI 缓存校准、普通/备用屏幕切换重绘和标签激活渲染恢复                     |
 | `terminal-wheel-compat.ts`                                    | 将 WebView 重定向到 document 的滚轮事件交还 xterm                              |
 | `terminal-options.ts`                                         | TUI、ConPTY、本地选择等兼容选项                                                |

@@ -99,3 +99,58 @@ test('an unsupported renderer fails before installing a grid hook', () => {
   )
   assert.equal(renderer._updateDimensions, original)
 })
+
+test('clearing a shared atlas invalidates peers once and disposed or unrelated terminals are left alone', () => {
+  const shared = {}
+  const makeTerminal = (atlas) => {
+    let clears = 0
+    let redraws = 0
+    const originalClear = () => {
+      clears++
+    }
+    const renderer = {
+      _gl: {},
+      _charAtlas: atlas,
+      _setCanvasDevicePixelDimensions() {},
+      _glyphRenderer: { value: { handleResize() {} } },
+      _clearModel() {
+        clears++
+      },
+      handleCharSizeChanged() {}
+    }
+    const terminal = {
+      rows: 24,
+      clearTextureAtlas: originalClear,
+      refresh(start, end) {
+        assert.equal(start, 0)
+        assert.equal(end, 23)
+        redraws++
+      },
+      _core: { _renderService: { _renderer: { value: renderer } } }
+    }
+    return {
+      terminal,
+      originalClear,
+      renderer,
+      adapter: registerTerminalWebglGrid(terminal),
+      counts: () => ({ clears, redraws })
+    }
+  }
+  const first = makeTerminal(shared)
+  const second = makeTerminal(shared)
+  const third = makeTerminal({})
+  first.terminal.clearTextureAtlas()
+  assert.deepEqual(first.counts(), { clears: 1, redraws: 0 })
+  assert.deepEqual(second.counts(), { clears: 1, redraws: 1 })
+  assert.deepEqual(third.counts(), { clears: 0, redraws: 0 })
+  second.adapter.dispose()
+  assert.equal(second.terminal.clearTextureAtlas, second.originalClear)
+  first.terminal.clearTextureAtlas()
+  assert.deepEqual(second.counts(), { clears: 1, redraws: 1 })
+  third.renderer._charAtlas = shared
+  first.terminal.clearTextureAtlas()
+  assert.deepEqual(third.counts(), { clears: 1, redraws: 1 }, 'font changes can switch which atlas is shared')
+  first.adapter.dispose()
+  third.adapter.dispose()
+  assert.equal(first.terminal.clearTextureAtlas, first.originalClear)
+})

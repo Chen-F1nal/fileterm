@@ -79,7 +79,7 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 | `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `transferTasks`、`transferRuns`、`transferProgressSamples`、`terminalOutput.windows`、`terminalOutput.inFlight`、`terminalOutput.queuedBatches`、`terminalOutput.queuedBytes`、`terminalOutput.queuedTabs`       | 只记录数量；锁忙时相应值为 `null`，不是累计历史数或内存字节数                        |
 | `event-loop-gap` / `renderer:performance`        | WARN；可见页面的 1 秒心跳间隔达到 2 秒，最多每 30 秒一次                             | `elapsedMs`、预期/恢复时间锚点、页面是否聚焦、应用版本与平台                                                                                                                                                     | 在 renderer 恢复后才能记录；时间锚点只界定心跳缺口，不能证明阻塞起点或原因           |
 | `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
-| `terminal-renderer` / `renderer:performance`     | INFO；终端 renderer 初始化、WebGL 加载/激活或 DOM 回退时                             | `renderer`、`reason`、Chromium/Edge 版本、GPU vendor/renderer、硬件加速启发式结果                                                                                                                                | 当前只由 Windows 开发版 WebGL 测试开关请求 WebGL；GPU 字符串不可用时字段为 `null`    |
+| `terminal-renderer` / `renderer:performance`     | INFO：初始化/加载/激活；WARN：加载/激活失败或 context loss 回退时                    | `renderer`、`reason`、Chromium/Edge 版本、GPU vendor/renderer、硬件加速启发式结果                                                                                                                                | 三平台按设置选择 renderer；GPU 字符串不可用时字段为 `null`                           |
 | `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口/标签标识、累计跳过字节数与 `since_last_ack_ms`                                                                                                     | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
 
 当前排查分支（尚未发布，beta.9 不含以下新增字段）补充：
@@ -292,3 +292,15 @@ SSH、FTP、本地终端、Telnet 和串口的状态更新仅在状态实际改�
 
 策略参考：[PuTTY Event Log](https://the.earth.li/~sgtatham/putty/0.85/htmldoc/Chapter3.html#using-eventlog)、[OpenSSH LogLevel](https://man.openbsd.org/ssh_config#LogLevel)、[SecureCRT 排障跟踪](https://www.vandyke.com/support/tips/configure-trace-options-debug-logging-in-securecrt.html)、[WinSCP 日志级别](https://winscp.net/eng/docs/ui_pref_logging)。
 这些资料区分重要连接事件与按需开启的详细调试；FileTerm 的具体基础事件清单属于本项目设计，不是其他产品默认落盘策略的逐项复制。
+
+## WebGL 字形图集与实际回退
+
+`terminalResources.perTerminal[].renderer` 表示实际后端；设置页的 WebGL 选择不保证所有实例均为 WebGL。
+`terminal-renderer` 的 `load-failed` / `activation-failed` / `context-loss` 为 WARN，默认保留。
+块字符不再触发自动回退。
+
+资源摘要增加 `uniqueWebglAtlasPages`、`uniqueWebglAtlasBytesEstimate`、`unknownWebglAtlases` 和
+`webglAtlasEstimateTruncated`，每终端增加 `webglAtlasPages`。图集 canvas 不在 DOM 中，旧的
+`canvasBackingBytesEstimate` 不含它们。新估计按页宽×高×4计算，每个共享图集仅计一次，
+每图集最多读取 64 页；超限是下界，未知私有结构不当作零。它只估计 CPU 侧 RGBA 图集，
+不包含 GPU 纹理副本、mipmap、分配器/驱动和浏览器其他内存，不能直接与任务管理器 RSS 相等。

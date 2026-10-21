@@ -11,6 +11,8 @@ Windows Tauri 的 renderer 由上述设置决定；`VITE_FILETERM_TERMINAL_RENDE
 
 ## 块字形兼容：2026-10-21
 
+> 以下为历史实现。后续已移除块字符触发的 DOM 回退，改为保留 WebGL custom glyphs，并修复共享图集清理后其他终端坐标未失效的问题。复现和当前验证见[本轮报告](terminal-webgl-fallback-shared-atlas-2026-10-21.md)。
+
 OpenCode 截图中的像素风块字可能被 WebGL 图集按字体字面度量错位。沿用 Ghostty 按终端 cell 尺寸和 glyph bearing 定位字形的思路，FileTerm 在 WebGL 终端检测到可见 U+2580–U+259F 后，让该终端回退到现有 DOM 字形适配器；适配器按列宽和设备像素网格绘制块字，不更改文本缓冲、字体或默认 renderer。参考：[Ghostty cell text shader](https://github.com/ghostty-org/ghostty/blob/main/src/renderer/shaders/glsl/cell_text.v.glsl)。
 
 生命周期回归使用 OpenCode 风格的块字组合，确认该终端回退 DOM、单元格字形 canvas 已绘制且缓冲文本完整。尚未在真实 OpenCode 长会话中验证其余 TUI 元素和性能影响。

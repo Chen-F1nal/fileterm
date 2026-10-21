@@ -1,4 +1,4 @@
-/* global window, document, HTMLCanvasElement */
+/* global window, document, HTMLCanvasElement, requestAnimationFrame */
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -14,6 +14,8 @@ const archiveRoot = resolve(
 const require = createRequire(import.meta.url)
 const { build } = require(process.env.ESBUILD_MODULE_PATH || 'esbuild')
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
+const deviceScaleFactor = Number(process.env.FILETERM_WEBGL_DPR || 1)
+assert.ok(Number.isFinite(deviceScaleFactor) && deviceScaleFactor >= 1 && deviceScaleFactor <= 3)
 const output = resolve(
   process.env.FILETERM_WEBGL_LIFECYCLE_OUTPUT || join(archiveRoot, 'results', 'terminal-webgl-lifecycle.json')
 )
@@ -69,13 +71,13 @@ try {
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
-    args: ['--enable-gpu']
+    args: ['--enable-gpu', '--force-device-scale-factor=' + deviceScaleFactor, '--window-size=1100,800']
   })
   try {
     const browserCdp = await browser.newBrowserCDPSession()
     const { gpu: rawGpu } = await browserCdp.send('SystemInfo.getInfo')
     const gpu = summarizeGpu(rawGpu)
-    const page = await browser.newPage({ viewport: { width: 1000, height: 700 }, deviceScaleFactor: 1 })
+    const page = await browser.newPage({ viewport: null })
     const errors = []
     page.on('pageerror', (error) => errors.push(error.message))
     page.on('console', (message) => {
@@ -86,8 +88,8 @@ try {
       window.rendererLogs = []
       window.fileterm = {
         platform: 'win32',
-        writeDiagnosticLog: (_level, _scope, message) => {
-          window.rendererLogs.push(JSON.parse(message))
+        writeDiagnosticLog: (level, _scope, message) => {
+          window.rendererLogs.push({ level, ...JSON.parse(message) })
           return Promise.resolve()
         },
         writeTerminal: () => Promise.resolve()
@@ -144,18 +146,10 @@ try {
         window.blockGlyphRuntime.terminal.write('OpenCode logo: ▗▀▖ ▌█▐ ▝▄▘ ░▒▓█\r\n', resolve)
       )
     })
-    await page.waitForFunction(
-      () =>
-        window.rendererLogs.some(
-          (entry) =>
-            entry.event === 'terminal-renderer' &&
-            entry.renderer === 'dom' &&
-            entry.reason === 'block-glyph-compatibility'
-        ),
-      undefined,
-      { timeout: 10000 }
+    await page.waitForFunction(() =>
+      Boolean(window.blockGlyphRuntime.terminal._core._renderService._renderer.value._gl)
     )
-    const blockGlyphFallback = await page.evaluate(() => {
+    const blockGlyphRendering = await page.evaluate(() => {
       const terminal = window.blockGlyphRuntime.terminal
       return {
         renderer: terminal._core._renderService._renderer.value.constructor.name,
@@ -164,9 +158,155 @@ try {
         text: terminal.buffer.active.getLine(0).translateToString(true)
       }
     })
-    assert.equal(blockGlyphFallback.domRows, true)
-    assert.equal(blockGlyphFallback.overlay, true)
-    assert.match(blockGlyphFallback.text, /OpenCode logo: ▗▀▖/)
+    assert.equal(blockGlyphRendering.domRows, false)
+    assert.equal(blockGlyphRendering.overlay, false)
+    assert.match(blockGlyphRendering.text, /OpenCode logo: ▗▀▖/)
+
+    const blockPixels = await page.evaluate(async () => {
+      const runtime = window.blockGlyphRuntime
+      const terminal = runtime.terminal
+      await new Promise((resolve) => terminal.write('\x1b[2J\x1b[H█▀▄▌▐▖▗▘▝', resolve))
+      const samples = []
+      for (const [width, height] of [
+        [900, 600],
+        [700, 450],
+        [900, 600]
+      ]) {
+        window.blockGlyphHost.style.width = width + 'px'
+        window.blockGlyphHost.style.height = height + 'px'
+        runtime.fitAddon.fit()
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        const renderer = terminal._core._renderService._renderer.value
+        renderer.renderRows(0, terminal.rows - 1)
+        const gl = renderer._gl
+        // DPR emulation can report a backing size different from the logical integer atlas grid.
+        const cell = { width: gl.canvas.width / terminal.cols, height: gl.canvas.height / terminal.rows }
+        const pixel = new Uint8Array(4)
+        const quarters = [...'█▀▄▌▐▖▗▘▝'].map((_, column) =>
+          [
+            [0.25, 0.25],
+            [0.75, 0.25],
+            [0.25, 0.75],
+            [0.75, 0.75]
+          ].map(([x, y]) => {
+            gl.readPixels(
+              Math.floor((column + x) * cell.width),
+              gl.canvas.height - 1 - Math.floor(y * cell.height),
+              1,
+              1,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              pixel
+            )
+            return pixel[0] > 100
+          })
+        )
+        samples.push({
+          width,
+          height,
+          quarters,
+          viewport: [...gl.getParameter(gl.VIEWPORT)],
+          backing: [gl.canvas.width, gl.canvas.height],
+          device: window.structuredClone(renderer.dimensions.device),
+          css: window.structuredClone(renderer.dimensions.css),
+          dpr: window.devicePixelRatio
+        })
+      }
+      window.blockGlyphHost.style.display = 'none'
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      window.blockGlyphHost.style.display = ''
+      runtime.fitAddon.fit()
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      return { samples, webglAfterRestore: Boolean(terminal._core._renderService._renderer.value._gl) }
+    })
+    const expectedQuarters = [
+      [true, true, true, true],
+      [true, true, false, false],
+      [false, false, true, true],
+      [true, false, true, false],
+      [false, true, false, true],
+      [false, false, true, false],
+      [false, false, false, true],
+      [true, false, false, false],
+      [false, true, false, false]
+    ]
+    if (blockPixels.samples.some((sample) => JSON.stringify(sample.quarters) !== JSON.stringify(expectedQuarters))) {
+      console.error(JSON.stringify(blockPixels))
+      await page.screenshot({ path: output.replace(/\.json$/, '-pixels.png'), fullPage: true })
+    }
+    for (const sample of blockPixels.samples) {
+      assert.deepEqual(sample.quarters, expectedQuarters, 'block geometry stays aligned to cells across resizes')
+      assert.deepEqual(sample.viewport, [0, 0, ...sample.backing])
+      assert.equal(sample.dpr, deviceScaleFactor)
+      assert.ok(Math.abs(sample.backing[0] - sample.device.canvas.width) <= 1)
+      assert.ok(Math.abs(sample.backing[1] - sample.device.canvas.height) <= 1)
+    }
+    assert.equal(blockPixels.webglAfterRestore, true)
+    const sharedAtlasPixels = await page.evaluate(async () => {
+      const terminal = window.blockGlyphRuntime.terminal
+      terminal.options.cursorBlink = false
+      const host = document.createElement('main')
+      host.style.cssText = 'width:900px;height:600px'
+      document.body.append(host)
+      const other = window.createRuntime(host)
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const renderer = terminal._core._renderService._renderer.value
+      const otherRenderer = other.terminal._core._renderService._renderer.value
+      await new Promise((resolve) => terminal.write('\x1b[?25l\x1b[2J\x1b[H█▀▄▌▐▖▗▘▝', resolve))
+      const read = () => {
+        renderer.renderRows(0, terminal.rows - 1)
+        const gl = renderer._gl
+        const width = Math.floor((gl.canvas.width / terminal.cols) * 9)
+        const height = Math.floor(gl.canvas.height / terminal.rows)
+        const pixels = new Uint8Array(width * height * 4)
+        gl.readPixels(0, gl.canvas.height - height, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+        const point = new Uint8Array(4)
+        const quarters = [...'█▀▄▌▐▖▗▘▝'].map((_, column) =>
+          [
+            [0.25, 0.25],
+            [0.75, 0.25],
+            [0.25, 0.75],
+            [0.75, 0.75]
+          ].map(([x, y]) => {
+            gl.readPixels(
+              Math.floor(((column + x) * gl.canvas.width) / terminal.cols),
+              gl.canvas.height - 1 - Math.floor((y * gl.canvas.height) / terminal.rows),
+              1,
+              1,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              point
+            )
+            return point[0] > 100
+          })
+        )
+        return { pixels: [...pixels], quarters }
+      }
+      const before = read()
+      const shared = renderer._charAtlas === otherRenderer._charAtlas
+      other.terminal.clearTextureAtlas()
+      await new Promise((resolve) => other.terminal.write('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', resolve))
+      const after = read()
+      other.disposeCore()
+      host.remove()
+      return {
+        shared,
+        changedPixels: after.pixels.filter((value, index) => value !== before.pixels[index]).length,
+        beforeQuarters: before.quarters,
+        afterQuarters: after.quarters
+      }
+    })
+    assert.equal(sharedAtlasPixels.shared, true)
+    assert.deepEqual(sharedAtlasPixels.beforeQuarters, expectedQuarters)
+    assert.deepEqual(
+      sharedAtlasPixels.afterQuarters,
+      expectedQuarters,
+      'shared atlas clearing preserves block geometry'
+    )
+    // Fractional backing pixel rounding can resample atlas edges after repacking.
+    if (Number.isInteger(deviceScaleFactor))
+      assert.equal(sharedAtlasPixels.changedPixels, 0, 'clearing another terminal must not corrupt shared atlas glyphs')
+
     await page.evaluate(() => {
       window.blockGlyphRuntime.disposeCore()
       window.blockGlyphHost.remove()
@@ -277,7 +417,7 @@ try {
     })
     assert.deepEqual(errors, [])
 
-    const domPage = await browser.newPage({ viewport: { width: 1000, height: 700 }, deviceScaleFactor: 1 })
+    const domPage = await browser.newPage({ viewport: null })
     await domPage.setContent('<main id="host" style="width:900px;height:600px"></main>')
     await domPage.evaluate(() => {
       window.fileterm = {
@@ -290,6 +430,7 @@ try {
     await domPage.addScriptTag({ path: bundlePath })
     await domPage.evaluate(async () => document.fonts.ready)
     await domPage.evaluate(() => {
+      window.setTerminalRendererPreference('dom')
       window.domRuntime = window.createRuntime(document.getElementById('host'))
     })
     const defaultDom = await domPage.evaluate(() => ({
@@ -301,7 +442,7 @@ try {
     await domPage.evaluate(() => window.domRuntime.disposeCore())
     await domPage.close()
 
-    const loadFailurePage = await browser.newPage({ viewport: { width: 1000, height: 700 }, deviceScaleFactor: 1 })
+    const loadFailurePage = await browser.newPage({ viewport: null })
     const loadFailureErrors = []
     loadFailurePage.on('pageerror', (error) => loadFailureErrors.push(error.message))
     loadFailurePage.on('console', (message) => {
@@ -312,8 +453,8 @@ try {
       window.rendererLogs = []
       window.fileterm = {
         platform: 'win32',
-        writeDiagnosticLog: (_level, _scope, message) => {
-          window.rendererLogs.push(JSON.parse(message))
+        writeDiagnosticLog: (level, _scope, message) => {
+          window.rendererLogs.push({ level, ...JSON.parse(message) })
           return Promise.resolve()
         },
         writeTerminal: () => Promise.resolve()
@@ -346,6 +487,12 @@ try {
     assert.deepEqual(loadFailureErrors, [])
     await loadFailurePage.evaluate(() => window.failedLoadRuntime.disposeCore())
 
+    const rendererLogs = await page.evaluate(() => window.rendererLogs)
+    const failedLoadLogs = await loadFailurePage.evaluate(() => window.rendererLogs)
+    for (const entry of [...rendererLogs, ...failedLoadLogs].filter((entry) =>
+      ['context-loss', 'activation-failed', 'load-failed'].includes(entry.reason)
+    ))
+      assert.equal(entry.level, 'WARN', 'renderer failures remain recorded when detailed diagnostics are off')
     writeFileSync(
       output,
       JSON.stringify(
@@ -353,18 +500,21 @@ try {
           environment: {
             engine: 'Playwright Chromium headless; not Tauri WebView2',
             browserVersion: browser.version(),
+            deviceScaleFactor,
             gpu,
             gpuSource: 'Chromium CDP SystemInfo.getInfo'
           },
           active,
-          blockGlyphFallback,
+          blockGlyphRendering,
+          blockPixels,
+          sharedAtlasPixels,
           contextLossFallback: fallback,
           failedActivationFallback: failedActivation,
           failedLoadFallback: loadFailureFallback,
           normalDispose,
           hiddenGrid,
-          logs: await page.evaluate(() => window.rendererLogs),
-          loadFailureLogs: await loadFailurePage.evaluate(() => window.rendererLogs)
+          logs: rendererLogs,
+          loadFailureLogs: failedLoadLogs
         },
         null,
         2
@@ -373,7 +523,8 @@ try {
     console.log(
       JSON.stringify({
         active,
-        blockGlyphFallback,
+        blockGlyphRendering,
+        blockPixels,
         contextLossFallback: fallback,
         failedActivationFallback: failedActivation,
         failedLoadFallback: loadFailureFallback
