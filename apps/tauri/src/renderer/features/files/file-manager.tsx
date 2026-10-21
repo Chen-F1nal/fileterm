@@ -346,6 +346,7 @@ export function FileManager({
     if (event.button !== 0 || !event.isPrimary || item.name === '..') {
       return
     }
+    suppressNextSelectionClick.current = false
 
     const rows = sourcePane === 'local' ? localItems : activeSession.remoteFiles
     const selectedPaths = sourcePane === 'local' ? selectedLocalPaths : selectedRemotePaths

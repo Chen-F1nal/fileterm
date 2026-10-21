@@ -1,3 +1,4 @@
+import './file-tables.css'
 import '../workspace/workspace-list-rows.css'
 import { useCallback, useState, useEffect, FormEvent, MouseEvent, PointerEvent, ReactNode, RefObject } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -505,18 +506,16 @@ function FileNameCell({
   onPointerDown?(event: PointerEvent<HTMLElement>): void
 }) {
   return (
-    <span className="file-name-cell" title={item.name}>
-      <span
-        className={`file-icon ${draggable ? 'is-draggable' : ''}`}
-        // FileTerm transfers use the pointer gesture below instead of the
-        // browser/OS drag session. This keeps remote files from becoming
-        // external filesystem drops while still allowing cross-pane transfer.
-        draggable={false}
-        onPointerDown={onPointerDown}
-        onDragStart={(event) => event.preventDefault()}
-        onMouseDown={(event) => event.stopPropagation()}
-        title={draggable ? t.dragTransfer : undefined}
-      >
+    <span
+      className={`file-name-cell ${draggable ? 'is-draggable' : ''}`}
+      title={draggable ? `${item.name} — ${t.dragTransfer}` : item.name}
+      // Keep transfers inside FileTerm; WebKit native drags cancel pointer gestures.
+      draggable={false}
+      onPointerDown={draggable ? onPointerDown : undefined}
+      onDragStart={(event) => event.preventDefault()}
+      onMouseDown={draggable ? (event) => event.stopPropagation() : undefined}
+    >
+      <span className="file-icon">
         <AppIcon name={iconName} />
       </span>
       <span className="file-row-text">

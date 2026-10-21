@@ -108,6 +108,11 @@ try {
   await page.getByRole('button', { name: 'Preferences', exact: true }).click()
   await page.getByRole('button', { name: 'Show Whitespace', exact: true }).click()
   assert.equal(await page.evaluate(() => window.fixture.whitespace()), 'all')
+  await page.waitForFunction(() => document.querySelector('.file-editor-line-ending')?.textContent === '↓')
+  assert.equal(await page.locator('.file-editor-line-ending').count(), 5)
+  await page.getByRole('button', { name: 'Show Whitespace', exact: true }).click()
+  await page.waitForFunction(() => !document.querySelector('.file-editor-line-ending'))
+  await page.getByRole('button', { name: 'Show Whitespace', exact: true }).click()
   await page.screenshot({ path: '/tmp/fileterm-editor-dark.png' })
   await page.reload()
   await page.waitForFunction(() => window.fixture?.editor() && window.fixture.whitespace() === 'all')
@@ -123,11 +128,58 @@ try {
     ['a\nb\n', 'test.txt', 'local', 'unknown', '\n'],
     ['a\r\nb\r\n', 'test.sh', 'remote', 'linux', '\r\n']
   ]) {
-    await page.evaluate((args) => window.fixture.start(...args), [content, name, source, platform])
-    await page.waitForFunction(() => window.fixture?.editor())
+    const previousId = await page.evaluate(
+      (args) => {
+        const id = window.fixture.model()?.id
+        window.fixture.start(...args)
+        return id
+      },
+      [content, name, source, platform]
+    )
+    await page.waitForFunction((id) => {
+      const model = window.fixture.editor()?.getModel()
+      return model && model.id !== id && model.id === window.fixture.model()?.id
+    }, previousId)
     assert.equal(await page.evaluate(() => window.fixture.model().getEOL()), expected, `${source} ${platform} ${name}`)
     assert.equal(await page.evaluate(() => window.fixture.model().getValue()), content)
+    const breaks = content.split(/\r\n|\r|\n/).length - 1
+    await page.waitForFunction(
+      ({ breaks, expected }) => {
+        const markers = [...document.querySelectorAll('.file-editor-line-ending')]
+        return markers.length === breaks && markers.every((node) => node.textContent === expected)
+      },
+      { breaks, expected: expected === '\r\n' ? '↵' : '↓' }
+    )
   }
+  await page.getByRole('button', { name: 'CRLF', exact: true }).click()
+  await page.getByRole('button', { name: 'LF (Unix / Linux)', exact: true }).click()
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.file-editor-line-ending')].every((node) => node.textContent === '↓')
+  )
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.saved), 'a\nb\n')
+  await page.evaluate(() => window.fixture.editor().trigger('regression', 'undo', null))
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.file-editor-line-ending')].every((node) => node.textContent === '↵')
+  )
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.saved), 'a\r\nb\r\n')
+  await page.evaluate(() =>
+    window.fixture.start(Array.from({ length: 200 }, (_, i) => 'line ' + i).join('\n'), 'long.txt', 'local', 'unknown')
+  )
+  await page.waitForFunction(
+    () =>
+      window.fixture.editor()?.getModel()?.getLineCount() === 200 && document.querySelector('.file-editor-line-ending')
+  )
+  assert.ok((await page.locator('.file-editor-line-ending').count()) < 30, 'only the viewport is decorated')
+  await page.evaluate(() => window.fixture.editor().revealLine(200))
+  await page.waitForFunction(() =>
+    window.fixture
+      .editor()
+      .getVisibleRanges()
+      .some((range) => range.endLineNumber === 200)
+  )
+  assert.ok((await page.locator('.file-editor-line-ending').count()) > 0, 'markers follow scrolling')
   await page.evaluate(() => window.fixture.theme('default-light'))
   await page.setViewportSize({ width: 800, height: 500 })
   await page.screenshot({ path: '/tmp/fileterm-editor-light-small.png' })

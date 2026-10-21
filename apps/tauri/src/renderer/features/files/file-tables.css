@@ -1,0 +1,10 @@
+.file-name-cell.is-draggable {
+  cursor: grab;
+  -webkit-user-drag: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.file-name-cell.is-draggable:active {
+  cursor: grabbing;
+}

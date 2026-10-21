@@ -102,6 +102,7 @@ FileTerm 第一版要解决的是“桌面端远程工作台”的核心闭环�
   - 主题 runtime 根据主按钮/危险按钮背景（透明色先合成 panel surface）选择更易读的白色或深色文字，经参考值和语义变量传入组件。
 - `apps/tauri/src/renderer/features/files/file-editor-modal.tsx`
   - Monaco 主题从 CSS 变量读取，跟随深色/浅色主题切换。
+  - 显示空白字符时，`file-editor-line-endings.ts` 仅为可见行注入 LF（`↓`）/CRLF（`↵`）标记，不写入编辑模型或保存内容。标记跟随 Monaco 当前统一的换行格式；独立 CR 与混合换行在加载模型时仍按 Monaco 原有行为归一化。
 - `packages/core` 的 `ThemeConfig.baseThemeId` 记录自定义主题继承的内置基准，`UiPreferences.customThemes` 保存用户命名的主题；renderer 只将相对基准真正变化的变量覆盖到主题根节点，避免微调一个颜色时整套组件皮肤被重算。
 
 ## 3. 技术栈
