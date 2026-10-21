@@ -262,7 +262,7 @@ test('unsupported or rejecting frame observers degrade without changing app beha
 test('WebGL atlas accounting includes off-DOM canvases, deduplicates shared atlases and marks unknown or truncated data', () => {
   const { work } = workFixture()
   const diagnostics = load('xterm-adapters/terminal-diagnostics', {}, { '../lib/renderer-work-log': work })
-  const atlas = { pages: [{ canvas: { width: 512, height: 512 } }] }
+  const atlas = { pages: [{ canvas: { width: 512, height: 512 }, glyphs: [{}, {}] }] }
   const terminal = (sharedAtlas) => ({
     cols: 80,
     buffer: { normal: { length: 50 }, alternate: { length: 0 } },
@@ -274,6 +274,7 @@ test('WebGL atlas accounting includes off-DOM canvases, deduplicates shared atla
   )
   const snapshot = diagnostics.getTerminalResourceSnapshot()
   assert.equal(snapshot.uniqueWebglAtlasPages, 1)
+  assert.equal(snapshot.uniqueWebglAtlasGlyphs, 2)
   assert.equal(snapshot.uniqueWebglAtlasBytesEstimate, 512 * 512 * 4)
   assert.equal(snapshot.unknownWebglAtlases, 1)
   assert.equal(snapshot.perTerminal[0].webglAtlasPages, 1)
@@ -281,6 +282,7 @@ test('WebGL atlas accounting includes off-DOM canvases, deduplicates shared atla
   atlas.pages = Array.from({ length: 70 }, () => ({ canvas: { width: 512, height: 512 } }))
   const truncated = diagnostics.getTerminalResourceSnapshot()
   assert.equal(truncated.uniqueWebglAtlasPages, 70)
+  assert.equal(truncated.uniqueWebglAtlasGlyphs, null)
   assert.equal(truncated.uniqueWebglAtlasBytesEstimate, 64 * 512 * 512 * 4)
   assert.equal(truncated.webglAtlasEstimateTruncated, true)
   registrations.forEach((registration) => registration.dispose())

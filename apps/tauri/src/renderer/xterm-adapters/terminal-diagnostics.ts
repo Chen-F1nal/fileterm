@@ -2,7 +2,7 @@ import type { Terminal } from '@xterm/xterm'
 import { trackRendererWork } from '../lib/renderer-work-log'
 
 type Parser = { parse(data: string | Uint8Array, promiseResult?: boolean): void | Promise<boolean> }
-type GlyphAtlas = { pages: Array<{ canvas: { width: number; height: number } }> }
+type GlyphAtlas = { pages: Array<{ canvas: { width: number; height: number }; glyphs?: readonly unknown[] }> }
 type Renderer = { renderRows(start: number, end: number): void; _gl?: unknown; _charAtlas?: GlyphAtlas }
 type DiagnosticTerminal = Terminal & {
   _core?: {
@@ -97,6 +97,7 @@ export function getTerminalResourceSnapshot() {
     }>,
     terminalsTruncated: readers.size > 8,
     uniqueWebglAtlasPages: 0,
+    uniqueWebglAtlasGlyphs: 0 as number | null,
     uniqueWebglAtlasBytesEstimate: 0,
     unknownWebglAtlases: 0,
     webglAtlasEstimateTruncated: false,
@@ -122,8 +123,11 @@ export function getTerminalResourceSnapshot() {
       totals.uniqueWebglAtlasPages += pages.length
       totals.webglAtlasEstimateTruncated ||= pages.length > 64
       // Off-DOM CPU atlas canvases can dominate visible canvas storage; shared atlases count once.
-      for (const { canvas } of pages.slice(0, 64))
+      for (const { canvas, glyphs } of pages.slice(0, 64)) {
         totals.uniqueWebglAtlasBytesEstimate += canvas.width * canvas.height * 4
+        if (totals.uniqueWebglAtlasGlyphs !== null)
+          totals.uniqueWebglAtlasGlyphs = Array.isArray(glyphs) ? totals.uniqueWebglAtlasGlyphs + glyphs.length : null
+      }
     }
     if (totals.perTerminal.length < 8)
       totals.perTerminal.push({

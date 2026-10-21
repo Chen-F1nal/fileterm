@@ -304,3 +304,5 @@ SSH、FTP、本地终端、Telnet 和串口的状态更新仅在状态实际改�
 `canvasBackingBytesEstimate` 不含它们。新估计按页宽×高×4计算，每个共享图集仅计一次，
 每图集最多读取 64 页；超限是下界，未知私有结构不当作零。它只估计 CPU 侧 RGBA 图集，
 不包含 GPU 纹理副本、mipmap、分配器/驱动和浏览器其他内存，不能直接与任务管理器 RSS 相等。
+
+`terminalResources.uniqueWebglAtlasGlyphs` 统计共享 CPU 图集保留的字形对象数，图集只计一次；页面不暴露计数时为 `null`，64 页上限继续沿用截断标记。可与图集字节估计交叉观察“页面占用稳定但旧字形引用增加”的情况；不是 GPU 对象计数。

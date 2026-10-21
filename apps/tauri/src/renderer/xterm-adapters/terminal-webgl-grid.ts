@@ -1,4 +1,5 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
+import { isWebglAtlasCacheFull, resetWebglAtlasCache } from './terminal-webgl-atlas-cache'
 
 type WebglGridRenderer = {
   _gl?: WebGL2RenderingContext
@@ -6,6 +7,7 @@ type WebglGridRenderer = {
   _setCanvasDevicePixelDimensions(width: number, height: number): void
   _glyphRenderer: { value: { handleResize(): void } }
   _clearModel(clearGlyphRenderer: boolean): void
+  renderRows(start: number, end: number): void
   handleCharSizeChanged(): void
 }
 type GridTerminal = {
@@ -25,7 +27,8 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
     typeof renderer.handleCharSizeChanged !== 'function' ||
     typeof renderer._setCanvasDevicePixelDimensions !== 'function' ||
     typeof renderer._glyphRenderer?.value?.handleResize !== 'function' ||
-    typeof renderer._clearModel !== 'function'
+    typeof renderer._clearModel !== 'function' ||
+    typeof renderer.renderRows !== 'function'
   ) {
     throw new Error('Unsupported xterm WebGL grid; use DOM')
   }
@@ -56,6 +59,7 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
   const originalClearAtlas = terminal.clearTextureAtlas
   const clearAtlas = function (this: Terminal) {
     const atlas = renderer._charAtlas
+    resetWebglAtlasCache(atlas)
     originalClearAtlas.call(this)
     if (!atlas) return
     // xterm shares atlases but only invalidates the caller's cached glyph coordinates.
@@ -68,10 +72,28 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
   }
   terminal.clearTextureAtlas = clearAtlas
   webglTerminals.add(registration)
+  const originalRender = renderer.renderRows
+  const render = function (this: WebglGridRenderer, start: number, end: number) {
+    // Historical RGB variants must not grow forever; keep room for four visible RGBA surfaces.
+    let surfacePixels = this._gl!.canvas.width * this._gl!.canvas.height
+    for (const peer of webglTerminals) {
+      if (peer.renderer._charAtlas === this._charAtlas && peer.renderer._gl)
+        surfacePixels = Math.max(surfacePixels, peer.renderer._gl.canvas.width * peer.renderer._gl.canvas.height)
+    }
+    const budget = Math.max(32 * 1024 * 1024, surfacePixels * 16)
+    if (isWebglAtlasCacheFull(this._charAtlas, budget)) {
+      terminal.clearTextureAtlas()
+      start = 0
+      end = terminal.rows - 1
+    }
+    originalRender.call(this, start, end)
+  }
+  renderer.renderRows = render
 
   return {
     dispose() {
       webglTerminals.delete(registration)
+      if (renderer.renderRows === render) renderer.renderRows = originalRender
       if (terminal.clearTextureAtlas === clearAtlas) terminal.clearTextureAtlas = originalClearAtlas
       if (renderer._setCanvasDevicePixelDimensions === resizeBacking)
         renderer._setCanvasDevicePixelDimensions = originalBackingResize

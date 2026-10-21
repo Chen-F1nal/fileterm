@@ -32,3 +32,5 @@
 `styles/features/session.css` 和各主题 skin 继续维护终端布局、选区颜色与自定义滚动条的样式契约；与字形测量有关的排版修正在本目录的 `xterm-compat.css`。
 
 单元测试在 `apps/tauri/tests/terminal-*.test.mjs`；真实 xterm 的字体、字宽、符号、框线和鼠标选区回归在 `apps/tauri/tests/browser/terminal-*.mjs`。这些 fixture 直接加载生产模块，移动文件时须同步路径。
+
+`terminal-webgl-atlas-cache.ts` 修正 addon-webgl 0.19 的清理引用与合并页复用，由 grid 适配器在绘制前按共享终端最大视口回收历史颜色变体；预算是缓存回收触发线，不是进程总内存上限。升级 xterm 时复核私有结构与 RGB/重复清理回归。

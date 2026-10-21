@@ -15,6 +15,9 @@ const { build } = require(process.env.ESBUILD_MODULE_PATH || 'esbuild')
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const batches = Number(process.env.FILETERM_RUNTIME_BATCHES || 3000)
 const soakMs = Number(process.env.FILETERM_RUNTIME_SOAK_MS || 0)
+const truecolor = process.env.FILETERM_RUNTIME_TRUECOLOR === '1'
+const clearCycles = Number(process.env.FILETERM_RUNTIME_CLEAR_CYCLES || 0)
+assert.ok(Number.isInteger(clearCycles) && clearCycles >= 0 && clearCycles <= 1000)
 assert.ok(Number.isInteger(batches) && batches >= 100 && batches <= 20000)
 assert.ok(Number.isInteger(soakMs) && soakMs >= 0 && soakMs <= 600000)
 const output = resolve(process.env.FILETERM_RUNTIME_OUTPUT || join(tmpdir(), 'fileterm-renderer-runtime-load.json'))
@@ -145,28 +148,68 @@ try {
       await cdp.send('HeapProfiler.collectGarbage')
       const before = await measure()
       await page.evaluate(() => window.resetWork())
-      const load = await page.evaluate(async (batches) => {
-        const terminal = window.runtime.terminal
-        const write = (data) => new Promise((resolve) => terminal.write(data, resolve))
-        const frame = () => new Promise((resolve) => requestAnimationFrame(resolve))
-        window.writeFixtureBatch = async (index) => {
-          const cjk = Array.from({ length: 16 }, (_, column) =>
-            String.fromCodePoint(0x4e00 + ((index * 13 + column) % 2048))
-          ).join('')
-          const line = '\x1b[' + (31 + (index % 7)) + 'm✻ Working ' + index + ' ' + cjk + ' █▀▄▌▐ ─│ 🧪\x1b[0m\r\n'
-          const data = line.repeat(4)
-          await write(data)
-          return data.length
-        }
-        const started = performance.now()
-        let characters = 0
-        for (let index = 0; index < batches; index++) {
-          characters += await window.writeFixtureBatch(index)
-          if (index % 10 === 0) await frame()
-        }
-        await frame()
-        return { elapsedMs: performance.now() - started, batches, characters, work: window.work() }
-      }, batches)
+      const load = await page.evaluate(
+        async ({ batches, truecolor }) => {
+          const terminal = window.runtime.terminal
+          const write = (data) => new Promise((resolve) => terminal.write(data, resolve))
+          const frame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+          window.writeFixtureBatch = async (index) => {
+            const cjk = Array.from({ length: 16 }, (_, column) =>
+              String.fromCodePoint(0x4e00 + ((index * 13 + column) % 2048))
+            ).join('')
+            const color = truecolor
+              ? '38;2;' + [80 + (index % 176), 80 + (Math.floor(index / 176) % 176), 160].join(';')
+              : String(31 + (index % 7))
+            const line = '\x1b[' + color + 'm✻ Working ' + index + ' ' + cjk + ' █▀▄▌▐ ─│ 🧪\x1b[0m\r\n'
+            const data = line.repeat(4)
+            await write(data)
+            return data.length
+          }
+          const started = performance.now()
+          let characters = 0
+          const atlasSamples = []
+          for (let index = 0; index < batches; index++) {
+            characters += await window.writeFixtureBatch(index)
+            if (index % 10 === 0) await frame()
+            if (index % 250 === 0)
+              atlasSamples.push({ batch: index, bytes: window.resources().uniqueWebglAtlasBytesEstimate })
+          }
+          await frame()
+          return { elapsedMs: performance.now() - started, batches, characters, atlasSamples, work: window.work() }
+        },
+        { batches, truecolor }
+      )
+      const atlasClearProbe =
+        backend === 'webgl' && clearCycles
+          ? await page.evaluate(async (cycles) => {
+              const terminal = window.runtime.terminal
+              terminal.options.fontSize += 1
+              window.runtime.fitAddon.fit()
+              terminal.reset()
+              await new Promise((resolve) =>
+                terminal.write('Working Cache probe ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\r\n', resolve)
+              )
+              await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+              const glyphs = () =>
+                terminal._core._renderService._renderer.value._charAtlas.pages.reduce(
+                  (sum, page) => sum + page.glyphs.length,
+                  0
+                )
+              const before = glyphs()
+              const samples = []
+              for (let cycle = 0; cycle < cycles; cycle++) {
+                terminal.clearTextureAtlas()
+                await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+                if (cycle % 10 === 0 || cycle === cycles - 1) samples.push({ cycle, glyphs: glyphs() })
+              }
+              return { before, samples, after: glyphs() }
+            }, clearCycles)
+          : null
+      if (atlasClearProbe)
+        assert.ok(
+          atlasClearProbe.after <= atlasClearProbe.before * 2,
+          'repeated atlas clears must release obsolete glyph objects'
+        )
       const afterLoad = await measure()
       const samples = [before, afterLoad]
       if (backend === 'webgl' && soakMs) {
@@ -221,6 +264,25 @@ try {
         }
       })
       assert.equal(resources.byRenderer[backend], 1)
+      if (truecolor && backend === 'webgl')
+        assert.ok(
+          Math.max(
+            resources.uniqueWebglAtlasBytesEstimate,
+            ...load.atlasSamples.map((sample) => sample.bytes),
+            ...samples.map((sample) => sample.resources.uniqueWebglAtlasBytesEstimate)
+          ) <=
+            96 * 1024 * 1024,
+          'fixed-size RGB fixture must recycle historical glyph variants instead of growing without a bound'
+        )
+      if (truecolor && soakMs >= 60000) {
+        const late = samples
+          .slice(1 + Math.floor((samples.length - 1) / 2))
+          .map((sample) => sample.resources.uniqueWebglAtlasBytesEstimate)
+        assert.ok(
+          Math.max(...late) - Math.min(...late) <= 4 * 1024 * 1024,
+          'RGB atlas backing must plateau in the second half of sustained output'
+        )
+      }
       assert.ok(resources.normalBufferRows <= 6000 + 80)
       assert.equal(resources.pendingXtermCharacters, 0)
       assert.match(resources.lastLine, /Working/)
@@ -237,6 +299,8 @@ try {
       assert.deepEqual(errors, [])
       const result = {
         backend,
+        truecolor,
+        atlasClearProbe,
         browser: browser.version(),
         gpu: summarizeGpu(gpu),
         load,
