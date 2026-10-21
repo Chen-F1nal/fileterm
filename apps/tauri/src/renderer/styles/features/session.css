@@ -1564,17 +1564,6 @@
   white-space: nowrap;
 }
 
-.file-icon.is-draggable {
-  cursor: grab;
-  -webkit-user-drag: none;
-  user-select: none;
-  touch-action: none;
-}
-
-.file-icon.is-draggable:active {
-  cursor: grabbing;
-}
-
 .file-drag-preview {
   position: fixed;
   top: -1000px;

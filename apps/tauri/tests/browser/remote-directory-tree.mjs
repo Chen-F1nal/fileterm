@@ -60,6 +60,7 @@ const catalog = {
   '/home':[folder('/home/user')], '/home/user':[folder('/home/user/logs'),file('/home/user/note.txt')],
   '/home/user/logs':[], '/etc':[folder('/etc/ssh')], '/etc/ssh':[], '/restricted':[]
 }
+window.fixtureTransfers = []
 window.fixtureRequests = []
 window.fixtureFailRestricted = true
 window.fileterm = new Proxy({
@@ -75,6 +76,7 @@ window.fileterm = new Proxy({
 function Fixture() {
   const [session,setSession] = useState({profileId:'preview',connected:true,remotePath:'/home/user',remoteFiles:catalog['/home/user'],capabilities:{files:true,tunnels:false}})
   const [access,setAccess] = useState('user')
+  const [paneMode,setPaneMode] = useState(() => sessionStorage.getItem('fixture-pane-mode') || 'local')
   const [showPresetSync,setShowPresetSync] = useState(false)
   const navigate = (path) => setSession(current=>({...current,remotePath:path,remoteFiles:catalog[path]||[]}))
   window.fixtureNavigate = navigate
@@ -85,6 +87,7 @@ function Fixture() {
   return <><main style={{height:480,margin:16,display:'grid',gridTemplateRows:'minmax(0,1fr)'}}><FileManager
     activeSession={session} activeTab={{id:'preview-tab',profileId:'preview',sessionType:'ssh'}} activeView="file"
     localPath="/Users/demo" localPanePath="/Users/demo" localItems={[folder('/Users/demo/Documents'),file('/Users/demo/local.txt')]}
+    filePaneMode={paneMode} onSetProfileFilePaneMode={async (_,mode)=>{sessionStorage.setItem('fixture-pane-mode',mode);setPaneMode(mode)}}
     commandPaneWidth={240} sendTargets={[]} commandFolders={[]} commandTemplates={[]}
     isBusy={false} isLocalNetworkShare={false} isLocalDirectoryLoading={false} isWorkspaceRefreshing={false} isWorkspaceSwitching={false}
     canPasteToLocal={false} canPasteToRemote={false} clipboardStatusText={null} localCutPaths={[]} remoteCutPaths={[]}
@@ -93,7 +96,7 @@ function Fixture() {
     onSaveTemporaryCommand={noop} onUpdateCommand={noop} onOpenCommandManager={noop} onCopyItems={noop} onCutItems={noop} onClearCutState={noop}
     onOpenLocalItem={noop} onOpenLocalPath={noop} onBackToLocalComputer={noop} onOpenRemoteItem={item=>navigate(item.path)} onOpenRemotePath={navigate}
     onPasteIntoPane={noop} onRefresh={()=>setSession(current=>({...current,remoteFiles:[...catalog[current.remotePath]]}))}
-    onUploadFiles={noop} onChooseUploadFiles={noop} onDownloadFiles={noop} onDownloadLocalNetworkFiles={noop} onDropUpload={noop}
+    onUploadFiles={items=>window.fixtureTransfers.push({direction:'upload',paths:items.map(item=>item.path)})} onChooseUploadFiles={noop} onDownloadFiles={(items,target)=>window.fixtureTransfers.push({direction:'download',paths:items.map(item=>item.path),target})} onDownloadLocalNetworkFiles={noop} onDropUpload={noop}
     onRequestChangePermissions={noop} onRequestDelete={noop} onRequestNewFile={noop} onRequestNewFolder={noop} onRequestQuickDelete={noop} onRequestRename={noop}
     onToggleFollowShellCwd={noop} onToggleRemoteFileAccessMode={noop}/></main>{showPresetSync ? <PresetSyncProbe/> : null}</>
 }
@@ -316,6 +319,61 @@ try {
     await page.goto(`${address}/?platform=${platform}`)
     await page.evaluate((platform) => (document.documentElement.dataset.platform = platform), platform)
     await page.locator('.local-pane').waitFor()
+    const localName = page.locator('.local-pane .file-name-cell').filter({ hasText: 'local.txt' })
+    const remoteName = page.locator('.remote-pane .file-name-cell').filter({ hasText: 'note.txt' })
+    const dragTo = async (source, target) => {
+      const start = await source.boundingBox()
+      const end = await target.boundingBox()
+      await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(start.x + start.width / 2 + 10, start.y + start.height / 2, { steps: 3 })
+      await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 8 })
+      await page.mouse.up()
+    }
+    await dragTo(localName.locator('.file-row-main'), page.locator('.remote-pane'))
+    assert.deepEqual(
+      await page.evaluate(() => window.fixtureTransfers.splice(0)),
+      [{ direction: 'upload', paths: ['/Users/demo/local.txt'] }],
+      `${platform}: drag file name to upload`
+    )
+    await dragTo(remoteName.locator('.file-row-main'), page.locator('.local-pane'))
+    assert.deepEqual(
+      await page.evaluate(() => window.fixtureTransfers.splice(0)),
+      [{ direction: 'download', paths: ['/home/user/note.txt'], target: '/Users/demo' }],
+      `${platform}: drag file name to download`
+    )
+    await dragTo(localName.locator('.file-icon'), page.locator('.remote-pane'))
+    assert.equal(await page.evaluate(() => window.fixtureTransfers.splice(0).length), 1)
+    await dragTo(localName, page.locator('.local-pane'))
+    assert.deepEqual(await page.evaluate(() => window.fixtureTransfers), [], 'same pane is a no-op')
+    await localName.click()
+    await page
+      .locator('.local-pane .file-name-cell')
+      .filter({ hasText: 'Documents' })
+      .click({ modifiers: ['ControlOrMeta'] })
+    await dragTo(localName, page.locator('.remote-pane'))
+    assert.deepEqual(
+      await page.evaluate(() => window.fixtureTransfers.splice(0)),
+      [{ direction: 'upload', paths: ['/Users/demo/Documents', '/Users/demo/local.txt'] }],
+      'drag selected files together'
+    )
+    const start = await localName.boundingBox()
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(start.x + start.width / 2 + 15, start.y + start.height / 2)
+    await page.locator('.file-drag-preview').waitFor()
+    await page.evaluate(() => window.dispatchEvent(new window.PointerEvent('pointercancel', { pointerId: 1 })))
+    await page.locator('.file-drag-preview').waitFor({ state: 'hidden' })
+    await page.mouse.up()
+    assert.equal(await page.locator('.file-drag-preview').count(), 0, 'cancel clears the preview')
+    assert.deepEqual(await page.evaluate(() => window.fixtureTransfers), [], 'cancel never transfers files')
+    await page.evaluate(() => window.fixtureConnect(false))
+    await dragTo(localName, page.locator('.remote-pane'))
+    assert.deepEqual(await page.evaluate(() => window.fixtureTransfers), [], 'disconnected panes reject transfers')
+    if (process.argv.includes('--drag-only')) continue
+    await page.reload()
+    await page.evaluate((platform) => (document.documentElement.dataset.platform = platform), platform)
+    await page.locator('.local-pane').waitFor()
     assert.deepEqual(await page.evaluate(() => window.fixtureLegacyTheme()), {
       surface: '#303030',
       override: '#303030',
@@ -535,7 +593,9 @@ try {
   }
   assert.deepEqual(errors, [])
   console.log(
-    'Passed: layout modes, lazy expansion, navigation, errors/retry, keyboard/locate, persistence, reconnect and access-mode isolation; macOS/Windows/Linux controls and dark/light themes.'
+    process.argv.includes('--drag-only')
+      ? 'Passed: name/icon uploads, name downloads, multi-selection, same-pane/cancelled/disconnected drops; macOS/Windows/Linux renderer branches.'
+      : 'Passed: file dragging, layout modes, lazy expansion, navigation, errors/retry, keyboard/locate, persistence, reconnect and access-mode isolation; macOS/Windows/Linux controls and dark/light themes.'
   )
 } finally {
   await browser.close()

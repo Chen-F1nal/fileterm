@@ -10,6 +10,7 @@ import { CloseButton } from '../common/close-button'
 import { AppIcon } from '../common/app-icon'
 import { StableButtonContent, StableButtonLabel } from '../common/stable-button-content'
 import { loadFileEditorModel } from './file-editor-model'
+import { installFileEditorLineEndings } from './file-editor-line-endings'
 import {
   EDITOR_ENCODINGS,
   getEditorEncodingLabel,
@@ -239,6 +240,7 @@ export function FileEditorModal({
       setContent(model.getValue())
       setLineEnding(model.getEOL())
     }
+    installFileEditorLineEndings(editor)
     editor.onDidChangeModelContent(() => {
       setContent(editor.getValue())
       setLineEnding(editor.getModel()?.getEOL() ?? '\n')
