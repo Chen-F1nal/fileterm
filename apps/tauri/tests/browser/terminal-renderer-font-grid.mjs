@@ -2,14 +2,16 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTypeScript } from './helpers/load-typescript.mjs'
 import { summarizeGpu } from './helpers/terminal-renderer-environment.mjs'
 import { registerComparisonGridCalibration, readComparisonGridMetrics } from './helpers/terminal-grid-calibration.mjs'
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
+const archiveRoot = resolve(
+  process.env.FILETERM_VALIDATION_ARCHIVE || join(root, '..', 'renderer-validation-archive', 'windows-2026-10-20')
+)
 const gridMode = process.env.FILETERM_GRID_MODE || 'comparison'
 assert.ok(['comparison', 'production'].includes(gridMode), 'FILETERM_GRID_MODE must be comparison or production')
 const webglBundle = resolve(root + 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js')
@@ -22,9 +24,15 @@ const browser = await chromium.launch({
   executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
   args: ['--enable-gpu']
 })
-const output = resolve(process.env.FILETERM_GRID_OUTPUT || join(tmpdir(), 'fileterm-renderer-font-grid.json'))
-const screenshot = resolve(process.env.FILETERM_GRID_SCREENSHOT || join(tmpdir(), 'fileterm-renderer-font-grid.png'))
+const output = resolve(
+  process.env.FILETERM_GRID_OUTPUT || join(archiveRoot, 'results', 'terminal-renderer-font-grid.json')
+)
+const screenshotDirectory = resolve(process.env.FILETERM_RENDERER_SCREENSHOT_DIR || join(archiveRoot, 'screenshots'))
+const screenshot = resolve(
+  process.env.FILETERM_GRID_SCREENSHOT || join(screenshotDirectory, 'terminal-renderer-font-grid.png')
+)
 mkdirSync(dirname(output), { recursive: true })
+mkdirSync(dirname(screenshot), { recursive: true })
 try {
   const browserCdp = await browser.newBrowserCDPSession()
   const { gpu: rawGpu } = await browserCdp.send('SystemInfo.getInfo')
@@ -415,14 +423,19 @@ try {
         resizeResults,
         searchResults,
         replayResults,
-        screenshot
+        screenshot: relative(dirname(output), screenshot).replaceAll('\\', '/')
       },
       null,
       2
     ) + '\n'
   )
   console.log(
-    JSON.stringify({ cases: results.length, control: control.map((grid) => grid.cellWidth), late, screenshot })
+    JSON.stringify({
+      cases: results.length,
+      control: control.map((grid) => grid.cellWidth),
+      late,
+      screenshot: relative(dirname(output), screenshot).replaceAll('\\', '/')
+    })
   )
 } finally {
   await browser.close()

@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { basename, dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
@@ -11,17 +11,16 @@ const cdpUrl = process.env.FILETERM_WEBVIEW2_CDP_URL || 'http://127.0.0.1:9223'
 const expectedRenderer = process.env.FILETERM_EXPECTED_RENDERER || 'webgl'
 assert.ok(['dom', 'webgl'].includes(expectedRenderer), 'FILETERM_EXPECTED_RENDERER must be dom or webgl')
 
-const resultsDirectory = join(
-  process.env.LOCALAPPDATA || tmpdir(),
-  'FileTerm',
-  'renderer-validation-archive',
-  'windows-2026-10-20',
-  'results'
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+const archiveRoot = resolve(
+  process.env.FILETERM_VALIDATION_ARCHIVE ||
+    resolve(projectRoot, '..', 'renderer-validation-archive', 'windows-2026-10-20')
 )
+const resultsDirectory = resolve(process.env.FILETERM_VALIDATION_RESULTS || join(archiveRoot, 'results'))
 const outputPath = resolve(
   process.env.FILETERM_WEBVIEW2_OUTPUT || join(resultsDirectory, `tauri-webview2-${expectedRenderer}.json`)
 )
-const screenshotDirectory = join(tmpdir(), 'fileterm-renderer-validation')
+const screenshotDirectory = resolve(process.env.FILETERM_RENDERER_SCREENSHOT_DIR || join(archiveRoot, 'screenshots'))
 const outputName = basename(outputPath).replace(/\.json$/i, '')
 const screenshotPath = join(screenshotDirectory, `${outputName}-render.png`)
 const mixedScreenshotPath = (suffix) => join(screenshotDirectory, `${outputName}${suffix}.png`)
@@ -387,7 +386,10 @@ try {
     if (sample.webgl) assert.equal(sample.nonIntegerGlyphs, 0)
     const mixedScreenshot = mixedScreenshotPath(`-mixed-${fontSize}px`)
     await page.locator('#fileterm-webview2-smoke-host').screenshot({ path: mixedScreenshot })
-    mixedText.push({ ...sample, screenshot: mixedScreenshot })
+    mixedText.push({
+      ...sample,
+      screenshot: relative(dirname(outputPath), mixedScreenshot).replaceAll('\\', '/')
+    })
   }
   await page.evaluate(async (fontSize) => {
     const { runtime } = window.__filetermWebView2Smoke
@@ -517,11 +519,21 @@ try {
     cdpDelta,
     unavailable: ['native terminal input latency', 'PTY parse/ACK backlog', 'native WebView2 IME composition'],
     pageErrors: errors,
-    screenshotPath,
-    appLog: '%APPDATA%/com.fileterm.desktop/logs/app.log; filter event=terminal-renderer'
+    screenshotPath: relative(dirname(outputPath), screenshotPath).replaceAll('\\', '/'),
+    appLog: 'FileTerm app.log; filter event=terminal-renderer'
   }
   writeFileSync(outputPath, `${JSON.stringify(result, null, 2)}\n`)
-  console.log(JSON.stringify({ outputPath, screenshotPath, result }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        outputPath: relative(archiveRoot, outputPath).replaceAll('\\', '/'),
+        screenshotPath: relative(dirname(outputPath), screenshotPath).replaceAll('\\', '/'),
+        result
+      },
+      null,
+      2
+    )
+  )
   await cdp.detach()
 } finally {
   if (page) {

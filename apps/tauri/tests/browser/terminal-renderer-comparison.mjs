@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
-import { cpus, release, tmpdir, totalmem, version } from 'node:os'
+import { basename, dirname, join, relative, resolve } from 'node:path'
+import { cpus, release, totalmem, version } from 'node:os'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
@@ -14,13 +14,18 @@ import { registerComparisonGridCalibration, readComparisonGridMetrics } from './
 
 // The application only bundles this dev dependency when the Windows renderer test flag is set.
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
+const archiveRoot = resolve(
+  process.env.FILETERM_VALIDATION_ARCHIVE || join(root, '..', 'renderer-validation-archive', 'windows-2026-10-20')
+)
 const gridMode = process.env.FILETERM_GRID_MODE || 'comparison'
 assert.ok(['comparison', 'production'].includes(gridMode), 'FILETERM_GRID_MODE must be comparison or production')
 const webglBundle = resolve(root + 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js')
 const addonVersion = JSON.parse(readFileSync(resolve(dirname(webglBundle), '../package.json'))).version
 assert.equal(addonVersion, '0.19.0')
-const output = resolve(process.env.FILETERM_COMPARISON_OUTPUT || join(tmpdir(), 'fileterm-renderer-comparison.json'))
-const screenshotDirectory = join(tmpdir(), 'fileterm-renderer-validation')
+const output = resolve(
+  process.env.FILETERM_COMPARISON_OUTPUT || join(archiveRoot, 'results', 'terminal-renderer-comparison.json')
+)
+const screenshotDirectory = resolve(process.env.FILETERM_RENDERER_SCREENSHOT_DIR || join(archiveRoot, 'screenshots'))
 mkdirSync(screenshotDirectory, { recursive: true })
 mkdirSync(dirname(output), { recursive: true })
 const normalBatchCount = Number(process.env.FILETERM_BATCH_COUNT || 4000)
@@ -655,7 +660,7 @@ async function run(mode, slowdown, repetition) {
       mode,
       gridCalibration:
         gridMode === 'production' ? 'native-renderer-grids-integer-webgl-atlas' : 'webgl-device-pixel-grid',
-      screenshot,
+      screenshot: relative(dirname(output), screenshot).replaceAll('\\', '/'),
       slowdown,
       repetition,
       browserVersion: browser.version(),

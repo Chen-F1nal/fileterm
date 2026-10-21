@@ -28,10 +28,11 @@ Earlier timing and memory tables below are retained as pre-repair data. The new 
 
 ## Artifacts
 
-Generated `.json` results and `.log` captures are stored outside the checkout under
-`%LOCALAPPDATA%\FileTerm\renderer-validation-archive\windows-2026-10-20\results\`.
-Screenshots are in the adjacent `screenshots\` folder. The filenames below identify the archived
-files; the result JSON retains the screenshot paths. Re-run artifacts stay outside the project.
+Generated `.json` results and `.log` captures are stored outside the checkout in the sibling
+`CodeFiles` archive directory `../renderer-validation-archive/windows-2026-10-20/results/`.
+Screenshots are in its `screenshots/` folder. The filenames below identify the archived files;
+result JSON points to screenshots relative to each JSON file. Re-run artifacts use the same sibling
+archive by default.
 
 - `terminal-renderer-comparison.json`: headless paired measurements and per-second process, CPU, memory, parser/ACK and keyboard samples.
 - `terminal-renderer-font-grid.json`: 52 headless font, DPI, resize, selection, search and replay cases.
@@ -39,10 +40,8 @@ files; the result JSON retains the screenshot paths. Re-run artifacts stay outsi
 - `tauri-webview2-dom.json` and `tauri-webview2-webgl.json`: same smoke procedure attached to the real Tauri WebView2, each writes 1,500 synthetic rows with Chinese and emoji, checks selection/search/resize, measures the configured and JetBrains Mono 14 font grids, then creates and disposes three renderer instances.
 - `tauri-webview2-dom-process.json` and `tauri-webview2-webgl-process.json`: 35 Windows process-tree samples per mode, including FileTerm, WebView2 browser, renderer, GPU and utility processes; working set, private bytes and cumulative CPU are recorded separately.
 - `tauri-webview2-renderer-events.log`: filtered `terminal-renderer` app.log lines only. No full application log was copied.
-- Matching screenshots. Existing captures are archived outside the checkout under
-  `%LOCALAPPDATA%\FileTerm\renderer-validation-archive\windows-2026-10-20\screenshots\`;
-  re-run screenshots go under `%TEMP%\fileterm-renderer-validation\` (the font-grid fixture
-  defaults to `%TEMP%`). Result JSON records each screenshot path.
+- Matching screenshots in the same archive's `screenshots/` folder. Result JSON records each
+  screenshot path relative to that JSON file.
 - `beta11-react-workspace-soak.json` and its stdout/stderr: two-hour synthetic React workspace soak with DOM; `beta11-webgl-react-workspace-soak.json` and its stdout/stderr: the sequential two-hour WebGL run, including Chromium GPU and process-group samples. Summary and limitations are in the [DOM / WebGL comparison report](../terminal-dom-webgl-comparison-2026-10-20.md#windows-react-workspace-两小时-renderer-soak2026-10-21).
 
 Repair artifacts: terminal-renderer-production-comparison.json, terminal-renderer-production-grid.json, terminal-renderer-production-grid-125pct.png, tauri-webview2-dom-grid-fixed.json, tauri-webview2-webgl-grid-fixed.json, both matching grid-fixed-process.json files, tauri-webview2-grid-fixed-environment.json, the filtered excerpts `tauri-webview2-dom-grid-fixed-renderer-events.log`, `tauri-webview2-grid-fixed-renderer-events.log`, and `tauri-webview2-font-fix-renderer-events.log`, plus terminal-webgl-lifecycle-grid-fixed.json.
@@ -81,8 +80,10 @@ The Tauri smoke uses an in-memory host created inside the actual WebView2. It do
 From the repository root in PowerShell:
 
 ```powershell
-$env:FILETERM_VALIDATION_RESULTS = Join-Path $env:LOCALAPPDATA 'FileTerm\renderer-validation-archive\windows-2026-10-20\results'
-New-Item -ItemType Directory -Force -Path $env:FILETERM_VALIDATION_RESULTS | Out-Null
+$env:FILETERM_VALIDATION_ARCHIVE = Join-Path (Split-Path -Parent $PWD) 'renderer-validation-archive\windows-2026-10-20'
+$env:FILETERM_VALIDATION_RESULTS = Join-Path $env:FILETERM_VALIDATION_ARCHIVE 'results'
+$env:FILETERM_RENDERER_SCREENSHOT_DIR = Join-Path $env:FILETERM_VALIDATION_ARCHIVE 'screenshots'
+New-Item -ItemType Directory -Force -Path $env:FILETERM_VALIDATION_RESULTS, $env:FILETERM_RENDERER_SCREENSHOT_DIR | Out-Null
 $env:FILETERM_GRID_MODE = 'production'
 $env:FILETERM_COMPARISON_OUTPUT = Join-Path $env:FILETERM_VALIDATION_RESULTS 'terminal-renderer-production-comparison.json'
 Remove-Item Env:FILETERM_COMPARISON_REPEATS -ErrorAction SilentlyContinue
@@ -91,7 +92,7 @@ Remove-Item Env:FILETERM_THROTTLED_BATCH_COUNT -ErrorAction SilentlyContinue
 node apps/tauri/tests/browser/terminal-renderer-comparison.mjs
 
 $env:FILETERM_GRID_OUTPUT = Join-Path $env:FILETERM_VALIDATION_RESULTS 'terminal-renderer-production-grid.json'
-Remove-Item Env:FILETERM_GRID_SCREENSHOT -ErrorAction SilentlyContinue
+$env:FILETERM_GRID_SCREENSHOT = Join-Path $env:FILETERM_RENDERER_SCREENSHOT_DIR 'terminal-renderer-production-grid.png'
 node apps/tauri/tests/browser/terminal-renderer-font-grid.mjs
 
 $env:FILETERM_WEBGL_LIFECYCLE_OUTPUT = Join-Path $env:FILETERM_VALIDATION_RESULTS 'terminal-webgl-lifecycle-grid-fixed.json'
@@ -108,8 +109,10 @@ npm run dev -w apps/tauri
 
 # In FileTerm, select the renderer under Settings → Interface → Terminal Display, then open a new terminal.
 # In another PowerShell window after the app opens, match the expected value to that selection:
-$env:FILETERM_VALIDATION_RESULTS = Join-Path $env:LOCALAPPDATA 'FileTerm\renderer-validation-archive\windows-2026-10-20\results'
-New-Item -ItemType Directory -Force -Path $env:FILETERM_VALIDATION_RESULTS | Out-Null
+$env:FILETERM_VALIDATION_ARCHIVE = Join-Path (Split-Path -Parent $PWD) 'renderer-validation-archive\windows-2026-10-20'
+$env:FILETERM_VALIDATION_RESULTS = Join-Path $env:FILETERM_VALIDATION_ARCHIVE 'results'
+$env:FILETERM_RENDERER_SCREENSHOT_DIR = Join-Path $env:FILETERM_VALIDATION_ARCHIVE 'screenshots'
+New-Item -ItemType Directory -Force -Path $env:FILETERM_VALIDATION_RESULTS, $env:FILETERM_RENDERER_SCREENSHOT_DIR | Out-Null
 $env:FILETERM_EXPECTED_RENDERER = 'dom' # or 'webgl'
 $env:FILETERM_WEBVIEW2_OUTPUT = Join-Path $env:FILETERM_VALIDATION_RESULTS "tauri-webview2-$($env:FILETERM_EXPECTED_RENDERER).json"
 node docs/quality/terminal-renderer-windows-2026-10-20/run-tauri-webview2-smoke.mjs
@@ -120,7 +123,7 @@ The smoke script attaches to `127.0.0.1:9223`; the selected renderer applies to 
 ## Development window snapshot (2026-10-21 02:06 SGT)
 
 This is a historical capture, not a live-process claim. A later process check found no `fileterm.exe` or
-Vite process from this checkout. The last renderer sequence in the external `%APPDATA%` app.log at
+Vite process from this checkout. The last renderer sequence in FileTerm's app.log at
 12:08 SGT shows WebGL activated on the same local terminal twice, then falling back to DOM with
 `block-glyph-compatibility`; it does not establish the renderer of any currently open window.
 

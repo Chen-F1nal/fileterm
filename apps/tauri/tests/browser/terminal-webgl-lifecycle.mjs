@@ -1,17 +1,23 @@
 /* global window, document, HTMLCanvasElement */
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { summarizeGpu } from './helpers/terminal-renderer-environment.mjs'
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
+const archiveRoot = resolve(
+  process.env.FILETERM_VALIDATION_ARCHIVE || join(root, '..', 'renderer-validation-archive', 'windows-2026-10-20')
+)
 const require = createRequire(import.meta.url)
 const { build } = require(process.env.ESBUILD_MODULE_PATH || 'esbuild')
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
-const output = process.env.FILETERM_WEBGL_LIFECYCLE_OUTPUT || join(tmpdir(), 'fileterm-webgl-lifecycle.json')
+const output = resolve(
+  process.env.FILETERM_WEBGL_LIFECYCLE_OUTPUT || join(archiveRoot, 'results', 'terminal-webgl-lifecycle.json')
+)
+mkdirSync(dirname(output), { recursive: true })
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'fileterm-webgl-lifecycle-'))
 const bundlePath = join(temporaryDirectory, 'bundle.js')
 const loadFailureBundlePath = join(temporaryDirectory, 'load-failure-bundle.js')
