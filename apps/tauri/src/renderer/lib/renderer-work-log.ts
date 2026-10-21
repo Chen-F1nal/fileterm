@@ -11,6 +11,7 @@ export type RendererWorkPhase =
   | 'terminal-selection-change'
   | 'terminal-ui-publish'
   | 'terminal-status'
+  | 'terminal-input'
   | 'workspace-snapshot'
   | 'session-metrics'
   | 'remote-files'
@@ -62,7 +63,7 @@ export function trackRendererWork<Args extends unknown[], Result>(
 
 export function getRendererWorkSnapshot() {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     sampledAtMs: Math.round(performance.now()),
     timeOriginUnixMs: Number.isFinite(performance.timeOrigin) ? Math.round(performance.timeOrigin) : undefined,
     phases: Object.fromEntries(
@@ -81,8 +82,8 @@ export function getRendererWorkSnapshot() {
   }
 }
 
-export function resetRendererWork() {
+export function resetRendererWork(preserveFailures = false) {
   phases.clear()
   recentSlowWork.length = 0
-  recentFailures.length = 0
+  if (!preserveFailures) recentFailures.length = 0
 }

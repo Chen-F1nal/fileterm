@@ -92,13 +92,13 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 
 ### 解析、绘制与内存占用的补充采集
 
-#### schemaVersion 2：命名回调与终端上下文
+#### schemaVersion 3：输入回调、异常积压与长任务时间线
 
-2026-10-21 排查代码在 bridge 就绪后记录一次 `renderer-diagnostics-ready`（INFO），包含 `schemaVersion=2`、版本与平台。bridge 异步初始化时复用每秒心跳延后提交，不新增定时器；这是日志能力标记，不是长任务验收通过标记。
+2026-10-21 排查代码在 bridge 就绪后记录一次 `renderer-diagnostics-ready`（INFO），当前包含 `schemaVersion=3`、版本与平台。它在 schema 2 基础上增加输入回调、异常积压与长任务时间线，可区分同为 beta11 的旧诊断构建。bridge 异步初始化时复用每秒心跳延后提交，不新增定时器；这是日志能力标记，不是长任务验收通过标记。
 
-`work.schemaVersion=2` 增加选区/搜索事件、按帧 UI 发布、终端状态、workspace snapshot、session metrics、remote files 和 transfer 的命名阶段。事件回调与 React updater 分开计时，二者可能嵌套，耗时不能相加。`activeWork` 最多返回最内层八个同步阶段，`recentFailures` 最多四个抛错阶段，均只包含名称和单调时钟时间，不保留参数、异常对象或终端内容。xterm 会捕获监听器异常并在另一个 timer 中重抛，最近失败记录可在同步栈退出后提供线索；它不是完整因果跟踪，Promise 拒绝不算同步异常，分钟/可见性重置也会清除记录。
+`work.schemaVersion=3` 保留 schema 2 的选区/搜索事件、按帧 UI 发布、终端状态、workspace snapshot、session metrics、remote files 和 transfer 阶段，增加 `terminal-input`（xterm onData 回调，包括自动协议回复）。事件回调与 React updater 分开计时，二者可能嵌套，耗时不能相加。`activeWork` 最多返回最内层八个同步阶段，`recentFailures` 最多四个抛错阶段，均只包含名称和单调时钟时间，不保留参数、异常对象或终端内容。xterm 会捕获监听器异常并在另一个 timer 中重抛，因此失败记录跨分钟/可见性重置保留，直到被后续失败替换或诊断重新安装；需按时间戳区分旧失败，不能把重复出现当新故障。它不是完整因果跟踪，Promise 拒绝不算同步异常。
 
-`renderer:error` 同时附带 `work` 和 `terminalResources`。资源摘要新增 `byRenderer`（DOM/WebGL/unknown）以及最多八个 `perTerminal` 项，包含内部 tab ID、后端、普通/备用屏行数和待解析/待写字符数。超出时 `terminalsTruncated=true`，总计仍覆盖当前模块注册的全部终端。`terminal-renderer` 初始化/回退事件新增内部 `tabId`，用于对应后端与积压；没有连接名称、主机地址、输入或输出正文。
+`renderer:error` 同时附带 `work`、`terminalResources`、`terminalOutput`、`capturedAtUnixMs` 和 `visible` / `focused`。异常发生时即可查看解析与 ACK 积压，不必只依赖前后一分钟的健康采样；异步重抛时这些是报告时状态。资源摘要保留 `byRenderer`（DOM/WebGL/unknown）以及最多八个 `perTerminal` 项，包含内部 tab ID、后端、普通/备用屏行数和待解析/待写字符数。超出时 `terminalsTruncated=true`，总计仍覆盖当前模块注册的全部终端。`terminal-renderer` 初始化/回退事件带内部 `tabId`，用于对应后端与积压；没有连接名称、主机地址、输入或输出正文。
 
 `maxEventLoopGapMs` 是心跳回调之间的间隔，一秒心跳下约 1000ms 并非一秒阻塞；卡顿告警应结合 `expectedIntervalMs` / `delayedByMs`、长任务、命名阶段与解析/ACK 进度。9855ms 的心跳间隔约比预期间隔多 8855ms，不能单独证明期间只有一个连续长任务。
 
@@ -106,6 +106,7 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 
 - `work`：xterm 解析、xterm 绘制、输出预处理、日志着色、前景色适配、符号/块字形/选区布局八个阶段的调用数、累计同步耗时、单次最大耗时，以及最近六次至少 16ms 的慢步骤。窗口每分钟或可见性切换时重置；异常日志也带当前摘要，原有五秒去重不受计数变化影响。时间为同步墙钟时间，包含嵌套调用，阶段之间不可直接相加；不包含 Promise 等待，也不是 CPU 占用率。`sampledAtMs` 和可用时的 `timeOriginUnixMs` 用于对应采样时段。
 - `longFrames`：支持 Long Animation Frames API 时保留当前窗口最慢四帧；每帧最多检查前 64 个脚本并保留其中耗时最高三个，包含强制布局耗时。只允许当前应用 `/assets/*.js` 的文件名、函数名和字符位置，不记录完整 URL、查询参数、invoker 或远端脚本路径。脚本列表可能裁剪，不是完整调用栈；布局字段是阶段起点到帧末的跨度，不是该阶段独占耗时。API 不可用时 `supported=false`。
+- `longTasks`：健康、长帧、心跳卡顿和进度缓慢记录均携带当前采集窗口的长任务数量、总量、最大值与最慢四项的 `startedAtMs` / `durationMs`。与 `work.timeOriginUnixMs` 相加可对齐卡顿时间；`windowStartedAtMs` 是最近一次计数重置的时间。PerformanceObserver 异步交付，条目可能晚于告警或跨越重置边界，要同时看后续健康记录；不代表 CPU 采样或具体函数归因。API 缺失或拒绝观察时 `supported=false`，不把未采集当零，也不影响软件启动。上下文同时记录 `visible` / `focused`；原生 `appForeground` 仍是另一项独立证据。
 - `renderer-long-frame`：观察到至少 1,000ms 的长帧后立即提交 WARN，最多每 30 秒一次，带上述上下文和输出/交互摘要。恢复后的心跳可能恰好没有明显延迟，此事件提供补充；仍需主线程恢复才能记录。
 - `terminalResources`：存活终端数、普通/备用屏幕行数、待写和 transcript 字符数、xterm 待解析量，以及成功挂接解析/绘制计时的实例数。私有字段不兼容时队列记入 `unknownXtermQueues`，不能当作零。当前字符串写入路径的队列单位为 UTF-16 字符；若改用 Uint8Array，xterm 内部数量将含字节，届时须同步修改解释。
 - `cellStorageBytesEstimate` 按 xterm 6 每单元三个 Uint32 估算已使用行的基础网格；不含字符串、容量余量、对象和原生/GPU 内存。`canvasBackingBytesEstimate` 按最多 512 个 canvas 的宽×高×4 估算单份 RGBA 存储，超限标记 `canvasEstimateTruncated`；不含纹理副本、合成器和驱动分配。二者都不能解释全部 WebView RSS。

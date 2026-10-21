@@ -1,4 +1,4 @@
-/* global window */
+/* global window, document, CompositionEvent */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -13,6 +13,8 @@ import react from '@vitejs/plugin-react'
 const require = createRequire(import.meta.url)
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const root = fileURLToPath(new URL('../../../../', import.meta.url)).replaceAll('\\', '/')
+const renderer = process.env.FILETERM_SOAK_RENDERER || 'dom'
+assert.ok(['dom', 'webgl'].includes(renderer), 'FILETERM_SOAK_RENDERER must be dom or webgl')
 const directory = realpathSync(mkdtempSync(join(tmpdir(), 'fileterm-monitoring-depth-')))
 const baseline = process.env.FILETERM_PERF_BASELINE === '1'
 const baselineFiles = ['system-network-panel.tsx', 'system-sidebar.tsx', 'network-history.ts'].map(
@@ -30,9 +32,11 @@ import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import { Terminal } from '${root}node_modules/@xterm/xterm'
 import { TerminalView } from '${root}apps/tauri/src/renderer/components/terminal-view'
+import { setTerminalRendererPreference } from '${root}apps/tauri/src/renderer/app/terminal-renderer-preference'
 import { SystemSidebar } from '${root}apps/tauri/src/renderer/features/system/system-sidebar'
 import { createTerminalOutputDelivery, getTerminalOutputProgress } from '${root}apps/tauri/src/bridge/events/terminal-output'
 const noop = () => {}
+setTerminalRendererPreference(${JSON.stringify(renderer)})
 const listeners = new Set()
 window.writes = []; window.sent = 0; window.acked = 0; window.networkRenders = 0
 window.fileterm = new Proxy({
@@ -52,6 +56,8 @@ window.unmount = () => appRoot.unmount()
 window.subscriptionCount = () => listeners.size
 function Fixture() {
  const [current, setCurrent] = useState(metrics)
+ const [active, setActive] = useState(true)
+ window.setActive = value => flushSync(() => setActive(value))
  window.updateMetrics = next => flushSync(() => setCurrent({...metrics, ...next}))
  // Model a backlog of discrete commits before normal-priority effect work can drain.
  // flushSync is test-only; the production IPC and xterm input handlers stay unchanged.
@@ -74,7 +80,7 @@ function Fixture() {
    activeSession={{profileId:'p',connected:true,capabilities:{resourceMonitoring:true},monitoring:{phase:'healthy',generation:1,revision:current.cpuPercent},systemMetrics:current}}
    collapsed={false} connectionStatus="connected" showResourceMeters visibleMetrics={['cpu','network']}
    onMonitoringSnapshot={noop} onOpenSystemInfo={noop} onToggleCollapsed={noop}/></aside>
-  <div style={{flex:1,minWidth:0}}><TerminalView profileId="p" tabId="tab" sessionType="ssh" connected bootText=""/></div>
+  <div style={{flex:1,minWidth:0}}><TerminalView profileId="p" tabId="tab" sessionType="ssh" isActive={active} connected bootText=""/></div>
  </div>
 }
 appRoot.render(<Fixture/>)
@@ -139,7 +145,11 @@ await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
 let browser
 try {
-  browser = await engine.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH })
+  browser = await engine.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
+    args: renderer === 'webgl' ? ['--enable-gpu'] : []
+  })
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } })
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -152,6 +162,12 @@ try {
       '.terminal-view,.terminal-host,.terminal-inner{height:100%;min-height:0;position:relative}.terminal-view{overflow:hidden}.terminal-host{padding:0}'
   })
   await page.waitForFunction(() => window.subscriptionCount?.() === 1)
+  await page.waitForFunction((expected) => {
+    const terminal = window.terminal
+    return expected === 'webgl'
+      ? Boolean(terminal?._core._renderService._renderer.value._gl)
+      : Boolean(terminal?.element.querySelector('.xterm-rows'))
+  }, renderer)
   for (const kind of ['empty', 'same', 'live']) {
     await page.evaluate((kind) => window.burst(kind, 120), kind)
   }
@@ -173,8 +189,9 @@ try {
   const renders = await page.evaluate(() => window.networkRenders)
   await page.waitForTimeout(150)
   assert.equal(await page.evaluate(() => window.networkRenders), renders, 'animation frames must not render React')
-  const offset = await page.locator('.network-chart-svg g').getAttribute('transform')
-  assert.notEqual(offset, 'translate(0 0)', 'new samples still scroll')
+  await page.waitForFunction(
+    () => document.querySelector('.network-chart-svg g').getAttribute('transform') !== 'translate(0 0)'
+  )
   await page.waitForTimeout(400)
   assert.equal(await page.locator('.network-chart-svg g').getAttribute('transform'), `translate(${-100 / 63} 0)`)
 
@@ -191,9 +208,34 @@ try {
 
   await page.locator('.terminal-inner').click({ button: 'right', position: { x: 100, y: 80 } })
   await page.locator('.terminal-context-menu').waitFor()
+  const queryCursor = () => page.evaluate(() => new Promise((resolve) => window.terminal.write('\x1b[6n', resolve)))
+  const assertCursorReply = async () => {
+    const reply = await page.evaluate(() => window.writes.at(-1))
+    assert.equal(reply.charCodeAt(0), 27)
+    assert.match(reply.slice(1), /^\[\d+;\d+R$/)
+  }
+  const beforeQuery = await page.evaluate(() => window.writes.length)
+  await queryCursor()
+  await page.waitForFunction((count) => window.writes.length === count + 1, beforeQuery)
+  await assertCursorReply()
+  assert.equal(await page.locator('.terminal-context-menu').count(), 1, 'query replies must not close UI menus')
   await page.keyboard.type('a')
   await page.locator('.terminal-context-menu').waitFor({ state: 'detached' })
   await page.waitForFunction(() => window.writes.at(-1) === 'a')
+  await page.evaluate(() => {
+    window.setActive(false)
+    window.terminal.input('inactive-user-input', true)
+    window.terminal.textarea.dispatchEvent(new CompositionEvent('compositionstart'))
+  })
+  const beforeBackgroundQuery = await page.evaluate(() => window.writes.length)
+  await queryCursor()
+  await page.waitForFunction((count) => window.writes.length === count + 1, beforeBackgroundQuery)
+  await assertCursorReply()
+  assert.equal(await page.evaluate(() => window.writes.includes('inactive-user-input')), false)
+  await page.evaluate(() => {
+    window.terminal.textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '' }))
+    window.setActive(true)
+  })
   await page.evaluate(() => window.output(200))
   const progress = await page.evaluate(() => window.progress())
   assert.equal(progress.receivedBatches, 200)
@@ -201,6 +243,17 @@ try {
   assert.equal(progress.pendingBatches, 0)
   assert.equal(progress.pendingAcknowledgements, 0)
   assert.equal(progress.parseFailures, 0)
+  assert.equal(
+    await page.evaluate(() =>
+      window.terminal._core._renderService._renderer.value._gl
+        ? 'webgl'
+        : window.terminal.element.querySelector('.xterm-rows')
+          ? 'dom'
+          : 'unknown'
+    ),
+    renderer,
+    'the selected renderer remains active through the regression'
+  )
   await page.evaluate(() => {
     window.updateMetrics({ networkSamples: [{ rx: 12, tx: 18, sampledAt: 300 }] })
     window.unmount()
@@ -209,7 +262,7 @@ try {
   await page.waitForTimeout(100)
   assert.deepEqual(errors, [])
   console.log(
-    'PASS: production React, 360 monitoring/input commits, SVG animation without React renders, menu/input and 200 parsed/ACKed batches, clean unmount'
+    `PASS (${renderer}): production React, 360 monitoring/input commits, SVG animation without React renders, query replies preserve menus and survive background/composition, 200 parsed/ACKed batches, clean unmount`
   )
 } finally {
   await browser?.close()

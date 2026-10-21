@@ -1,6 +1,6 @@
 # Windows renderer validation
 
-最新日志修补和诊断 schema 2 说明见 [现场日志分析与修补](../terminal-log-analysis-repair-2026-10-21.md)。旧 #185 尚未复现，不标记为彻底解决。
+最新日志修补和诊断 schema 3 说明见 [现场日志分析与修补](../terminal-log-analysis-repair-2026-10-21.md)。旧 #185 尚未在真实现场复现确认唯一原因，不标记为彻底解决。
 
 > 2026-10-21 字形回归更新：用户真实会话发现先前小数网格候选存在断笔/拖影。已删除 WebGL 小数宽度覆盖，恢复上游整数像素图集，仅保留 backing resize 同步。52 组字体/DPI 与实际 WebView2 独立临时终端验证通过；初始已有会话回退 DOM，后续门禁触发开发版自动重启，详见记录。此前候选的网格一致和短测性能数据不能作为当前候选视觉或性能验收依据。详见 [字形回归修复](font-regression-fix-2026-10-21.md)。
 
@@ -43,6 +43,7 @@ archive by default.
 - Matching screenshots in the same archive's `screenshots/` folder. Result JSON records each
   screenshot path relative to that JSON file.
 - `beta11-react-workspace-soak.json` and its stdout/stderr: two-hour synthetic React workspace soak with DOM; `beta11-webgl-react-workspace-soak.json` and its stdout/stderr: the sequential two-hour WebGL run, including Chromium GPU and process-group samples. Summary and limitations are in the [DOM / WebGL comparison report](../terminal-dom-webgl-comparison-2026-10-20.md#windows-react-workspace-两小时-renderer-soak2026-10-21).
+- `local-log-followup-summary.json`, `local-log-followup-filtered.log`, `log-followup-environment.json` and `log-followup-monitoring-{dom,webgl}.stdout.log` / `.stderr.log`: beta10/beta11 follow-up input/source hashes, gate results, local diagnostic excerpts and the DOM/WebGL query-response/React regressions. These are separate from the earlier overnight workload.
 
 Repair artifacts: terminal-renderer-production-comparison.json, terminal-renderer-production-grid.json, terminal-renderer-production-grid-125pct.png, tauri-webview2-dom-grid-fixed.json, tauri-webview2-webgl-grid-fixed.json, both matching grid-fixed-process.json files, tauri-webview2-grid-fixed-environment.json, the filtered excerpts `tauri-webview2-dom-grid-fixed-renderer-events.log`, `tauri-webview2-grid-fixed-renderer-events.log`, and `tauri-webview2-font-fix-renderer-events.log`, plus terminal-webgl-lifecycle-grid-fixed.json.
 

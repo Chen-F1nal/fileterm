@@ -49,6 +49,7 @@ test('phase timing preserves this, return values, exceptions and async parsing w
   assert.equal(work.trackRendererWork('xterm-parse', () => pending)(), pending)
   advance(500)
   const snapshot = work.getRendererWorkSnapshot()
+  assert.equal(snapshot.schemaVersion, 3)
   assert.equal(snapshot.phases['xterm-parse'].totalElapsedMs, 20, 'async waiting is not synchronous parsing time')
   assert.equal(snapshot.phases['xterm-parse'].calls, 2)
   assert.equal(snapshot.phases['xterm-render'].maxElapsedMs, 30)
@@ -80,6 +81,15 @@ test('named callback failures survive emitter unwinding without retaining errors
   assert.ok(!JSON.stringify(snapshot).includes('secret'))
   for (let i = 0; i < 20; i++) assert.throws(() => inner())
   assert.equal(work.getRendererWorkSnapshot().recentFailures.length, 4)
+  work.resetRendererWork(true)
+  assert.equal(
+    work.getRendererWorkSnapshot().recentFailures.length,
+    4,
+    'a heartbeat must not erase a pending xterm rethrow'
+  )
+  assert.deepEqual(Object.keys(work.getRendererWorkSnapshot().phases), [])
+  work.resetRendererWork()
+  assert.equal(work.getRendererWorkSnapshot().recentFailures.length, 0)
 })
 
 test('terminal resources are numeric, version guarded and released with exact methods restored', () => {

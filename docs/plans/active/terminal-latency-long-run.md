@@ -1,5 +1,9 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-21：协议回复绕过 React 更新与 schema 3
+
+交叉核对 beta10 报告和本机剩余 beta11 轮转日志，修复 xterm 自动查询回复误入活动标签/IME/菜单更新路径：已连接后台终端也能回复查询，自动回复不清选区或更新菜单；串口占用、历史回放与初始 ConPTY 回复规则保留。新增 `terminal-input` 阶段、异常时解析/ACK 快照和最慢四个长任务时间线，启动标记升级 schema 3。DOM/WebGL 生产 React + xterm 查询与监控回归通过，现场 #185 唯一原因和无脚本长帧仍未确认。证据、边界与外部归档文件名见[本轮复核](../../quality/terminal-log-analysis-repair-2026-10-21.md#2026-10-21beta10-与本机-beta11-日志交叉复核)。
+
 ## 2026-10-21：根据 Windows 现场日志修补事件与着色热路径
 
 选区/搜索的 React 状态发布改为按帧合并；日志着色复用未变化行的匹配/映射，并限制附加缓存预算。补充命名回调失败/耗时、按终端/后端资源与 schema 2 就绪标记，已核对真实 app.log 落盘。171 个 renderer 测试、类型、定向静态/格式、WebView2 混排/回退检查通过。旧 #185 尚未复现确认根因，不能标为完全解决；完整 Rust 门禁受运行中 exe 文件锁限制，lib/CLI/contract/scheduler 分项及 clippy 通过。详情与后续长测步骤见 [日志分析与修补记录](../../quality/terminal-log-analysis-repair-2026-10-21.md)。

@@ -17,7 +17,7 @@ export function installRendererPerformanceLogging(): () => void {
       DIAGNOSTIC_SCOPES.performance,
       JSON.stringify({
         event: 'renderer-diagnostics-ready',
-        schemaVersion: 2,
+        schemaVersion: 3,
         version: window.fileterm?.appVersion,
         platform: window.fileterm?.platform
       })
@@ -51,6 +51,8 @@ export function installRendererPerformanceLogging(): () => void {
   let longTaskCount = 0
   let longTaskTotalMs = 0
   let maxLongTaskMs = 0
+  let longTaskWindowStartedAtMs = previous
+  const slowestLongTasks: Array<{ startedAtMs: number; durationMs: number }> = []
   const longTasks =
     typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes.includes('longtask')
       ? new PerformanceObserver((list) => {
@@ -59,17 +61,32 @@ export function installRendererPerformanceLogging(): () => void {
             longTaskCount++
             longTaskTotalMs += entry.duration
             maxLongTaskMs = Math.max(maxLongTaskMs, entry.duration)
+            slowestLongTasks.push({ startedAtMs: Math.round(entry.startTime), durationMs: Math.round(entry.duration) })
+            slowestLongTasks.sort((left, right) => right.durationMs - left.durationMs)
+            if (slowestLongTasks.length > 4) slowestLongTasks.pop()
           }
         })
       : null
-  longTasks?.observe({ type: 'longtask' })
+  let longTasksAvailable = Boolean(longTasks)
+  try {
+    longTasks?.observe({ type: 'longtask' })
+  } catch {
+    longTasksAvailable = false
+    longTasks?.disconnect()
+  }
+  const resetLongTasks = () => {
+    longTaskCount = longTaskTotalMs = maxLongTaskMs = 0
+    slowestLongTasks.length = 0
+    longTaskWindowStartedAtMs = performance.now()
+  }
   const reset = () => {
     previous = performance.now()
     lastHealthReport = previous
     interactions.reset()
     frames.reset()
-    resetRendererWork()
-    maxEventLoopGapMs = longTaskCount = longTaskTotalMs = maxLongTaskMs = 0
+    resetRendererWork(true)
+    maxEventLoopGapMs = 0
+    resetLongTasks()
   }
   const readContext = () => {
     const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas')
@@ -79,8 +96,18 @@ export function installRendererPerformanceLogging(): () => void {
       canvasBackingBytesEstimate += canvas.width * canvas.height * 4
     }
     return {
+      visible: !document.hidden,
+      focused: document.hasFocus(),
       work: getRendererWorkSnapshot(),
       longFrames: frames.snapshot(),
+      longTasks: {
+        supported: longTasksAvailable,
+        windowStartedAtMs: Math.round(longTaskWindowStartedAtMs),
+        count: longTasksAvailable ? longTaskCount : undefined,
+        totalMs: longTasksAvailable ? Math.round(longTaskTotalMs) : undefined,
+        maxMs: longTasksAvailable ? Math.round(maxLongTaskMs) : undefined,
+        slowest: [...slowestLongTasks]
+      },
       terminalResources: getTerminalResourceSnapshot(),
       canvasCount: canvases.length,
       canvasBackingBytesEstimate,
@@ -139,17 +166,19 @@ export function installRendererPerformanceLogging(): () => void {
           terminalCount: document.querySelectorAll('.xterm').length,
           domNodeCount: document.getElementsByTagName('*').length,
           maxEventLoopGapMs: Math.round(maxEventLoopGapMs),
-          longTaskCount: longTasks ? longTaskCount : undefined,
-          longTaskTotalMs: longTasks ? Math.round(longTaskTotalMs) : undefined,
-          maxLongTaskMs: longTasks ? Math.round(maxLongTaskMs) : undefined,
+          longTaskCount: longTasksAvailable ? longTaskCount : undefined,
+          longTaskTotalMs: longTasksAvailable ? Math.round(longTaskTotalMs) : undefined,
+          maxLongTaskMs: longTasksAvailable ? Math.round(maxLongTaskMs) : undefined,
           version: window.fileterm?.appVersion,
           platform: window.fileterm?.platform
         })
       )
-      maxEventLoopGapMs = longTaskCount = longTaskTotalMs = maxLongTaskMs = 0
+      maxEventLoopGapMs = 0
+      resetLongTasks()
       interactions.reset()
       frames.reset()
-      resetRendererWork()
+      // xterm can rethrow after this heartbeat; retain the bounded failure trail.
+      resetRendererWork(true)
     }
     if (document.hidden || elapsed < 2000 || now - lastReport < 30000) return
     lastReport = now

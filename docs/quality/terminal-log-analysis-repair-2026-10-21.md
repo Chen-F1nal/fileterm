@@ -14,7 +14,7 @@
 | 同期 React #185，栈含 `_deliver` / `fire`                                       | 有更新深度超限异常，事件回调是排查入口                       | xterm 自带的 VS Code 事件基础层也有这些符号，不能归定为 Tauri/workspace 回调 |
 | 多数时段 queued=0、parseFailures/ackFailures=0；JS heap 有回落                  | 这些采样内没有持续 Rust 队列积压或已报告的解析/ACK 失败      | 不能排除停顿期间背压、确认迟到、长期内存增长或泄漏                           |
 
-用户栈的发布文件为 `index-DcpQ0jto.js`，本地已有产物为不同的 `index-CHv9CjYW.js`；不能套用另一个构建的行列号认定旧异常来源。尚未复现相同 #185，不能声称根因已确认或彻底修复。
+用户栈的发布文件为 `index-DcpQ0jto.js`。已有[更新链审计](react-update-loop-audit.md#2026-10-20长会话日志与监控图表的重复更新)记录了同文件名重建与 source map 对齐：抛错 setter 是 xterm onData 中的 `setContextMenu(null)`，两层 Emitter 属于 xterm。不能用不同产物的行列号定位，也不能从这个抛错点推断此前全部更新来源。监控图表的上游重复更新已在合成提交洪峰中复现并修补；Windows 现场唯一原因仍未确认。
 
 ## 本轮已实现
 
@@ -50,7 +50,7 @@
 
 1. 在当前开发版建立与现场相同数量的连接，先确认字体、DPI 和终端大小不变；用同一组 Claude Code 长任务，保留监控侧栏状态，不因测试主动修改远端业务数据。
 2. 连续运行至少 30–60 分钟。发生输入迟滞/冻结时记下本地时间、活动 tab、是否搜索或拖动选区、是否正在 resize、是否切屏；同时记录 CPU/进程树内存，而不只看 RSS。
-3. 出现问题后尽快保留 `app.log` 和 `app.log.1` 两份，日志只保留一个轮转备份。先查 `renderer-diagnostics-ready` / `schemaVersion:2`，再把 `renderer:error.work.recentFailures`、同分钟阶段耗时、Long Frames、每终端积压和 ACK 等待串起来；没有字段或失败记录时明确记为未捕获，不能当作无故障。
+3. 出现问题后尽快保留 `app.log` 和 `app.log.1` 两份，日志只保留一个轮转备份。先查 `renderer-diagnostics-ready` / `schemaVersion:3`，再把 `renderer:error.work.recentFailures`、异常时解析/ACK、同分钟阶段耗时、Long Tasks / Frames 和每终端积压串起来；没有字段或失败记录时明确记为未捕获，不能当作无故障。
 
 真实 #185 复现、长任务输入延迟改善、跨分钟内存趋势仍待现场验证。当前无 RSS 或短测证据可以证明泄漏已解决。
 
@@ -67,3 +67,19 @@
 已补充后续采集：Event Timing 汇总键盘、指针按下/抬起、文本输入、IME 和粘贴事件的最大事件类型及开始时间；输入派发延迟达到 250ms 即由现有心跳触发限频 WARN；可见页面心跳间隔阈值从 4 秒降至 2 秒，告警同时给出最后心跳、预期心跳和恢复时间锚点。Windows 调度采集现也接受 `renderer-long-frame` 和 `renderer-progress-slow`，因此后续同类帧停顿会触发短时 ETW 尝试。仍不记录输入文本，也不增加高频日志。
 
 本轮验证：Tauri 类型检查、173 个 renderer 测试、802 个 Rust 单测（1 个忽略）、10 个 CLI 测试、23 个 contract 测试和 3 个 Windows scheduler 测试通过；改动文件的 ESLint、Prettier、rustfmt 与 `git diff --check` 通过。全仓 lint / Prettier 仍被大量无关 CRLF 格式问题阻塞；严格 Clippy 在当前机器因 AWS-LC 缺少 NASM / CMake 依赖无法构建。检查时 FileTerm 未运行，因此尚未在新构建的真实 WebView2 中观察这些字段。
+
+## 2026-10-21：beta10 与本机 beta11 日志交叉复核
+
+再次读取用户提供的 beta10 分析报告，并对本机读取时尚保留的两份轮转文件做独立筛选。输入 SHA-256、字节数和统计保存在项目外的 `local-log-followup-summary.json`；数值诊断原文保存在 `local-log-followup-filtered.log`，源码哈希和门禁状态在 `log-followup-environment.json`。归档仍使用上述仓库同级目录，未把完整业务日志或个人绝对路径加入仓库。
+
+本机这次可读片段有 224 条 beta11 健康样本，未发现 renderer ERROR 或性能 WARN；采样中的待解析/待 ACK 数均为零，累计 ACK 最大耗时 256ms，输入派发最大延迟 12ms、长任务最大 136ms、已计时 xterm 解析/绘制最大 15/23ms。最新样本为一个 WebGL 终端。这是轮转后保留下来的低负载历史片段，不是当前窗口身份确认或多会话重绘压力测试。此前归档的无脚本归因 3.879–4.407 秒长帧仍未解释；新片段没有该事件不能推翻旧记录，也不能证明泄漏已解决。
+
+本轮确认并修补了一处遗漏：已连接终端的自动 CPR/DA/颜色/状态查询回复原先经过活动标签、IME 过滤、清选区和 `setContextMenu(null)`。所以后台回复会丢失，前台自动回复会无谓进入 React 更新链。现在这些已识别的协议回复直接进入现有输入发送队列，串口协议占用时仍阻止写入；历史回放抑制和初始 ConPTY 握手规则保留。普通键盘与 focus tracking 行为不变。该缺陷由回调与真实 xterm 查询回归确认，但没有证据说明它单独造成了旧现场全部 #185 或 9.9 秒停顿。
+
+诊断升级为 schema 3：`terminal-input` 记录 xterm 输入回调的同步耗时和失败阶段；异常报告增加发生时解析/ACK 状态、采集时间、可见/焦点状态；性能告警与健康报告保留最慢四个长任务的时间与持续量。最近四次失败跨分钟/可见性重置保留，避免心跳先清空证据、xterm 定时器随后才重抛；时间戳用于区分旧故障。仍使用现有心跳、分钟汇总和 30 秒 WARN 限频，不记录输入内容，也不增加高频日志。Long Tasks API 宣称可用但拒绝观察时明确降级。字段边界见 [日志文档](logging.md#schemaversion-3输入回调异常积压与长任务时间线)。
+
+新增回归覆盖协议回复绕过 React/IME、后台回复、普通键盘、串口占用、断连、历史回放和 ConPTY 初始回复；异常日志与长任务时间线也有定向测试。生产 React 与真实 xterm 的 Chromium 夹具分别以 DOM/WebGL 完成 360 次监控/输入提交、菜单打开时查询、后台模拟 composition 查询和 200 批解析/ACK，卸载订阅清零，无 pageerror。原动画断言有一次固定 150ms 等待失败，复跑通过；改为等待实际 SVG transform 进度，避免依赖调度时间。结果见 `log-followup-monitoring-{dom,webgl}.stdout.log` / `.stderr.log`。
+
+本轮完整类型检查、179 项 renderer 测试、803 项 Rust lib 测试（另 1 项忽略）、CSS contract 和改动文件静态/格式检查通过。全仓 lint / Prettier 仍受既有 CRLF 格式问题阻塞；完整 `npm run test:tauri` 被运行中开发版的 exe 文件锁阻塞，保留原进程；all-targets/all-features 严格 Clippy 因 AWS-LC 缺少 NASM 而构建失败。门禁输出归档为 `log-followup-gate-*.log`，没有把未完成门禁记为通过。
+
+本轮仍未在真实 Windows WebView2 上复现旧 #185，也未完成实际 Claude Code 长任务和物理 IME 验证。无脚本长帧仍需要与卡顿重合的原生线程/GPU 证据，不能靠增加前端数字推断根因。

@@ -38,6 +38,7 @@ function fixture(writer) {
       {
         exports,
         window,
+        document: { hidden: false, hasFocus: () => true },
         URLSearchParams,
         TextEncoder,
         Date: { now: () => now },
@@ -52,10 +53,13 @@ function fixture(writer) {
   }
   const diagnostic = load('../src/renderer/lib/diagnostic-log.ts')
   const reporter = load('../src/renderer/lib/renderer-error-log.ts', {
+    '../../bridge/events/terminal-output': {
+      getTerminalOutputProgress: () => ({ pendingBatches: 3, pendingAcknowledgements: 4, maxAckElapsedMs: 7000 })
+    },
     './diagnostic-log': diagnostic,
     './renderer-work-log': {
       getRendererWorkSnapshot: () => ({
-        schemaVersion: 2,
+        schemaVersion: 3,
         phases: {},
         recentSlowWork: [],
         recentFailures: [{ phase: 'terminal-ui-publish' }]
@@ -103,6 +107,11 @@ test('the actual error boundary persists error and component stacks with runtime
   assert.equal(report.window, 'file-editor')
   assert.equal(report.work.recentFailures[0].phase, 'terminal-ui-publish')
   assert.equal(report.terminalResources.byRenderer.dom, 1)
+  assert.equal(report.terminalOutput.pendingAcknowledgements, 4)
+  assert.equal(report.terminalOutput.maxAckElapsedMs, 7000)
+  assert.equal(report.capturedAtUnixMs, 10000)
+  assert.equal(report.visible, true)
+  assert.equal(report.focused, true)
   assert.ok(!f.calls[0][2].includes('do-not-log'))
 })
 

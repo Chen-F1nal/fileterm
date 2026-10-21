@@ -4,7 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-function fixture({ supportsLongTasks = false, bridgeReady = true } = {}) {
+function fixture({ supportsLongTasks = false, bridgeReady = true, longTaskObserveFails = false } = {}) {
   let now = 0
   let callback
   let reset
@@ -50,6 +50,7 @@ function fixture({ supportsLongTasks = false, bridgeReady = true } = {}) {
             }
             observe(options) {
               assert.equal(options.type, 'longtask')
+              if (longTaskObserveFails) throw new Error('unsupported WebView observer')
             }
             disconnect() {
               observerDisconnected = true
@@ -138,7 +139,8 @@ function fixture({ supportsLongTasks = false, bridgeReady = true } = {}) {
     get observerDisconnected() {
       return observerDisconnected
     },
-    longTasks: (...durations) => longTaskCallback({ getEntries: () => durations.map((duration) => ({ duration })) }),
+    longTasks: (...durations) =>
+      longTaskCallback({ getEntries: () => durations.map((duration) => ({ startTime: now, duration })) }),
     tick: (elapsed) => {
       now += elapsed
       callback()
@@ -150,7 +152,7 @@ function fixture({ supportsLongTasks = false, bridgeReady = true } = {}) {
 test('startup identifies the installed diagnostics schema without waiting for a stall', () => {
   const f = fixture()
   assert.equal(f.startup.event, 'renderer-diagnostics-ready')
-  assert.equal(f.startup.schemaVersion, 2)
+  assert.equal(f.startup.schemaVersion, 3)
   assert.equal(f.startup.platform, 'win32')
   f.dispose()
 })
@@ -248,6 +250,40 @@ test('long task summaries reset each minute and across visibility, then disconne
   assert.equal(JSON.parse(f.calls[1][2]).longTaskCount, 0)
   f.dispose()
   assert.equal(f.observerDisconnected, true)
+})
+
+test('stall warnings retain the four worst task timestamps and reset with the health window', () => {
+  const f = fixture({ supportsLongTasks: true })
+  f.tick(1000)
+  f.longTasks(60, 1200, 2400, 300, 900)
+  f.tick(3000)
+  const gap = JSON.parse(f.calls[0][2])
+  assert.equal(gap.longTasks.supported, true)
+  assert.equal(gap.longTasks.count, 5)
+  assert.equal(gap.longTasks.windowStartedAtMs, 0)
+  assert.deepEqual(
+    gap.longTasks.slowest.map((task) => task.durationMs),
+    [2400, 1200, 900, 300]
+  )
+  assert.equal(gap.longTasks.slowest[0].startedAtMs, 1000)
+  assert.equal(gap.visible, true)
+  assert.equal(gap.focused, true)
+  for (let index = 0; index < 56; index++) f.tick(1000)
+  f.tick(2000)
+  const nextGap = JSON.parse(f.calls.at(-1)[2])
+  assert.equal(nextGap.longTasks.count, 0)
+  assert.equal(nextGap.longTasks.windowStartedAtMs, 60000)
+  assert.deepEqual(nextGap.longTasks.slowest, [])
+  f.dispose()
+})
+
+test('an advertised but rejecting long-task observer does not stop diagnostics installation', () => {
+  const f = fixture({ supportsLongTasks: true, longTaskObserveFails: true })
+  f.tick(2000)
+  const gap = JSON.parse(f.calls[0][2])
+  assert.equal(gap.longTasks.supported, false)
+  assert.equal(gap.longTasks.count, undefined)
+  f.dispose()
 })
 
 test('stalled output and slow interactions report bounded summaries on the existing heartbeat', () => {
