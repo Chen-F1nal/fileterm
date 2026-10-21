@@ -10,7 +10,7 @@ import { StableButtonContent } from '../../../common/stable-button-content'
 import { type LocaleMessages } from '../../../../i18n'
 import { useSettingsModalContext } from '../context'
 import { useSystemFontAvailability } from '../../../../app/use-system-font-availability'
-import { InterfaceDisplaySettingsSections } from './interface-display-settings'
+import { InterfaceDisplaySettingsSections, TerminalDisplaySettingsSection } from './interface-display-settings'
 import { LayoutSettingsSection } from './layout-settings-section'
 import { OverviewContentSettingsSection } from './overview-content-settings-section'
 import {
@@ -146,6 +146,8 @@ export function InterfaceSettingsPanel() {
           </button>
         </div>
       </section>
+
+      <TerminalDisplaySettingsSection />
 
       <section className="settings-section theme-config-section">
         <div className="theme-config-heading">

@@ -15,14 +15,6 @@ import platformClean from '../../../../../../src-tauri/icons/app/shared/clean-51
 type InterfaceDisplaySettingsContext = {
   t: LocaleMessages
   desktopApi: FileTermDesktopApi | undefined
-  terminalZoomLocked: boolean
-  terminalRenderer: TerminalRenderer
-  isSavingTerminalRendererPreference: boolean
-  terminalRendererPreferenceError: string | null
-  saveTerminalRendererPreference(nextValue: TerminalRenderer): void
-  isSavingTerminalZoomPreference: boolean
-  terminalZoomPreferenceError: string | null
-  setTerminalZoomLockPreference(nextValue: boolean): void
   filePanelRememberRatio: boolean
   isSavingFilePanelPreference: boolean
   filePanelPreferenceError: string | null
@@ -49,19 +41,93 @@ type InterfaceDisplaySettingsContext = {
   setUiZoomPercentPreference(nextValue: number): void
 }
 
+type TerminalDisplaySettingsContext = {
+  t: LocaleMessages
+  desktopApi: FileTermDesktopApi | undefined
+  terminalRenderer: TerminalRenderer
+  isSavingTerminalRendererPreference: boolean
+  terminalRendererPreferenceError: string | null
+  saveTerminalRendererPreference(nextValue: TerminalRenderer): void
+  terminalZoomLocked: boolean
+  isSavingTerminalZoomPreference: boolean
+  terminalZoomPreferenceError: string | null
+  setTerminalZoomLockPreference(nextValue: boolean): void
+}
+
+/** Renderer selection applies to local and remote terminal surfaces. */
+export function TerminalDisplaySettingsSection() {
+  const {
+    t,
+    desktopApi,
+    terminalRenderer,
+    isSavingTerminalRendererPreference,
+    terminalRendererPreferenceError,
+    saveTerminalRendererPreference,
+    terminalZoomLocked,
+    isSavingTerminalZoomPreference,
+    terminalZoomPreferenceError,
+    setTerminalZoomLockPreference
+  } = useSettingsModalContext<TerminalDisplaySettingsContext>()
+  const showRendererPreference = desktopApi?.platform === 'win32'
+
+  return (
+    <section className="settings-section">
+      <h3>{t.terminalDisplaySettings}</h3>
+      {showRendererPreference ? (
+        <>
+          <p className="settings-tools-hint">{t.terminalDisplaySettingsHint}</p>
+          <div
+            aria-busy={isSavingTerminalRendererPreference}
+            className="theme-config-control"
+            inert={isSavingTerminalRendererPreference}
+          >
+            <span className="theme-config-label">{t.terminalRenderer}</span>
+            <DropdownSelect
+              ariaLabel={t.terminalRenderer}
+              className="theme-config-select"
+              disabled={isSavingTerminalRendererPreference}
+              onChange={(value) => saveTerminalRendererPreference(value as TerminalRenderer)}
+              options={[
+                { value: 'dom', label: 'DOM' },
+                { value: 'webgl', label: 'WebGL' }
+              ]}
+              value={terminalRenderer}
+            />
+          </div>
+          <p className="settings-tools-hint">{t.terminalRendererHint}</p>
+          {terminalRendererPreferenceError ? <p className="modal-error">{terminalRendererPreferenceError}</p> : null}
+        </>
+      ) : null}
+      <div
+        aria-busy={isSavingTerminalZoomPreference}
+        className="overview-preference-list"
+        inert={isSavingTerminalZoomPreference}
+      >
+        <label className="overview-preference-row">
+          <span className="overview-preference-copy">
+            <strong>{t.lockTerminalZoom}</strong>
+            <p>{t.lockTerminalZoomHint}</p>
+          </span>
+          <span className="command-toggle overview-preference-toggle">
+            <SelectionControl
+              checked={terminalZoomLocked}
+              disabled={!desktopApi}
+              onChange={(event) => setTerminalZoomLockPreference(event.target.checked)}
+              type="checkbox"
+            />
+          </span>
+        </label>
+      </div>
+      {terminalZoomPreferenceError ? <p className="modal-error">{terminalZoomPreferenceError}</p> : null}
+    </section>
+  )
+}
+
 /** Terminal display, interface zoom, app icon and window startup sections. */
 export function InterfaceDisplaySettingsSections() {
   const {
     t,
     desktopApi,
-    terminalZoomLocked,
-    terminalRenderer,
-    isSavingTerminalRendererPreference,
-    terminalRendererPreferenceError,
-    saveTerminalRendererPreference,
-    isSavingTerminalZoomPreference,
-    terminalZoomPreferenceError,
-    setTerminalZoomLockPreference,
     filePanelRememberRatio,
     isSavingFilePanelPreference,
     filePanelPreferenceError,
@@ -100,56 +166,6 @@ export function InterfaceDisplaySettingsSections() {
 
   return (
     <>
-      <section className="settings-section">
-        <h3>{t.terminalDisplaySettings}</h3>
-        <p className="settings-tools-hint">{t.terminalDisplaySettingsHint}</p>
-        {desktopApi?.platform === 'win32' ? (
-          <>
-            <div
-              aria-busy={isSavingTerminalRendererPreference}
-              className="theme-config-control"
-              inert={isSavingTerminalRendererPreference}
-            >
-              <span className="theme-config-label">{t.terminalRenderer}</span>
-              <DropdownSelect
-                ariaLabel={t.terminalRenderer}
-                className="theme-config-select"
-                disabled={isSavingTerminalRendererPreference}
-                onChange={(value) => saveTerminalRendererPreference(value as TerminalRenderer)}
-                options={[
-                  { value: 'dom', label: 'DOM' },
-                  { value: 'webgl', label: 'WebGL' }
-                ]}
-                value={terminalRenderer}
-              />
-            </div>
-            <p className="settings-tools-hint">{t.terminalRendererHint}</p>
-            {terminalRendererPreferenceError ? <p className="modal-error">{terminalRendererPreferenceError}</p> : null}
-          </>
-        ) : null}
-        <div
-          aria-busy={isSavingTerminalZoomPreference}
-          className="overview-preference-list"
-          inert={isSavingTerminalZoomPreference}
-        >
-          <label className="overview-preference-row">
-            <span className="overview-preference-copy">
-              <strong>{t.lockTerminalZoom}</strong>
-              <p>{t.lockTerminalZoomHint}</p>
-            </span>
-            <span className="command-toggle overview-preference-toggle">
-              <SelectionControl
-                checked={terminalZoomLocked}
-                disabled={!desktopApi}
-                onChange={(event) => setTerminalZoomLockPreference(event.target.checked)}
-                type="checkbox"
-              />
-            </span>
-          </label>
-        </div>
-        {terminalZoomPreferenceError ? <p className="modal-error">{terminalZoomPreferenceError}</p> : null}
-      </section>
-
       <section className="settings-section">
         <h3>{t.displayAndFilePanelSettings}</h3>
         <p className="settings-tools-hint">{t.displayAndFilePanelSettingsHint}</p>
