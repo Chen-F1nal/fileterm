@@ -89,6 +89,7 @@ import cjk from '${root}apps/tauri/src/renderer/assets/fonts/text/noto-sans-sc/N
 import { emptyState } from '${root}apps/tauri/src/renderer/app/app-data'
 import { createTerminalOutputDelivery } from '${root}apps/tauri/src/bridge/events/terminal-output'
 import { getTerminalResourceSnapshot } from '${root}apps/tauri/src/renderer/xterm-adapters/terminal-diagnostics'
+import { getRendererWorkSnapshot, resetRendererWork } from '${root}apps/tauri/src/renderer/lib/renderer-work-log'
 const noop = () => {}
 const subscriptions = new Map()
 const subscribe = (name, callback) => {
@@ -112,6 +113,7 @@ window.fileterm = new Proxy({
  onWorkspaceSnapshot:async callback=>subscribe('snapshot',callback),
  onTerminalData:callback=>subscribe('terminal',callback),
  onTransferUpdate:callback=>subscribe('transfer',callback),
+ onRemoteFilesChanged:callback=>subscribe('files',callback),
  onSessionMetrics:callback=>subscribe('metrics',callback)
 }, {get(target,key){if (key in target) return target[key];if(String(key).startsWith('on'))return callback=>subscribe(key,callback)}})
 window.terminals = []
@@ -128,6 +130,7 @@ function Fixture() {
  const [generation,setGeneration]=useState(0)
  window.replaceTerminals = () => setGeneration(n=>n+1)
  window.currentHistory = shell.workspace.transfers
+ window.currentFiles = shell.workspace.sessions[ids[0]]?.remoteFiles
  return <><input id="input"/><button id="button" onClick={()=>window.clicks++}>click</button><output id="history">{shell.workspace.transfers.length}</output><main style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)'}}>{ids.map((id,index)=><div key={generation+id} style={{height:160,minWidth:0}}><TerminalView profileId={id} tabId={id} sessionType="ssh" connected isActive={index<4} bootText="" onActivate={noop} onStatus={noop}/></div>)}</main><TransferCenter activeProfileId={ids[0]} activeTabId={ids[0]} activeTabStatus="connected" desktopApi={window.fileterm} fullWidth isPending={false} onApplySnapshot={shell.applySnapshot} onError={noop} sessionTabs={snapshot.tabs} transfers={shell.workspace.transfers} visible/></>
 }
 window.clicks=0;window.sent=0;window.acked=0;window.maxPending=0;window.maxHistory=0
@@ -151,6 +154,7 @@ window.prefill = async () => {
  while(window.sent!==window.acked)await new Promise(resolve=>setTimeout(resolve,0))
 }
 window.start = () => {
+ resetRendererWork()
  stopped=false
  const pump=()=>{
   if(stopped)return
@@ -161,6 +165,7 @@ window.start = () => {
    window.maxPending=Math.max(window.maxPending,window.sent-window.acked)
   }
   if(sequence%10===0){
+   emit('files',{tabId:ids[0],path:'/',files:[{name:'refresh-'+sequence,path:'/refresh-'+sequence,type:'file',size:0,modifiedAt:0}]})
    for(let index=0;index<10;index++)emit('metrics',{tabId:ids[index],monitoring:{...monitoring,revision:sequence+2},mode:'append',systemMetrics:{...metrics,cpuPercent:sequence%100,networkSamples:[{rx:sequence,tx:sequence,sampledAt:sequence}]}})
   }
   // Accelerated completion stream plus eight concurrent transfer progress streams.
@@ -176,7 +181,7 @@ window.start = () => {
 window.stop = ()=>{stopped=true;clearTimeout(timer)}
 window.sample = () => {
  const live=window.terminals.map(ref=>ref.deref()).filter(Boolean)
- return {terminalResources:getTerminalResourceSnapshot(),rendererEvents:window.rendererEvents.map(({renderer,reason,hardwareAcceleration,gpuVendor,gpuRenderer})=>({renderer,reason,hardwareAcceleration,gpuVendor,gpuRenderer})),sent:window.sent,acked:window.acked,maxPending:window.maxPending,history:window.currentHistory?.length,maxHistory:window.maxHistory,subscriptions:Object.fromEntries([...subscriptions].map(([name,listeners])=>[name,listeners.size])),liveTerminals:live.length,terminalElements:document.querySelectorAll('.xterm').length,markers:live.reduce((sum,t)=>sum+t.markers.length,0),pendingXterm:live.reduce((sum,t)=>sum+t._core._writeBuffer._pendingData,0),liveDomNodes:document.getElementsByTagName('*').length,clicks:window.clicks}
+ return {work:getRendererWorkSnapshot(),lastFile:window.currentFiles?.[0]?.name,terminalResources:getTerminalResourceSnapshot(),rendererEvents:window.rendererEvents.map(({renderer,reason,hardwareAcceleration,gpuVendor,gpuRenderer})=>({renderer,reason,hardwareAcceleration,gpuVendor,gpuRenderer})),sent:window.sent,acked:window.acked,maxPending:window.maxPending,history:window.currentHistory?.length,maxHistory:window.maxHistory,subscriptions:Object.fromEntries([...subscriptions].map(([name,listeners])=>[name,listeners.size])),liveTerminals:live.length,terminalElements:document.querySelectorAll('.xterm').length,markers:live.reduce((sum,t)=>sum+t.markers.length,0),pendingXterm:live.reduce((sum,t)=>sum+t._core._writeBuffer._pendingData,0),liveDomNodes:document.getElementsByTagName('*').length,clicks:window.clicks}
 }
 Promise.all([
  new FontFace('JetBrains Mono', 'url('+monoRegular+')',{weight:'400'}),
@@ -200,13 +205,10 @@ await build({
     react()
   ],
   logLevel: 'error',
-  define:
-    renderer === 'webgl'
-      ? {
-          'import.meta.env.DEV': 'true',
-          'import.meta.env.VITE_FILETERM_TERMINAL_RENDERER': '"webgl"'
-        }
-      : undefined,
+  define: {
+    'import.meta.env.DEV': 'true',
+    'import.meta.env.VITE_FILETERM_TERMINAL_RENDERER': JSON.stringify(renderer)
+  },
   resolve: {
     alias: [
       { find: /^react$/, replacement: require.resolve('react') },
@@ -343,6 +345,13 @@ try {
     assert.ok(current.history <= 200, 'completed transfer history must stay bounded')
     assert.ok(current.maxPending <= 4)
     assert.equal(current.subscriptions.terminal, 10)
+    assert.match(
+      current.lastFile,
+      /^refresh-/,
+      'directory updates must reach the workspace without replacing terminals'
+    )
+    if (!baselineSource)
+      assert.equal(current.work.phases['session-metrics'].calls, current.work.phases['session-metrics-event'].calls)
     iteration++
   }
   await page.evaluate(() => window.stop())

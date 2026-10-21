@@ -4,7 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-function fixture(text, fitted = false) {
+function fixture(text, fitted = false, cellWidth) {
   let layoutReads = 0
   class Element {
     textContent = text
@@ -49,6 +49,8 @@ function fixture(text, fitted = false) {
   )
   const registration = exports.registerTerminalSymbolGlyphRenderer({
     cols: 80,
+    options: {},
+    _core: { _renderService: { dimensions: { css: { cell: { width: cellWidth } } } } },
     element: { querySelector: () => rows },
     buffer: { active: { getNullCell: () => ({}), getLine: () => undefined } },
     onRender: () => ({ dispose() {} })
@@ -69,4 +71,8 @@ test('fallback symbols and CJK punctuation still enter the fitting path', () => 
 
 test('already fitted rows skip geometry on repeated render notifications', () => {
   for (const text of ['✻', '中文，。', '┃✓┃']) assert.equal(fixture(text, true), 0, text)
+})
+
+test('the calibrated xterm CSS grid avoids another geometry read', () => {
+  assert.equal(fixture('✻', false, 10), 0)
 })

@@ -1,5 +1,9 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-22：现场报告的 workspace 重放与 DOM 开销
+
+核对用户 app-log-1021.md 的完整内嵌样本为 beta.11；内容触发 DOM 回退已有修复，不能据此认定 WebGL context 崩溃。生产 React 受阻渲染复现 300 个监控事件执行 90,600 次 updater，改为按 IPC 顺序更新独立快照并由 useSyncExternalStore 订阅后为 300 次。减少 symbol observer 重扫、复用实际字体样式与校准网格；十终端目录/监控/传输对照通过，但原生远端刷新错位、长期 native/GPU 增长、DOM block 开销和既有粗体比例失败仍未解决。证据与门禁见 [本轮复核](../../quality/terminal-log-followup-2026-10-22.md)。
+
 ## 2026-10-21：Windows WebView2 纹理槽保留
 
 在当前 Windows Tauri 开发版和独立 Claude Code PTY 中接续 PR #351。真实 WebView2 复现字号变化后 CPU 图集降至 1 页，而历史纹理请求仍为 47,535,432 字节；修复未使用槽与旧 mip levels 后降至 1,398,160 字节，临时 runtime 销毁归零。两轮真实 Claude 短请求完成；12 分钟逐进程记录有峰值后回落，但不能归因于修复，也不能代替数小时/整夜负载验收。环境、原始本地归档、门禁与限制见 [Windows 纹理接续记录](../../quality/terminal-windows-texture-storage-2026-10-21.md)。整体长期卡死任务继续保持进行中。
