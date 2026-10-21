@@ -1,8 +1,9 @@
 import './ssh-config-host-field.css'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CreateProfileInput, SshConfigHostSummary } from '@fileterm/core'
 import { t } from '../../i18n'
+import { DropdownSelect } from '../common/dropdown-select'
 import type { ConnectionFormSetter } from './connection-modal-utils'
 
 function useSshConfigHosts() {
@@ -40,6 +41,10 @@ export function filterSshConfigHosts(hosts: SshConfigHostSummary[], query: strin
   )
 }
 
+export function usesNativeSshConfigHostPicker(platform: string | undefined) {
+  return platform === 'darwin'
+}
+
 /**
  * Host combobox for `authType: 'sshConfig'`. The value is the OpenSSH `Host`
  * alias: type freely or pick one of the aliases read from ~/.ssh/config; the
@@ -47,6 +52,8 @@ export function filterSshConfigHosts(hosts: SshConfigHostSummary[], query: strin
  */
 export function SshConfigHostField({ form, setForm }: { form: CreateProfileInput; setForm: ConnectionFormSetter }) {
   const hosts = useSshConfigHosts()
+  const nativeHostPicker = usesNativeSshConfigHostPicker(window.fileterm?.platform)
+  const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
@@ -54,7 +61,7 @@ export function SshConfigHostField({ form, setForm }: { form: CreateProfileInput
   const alias = form.host.trim()
   const selected = hosts.find((host) => host.alias.toLowerCase() === alias.toLowerCase())
   const matches = useMemo(() => filterSshConfigHosts(hosts, form.host), [hosts, form.host])
-  const menuOpen = open && matches.length > 0
+  const menuOpen = !nativeHostPicker && open && matches.length > 0
 
   const setAlias = (nextAlias: string) =>
     setForm((prev) => ({
@@ -108,49 +115,70 @@ export function SshConfigHostField({ form, setForm }: { form: CreateProfileInput
 
   return (
     <>
-      <label className="span-2">
-        {t.sshConfigAlias}:
-        <input
-          ref={inputRef}
-          role="combobox"
-          aria-expanded={menuOpen}
-          aria-autocomplete="list"
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          placeholder={hosts.length ? t.sshConfigAliasPickPlaceholder : t.sshConfigAliasPlaceholder}
-          value={form.host}
-          onFocus={() => setOpen(true)}
-          onBlur={(event) => {
-            const trimmed = event.target.value.trim()
-            if (trimmed !== event.target.value) setAlias(trimmed)
-          }}
-          onChange={(event) => {
-            setAlias(event.target.value)
-            setOpen(true)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-              event.preventDefault()
-              if (!menuOpen) {
-                setOpen(true)
-                return
+      <div className="span-2 ssh-config-host-field">
+        <label htmlFor={inputId}>{t.sshConfigAlias}:</label>
+        <span className="ssh-config-host-field__controls">
+          <input
+            id={inputId}
+            ref={inputRef}
+            role={nativeHostPicker ? undefined : 'combobox'}
+            aria-expanded={nativeHostPicker ? undefined : menuOpen}
+            aria-autocomplete={nativeHostPicker ? undefined : 'list'}
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            placeholder={hosts.length ? t.sshConfigAliasPickPlaceholder : t.sshConfigAliasPlaceholder}
+            value={form.host}
+            onFocus={() => {
+              if (!nativeHostPicker) setOpen(true)
+            }}
+            onBlur={(event) => {
+              const trimmed = event.target.value.trim()
+              if (trimmed !== event.target.value) setAlias(trimmed)
+            }}
+            onChange={(event) => {
+              setAlias(event.target.value)
+              if (!nativeHostPicker) setOpen(true)
+            }}
+            onKeyDown={(event) => {
+              if (nativeHostPicker) return
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault()
+                if (!menuOpen) {
+                  setOpen(true)
+                  return
+                }
+                const step = event.key === 'ArrowDown' ? 1 : -1
+                setHighlighted((current) => (current + step + matches.length) % matches.length)
+              } else if (event.key === 'Enter' && menuOpen) {
+                event.preventDefault()
+                const host = matches[highlighted]
+                if (host) choose(host)
+              } else if (event.key === 'Escape' && menuOpen) {
+                // Close only the list, not the surrounding connection dialog.
+                event.preventDefault()
+                event.stopPropagation()
+                setOpen(false)
               }
-              const step = event.key === 'ArrowDown' ? 1 : -1
-              setHighlighted((current) => (current + step + matches.length) % matches.length)
-            } else if (event.key === 'Enter' && menuOpen) {
-              event.preventDefault()
-              const host = matches[highlighted]
-              if (host) choose(host)
-            } else if (event.key === 'Escape' && menuOpen) {
-              // Close only the list, not the surrounding connection dialog.
-              event.preventDefault()
-              event.stopPropagation()
-              setOpen(false)
-            }
-          }}
-        />
-      </label>
+            }}
+          />
+          {nativeHostPicker && hosts.length > 0 ? (
+            <DropdownSelect
+              ariaLabel={t.sshConfigAliasPickPlaceholder}
+              className="ssh-config-host-picker"
+              onChange={(value) => {
+                const host = hosts.find((entry) => entry.alias === value)
+                if (host) choose(host)
+              }}
+              options={[
+                { value: '', label: t.sshConfigAliasPickPlaceholder, disabled: true },
+                ...hosts.map((host) => ({ value: host.alias, label: `${host.alias} — ${describeHost(host)}` }))
+              ]}
+              value={selected?.alias ?? ''}
+            />
+          ) : null}
+        </span>
+      </div>
       <div className="span-2 ssh-field-hint">
         {selected
           ? `${t.sshConfigResolvedTarget} ${describeHost(selected)}${

@@ -23,7 +23,7 @@
 3. 新增命名事件边界/更新计算计时、失败阶段和活动阶段摘要。异常同时附带按后端及内部 tab ID 汇总的终端资源，renderer 初始化/回退日志带内部 tab ID。bridge 异步就绪后一次性报告诊断 schema 2。
 4. 已从真实 app.log 观察到 `renderer-diagnostics-ready` 和带 schema 2、命名阶段、`byRenderer` / `perTerminal` 的健康记录。异常字段通过单元测试验证；未人为触发用户窗口崩溃。
 
-第一项隔离同步嵌套与事件风暴风险，第二项减少实际重复计算；它们不构成旧 #185 已复现修复的证明。该日志修补记录形成时仍默认 DOM；当前 Windows 默认更新见 [renderer 验证报告](terminal-dom-webgl-comparison-2026-10-20.md)。
+第一项隔离同步嵌套与事件风暴风险，第二项减少实际重复计算；它们不构成旧 #185 已复现修复的证明。该日志修补记录形成时仍默认 DOM；当前三平台默认状态见 [renderer 验证报告](terminal-dom-webgl-comparison-2026-10-20.md)。
 
 ## 自动验证
 

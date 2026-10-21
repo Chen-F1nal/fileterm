@@ -1,6 +1,6 @@
 ## FileTerm 2.3.1-beta.11
 
-本测试版为 Windows 终端增加 DOM/WebGL 选择、修复 WebGL 字形栅格问题，并补充用于定位卡顿的 renderer 诊断日志。
+本测试版为 Windows、macOS 和 Linux 终端增加 DOM/WebGL 选择、修复 Windows 上的 WebGL 字形栅格问题，并补充用于定位卡顿的 renderer 诊断日志。
 
 **下载地址**
 
@@ -20,14 +20,14 @@
 
 ### 2.3.1-beta.11 更新重点
 
-- **Windows 终端 renderer**：可在“设置 → 界面 → 终端显示”选择 DOM 或 WebGL。新安装默认 DOM；旧设置中没有 renderer 选项的升级用户首次迁移到 WebGL，之后保留用户明确选择。WebGL 加载或 context 恢复失败时自动回退 DOM；macOS 和 Linux 继续使用 DOM。已打开的终端需新建或重启后应用选择。
+- **跨平台终端 renderer**：Windows、macOS 和 Linux 均可在“设置 → 界面 → 终端显示”选择 DOM 或 WebGL，默认使用 WebGL；已保存的 DOM 选择会保留。WebGL 加载、激活或 context 恢复失败时自动回退 DOM。已打开的终端需新建或重启后应用选择。
 - **字体与栅格**：修复 WebGL 在 DPI、字体或画布尺寸变化后的视口同步，并保留 xterm 的整数像素字形图集约束，避免混合文字出现断笔、拖影或数字字形异常。
 - **卡顿诊断与终端响应**：app.log 增加 renderer 状态、输入派发延迟、解析/绘制耗时、解析与 ACK 积压、长任务时间点及进程资源摘要；不记录终端输入正文。终端查询回复绕过无关 UI 状态更新，降低后台或输入法状态下丢失回复的风险。
-- **测试版说明**：WebGL 在 Windows 上可选，尚未宣称真实 Claude Code 长任务下的性能提升；遇到问题可切回 DOM，并附脱敏日志反馈。
+- **测试版说明**：WebGL 在三端均可选，尚未宣称真实 Claude Code 长任务下的性能提升；遇到问题可切回 DOM，并附脱敏日志反馈。
 
 ### 本版本包含的主要 PR 和问题修复
 
-- [PR #348](https://github.com/St0ff3l/fileterm/pull/348)：增加 Windows DOM/WebGL renderer 选择、WebView2 字体与生命周期修复、终端卡顿诊断及协议回复处理修复。
+- [PR #348](https://github.com/St0ff3l/fileterm/pull/348)：增加跨平台 DOM/WebGL renderer 选择、Windows WebView2 字体与生命周期修复、终端卡顿诊断及协议回复处理修复。
 
 完整变更记录请查看 [v2.3.1-beta.10 与 v2.3.1-beta.11 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.10...v2.3.1-beta.11)。
 
@@ -40,7 +40,7 @@
 
 ## FileTerm 2.3.1-beta.11
 
-This beta adds DOM/WebGL selection for Windows terminals, fixes WebGL glyph-grid rendering and expands renderer diagnostics for investigating stalls.
+This beta adds DOM/WebGL selection for Windows, macOS and Linux terminals, fixes WebGL glyph-grid rendering on Windows, and expands renderer diagnostics for investigating stalls.
 
 **Downloads**
 
@@ -60,14 +60,14 @@ This beta adds DOM/WebGL selection for Windows terminals, fixes WebGL glyph-grid
 
 ### Highlights
 
-- **Windows terminal renderer**: Choose DOM or WebGL in Settings → Interface → Terminal Display. New installations default to DOM. Upgrades whose saved settings do not contain a renderer choice migrate to WebGL once; later explicit choices are preserved. FileTerm falls back to DOM if WebGL fails to load or recover its context. macOS and Linux continue to use DOM. Apply a changed choice to new or restarted terminals.
+- **Cross-platform terminal renderer**: Choose DOM or WebGL in Settings → Interface → Terminal Display on Windows, macOS and Linux; WebGL is the default, and saved DOM choices are preserved. FileTerm falls back to DOM if WebGL fails to load, activate or recover its context. Apply a changed choice to new or restarted terminals.
 - **Fonts and glyph grid**: Synchronize the WebGL viewport after DPI, font or canvas-size changes while preserving xterm's integer-pixel glyph atlas constraints, preventing broken strokes, trails and malformed digits in mixed text.
 - **Stall diagnostics and terminal replies**: `app.log` now records renderer state, input dispatch delay, parse and draw timings, parse/ACK backlog, long-task timestamps and process resource summaries without recording terminal input contents. Terminal query replies bypass unrelated UI state updates to reduce the risk of dropped replies in background or IME states.
-- **Beta note**: WebGL is optional on Windows. Performance under real, long-running Claude Code workloads has not been established. Switch to DOM if needed and include redacted logs when reporting problems.
+- **Beta note**: WebGL is optional on all three desktop platforms. Performance under real, long-running Claude Code workloads has not been established. Switch to DOM if needed and include redacted logs when reporting problems.
 
 ### Main PRs and issues
 
-- [PR #348](https://github.com/St0ff3l/fileterm/pull/348): Add Windows DOM/WebGL selection, WebView2 font and lifecycle fixes, renderer stall diagnostics, and terminal protocol-reply handling.
+- [PR #348](https://github.com/St0ff3l/fileterm/pull/348): Add cross-platform DOM/WebGL selection, Windows WebView2 font and lifecycle fixes, renderer stall diagnostics, and terminal protocol-reply handling.
 
 See the [comparison between v2.3.1-beta.10 and v2.3.1-beta.11](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.10...v2.3.1-beta.11) for the complete change set.
 

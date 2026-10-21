@@ -71,7 +71,7 @@ export function ConnectionSshGeneralSection({
               { value: 'serial', label: t.serial }
             ]}
             onChange={(value) => {
-              // "SSH (ssh config)" is an SSH profile whose host is an OpenSSH alias.
+              // "SSH Config" is an SSH profile whose host is an OpenSSH alias.
               const pickedSshConfig = value === SSH_CONFIG_CONNECTION_TYPE
               const nextType = (pickedSshConfig ? 'ssh' : value) as SessionType
               const defaults: Record<SessionType, number> = { ssh: 22, ftp: 21, telnet: 23, serial: 0 }

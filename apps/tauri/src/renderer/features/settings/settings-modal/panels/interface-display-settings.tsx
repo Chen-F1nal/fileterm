@@ -4,6 +4,7 @@ import { DropdownSelect } from '../../../common/dropdown-select'
 import { RadioCardGroup } from '../../../common/radio-card-group'
 import { SelectionControl } from '../../../common/selection-control'
 import { type LocaleMessages } from '../../../../i18n'
+import { supportsTerminalRenderer } from '../../../../app/terminal-renderer-preference'
 import { useSettingsModalContext } from '../context'
 import dockClassic from '../../../../assets/app-icons/dock-classic.png'
 import dockMaterial from '../../../../assets/app-icons/dock-material.png'
@@ -68,7 +69,7 @@ export function TerminalDisplaySettingsSection() {
     terminalZoomPreferenceError,
     setTerminalZoomLockPreference
   } = useSettingsModalContext<TerminalDisplaySettingsContext>()
-  const showRendererPreference = desktopApi?.platform === 'win32'
+  const showRendererPreference = supportsTerminalRenderer(desktopApi?.platform)
 
   return (
     <section className="settings-section">

@@ -103,7 +103,7 @@ void createTauriApi()
         return undefined
       })
       .then(async (initialUiPreferences) => {
-        setTerminalRendererPreference(initialUiPreferences?.terminalRenderer ?? 'dom')
+        setTerminalRendererPreference(initialUiPreferences?.terminalRenderer ?? 'webgl')
         const searchParams = new URLSearchParams(window.location.search)
         const queryTheme = searchParams.get('theme')
         const isThemeMode = (val: unknown): val is ThemeMode =>

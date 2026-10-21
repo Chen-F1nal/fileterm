@@ -1,3 +1,43 @@
+.ssh-grid .ssh-config-host-field {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.ssh-grid .ssh-config-host-field > label {
+  display: block;
+  font-size: 13px;
+}
+
+.ssh-config-host-field__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ssh-grid .ssh-config-host-field .ssh-config-host-field__controls > input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.ssh-grid .ssh-config-host-field .ssh-config-host-picker {
+  flex: 0 0 var(--button-height-md, 36px);
+  width: var(--button-height-md, 36px);
+  min-width: var(--button-height-md, 36px);
+  padding: 0;
+}
+
+.ssh-grid .ssh-config-host-field .ssh-config-host-picker .ft-select-shell__value {
+  display: none;
+}
+
+.ssh-grid .ssh-config-host-field .ssh-config-host-picker .ft-select-shell__icon {
+  margin: auto;
+}
+
 .ssh-config-host-menu {
   max-height: 280px;
   overflow-y: auto;

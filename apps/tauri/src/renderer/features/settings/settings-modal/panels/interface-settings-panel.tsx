@@ -147,8 +147,6 @@ export function InterfaceSettingsPanel() {
         </div>
       </section>
 
-      <TerminalDisplaySettingsSection />
-
       <section className="settings-section theme-config-section">
         <div className="theme-config-heading">
           <div>
@@ -642,6 +640,8 @@ export function InterfaceSettingsPanel() {
           />
         ) : null}
       </section>
+
+      <TerminalDisplaySettingsSection />
 
       <InterfaceDisplaySettingsSections />
 

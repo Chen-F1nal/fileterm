@@ -1276,8 +1276,8 @@ mod ui_preferences_tests {
     }
 
     #[test]
-    fn new_install_terminal_renderer_defaults_to_dom() {
-        assert_eq!(default_terminal_renderer(), "dom");
+    fn new_install_terminal_renderer_defaults_to_webgl() {
+        assert_eq!(default_terminal_renderer(), "webgl");
     }
 
     #[test]

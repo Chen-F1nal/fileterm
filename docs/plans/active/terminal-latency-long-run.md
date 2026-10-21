@@ -10,7 +10,7 @@
 
 > 2026-10-21 字形回归更新：用户真实会话发现先前小数网格候选存在断笔/拖影。已删除 WebGL 小数宽度覆盖，恢复上游整数像素图集，仅保留 backing resize 同步。52 组字体/DPI 与实际 WebView2 独立临时终端验证通过；初始已有会话回退 DOM，后续门禁触发开发版自动重启，详见记录。此前候选的网格一致和短测性能数据不能作为当前候选视觉或性能验收依据。详见 [字形回归修复](../../quality/terminal-renderer-windows-2026-10-20/font-regression-fix-2026-10-21.md)。
 
-> 2026-10-21 renderer 设置：Windows 可在“设置 → 界面 → 终端显示”选择 DOM 或 WebGL。新安装默认 DOM；升级时旧 `state.json` 若缺少 renderer 字段会迁移为 WebGL，后续显式选择会保留。已打开终端需重启后切换；WebGL 加载失败、激活失败或 context loss 会回退 DOM。真实 Claude Code 长任务和中文 IME 仍待验证，不能把自动 soak 当作交互长测结论。
+> 2026-10-21 renderer 设置：Windows、macOS 和 Linux 均可在“设置 → 界面 → 终端显示”选择 DOM 或 WebGL。新安装及旧 `state.json` 缺少 renderer 字段时默认 WebGL；已保存的选择会保留。已打开终端需重启后切换；WebGL 加载失败、激活失败或 context loss 会回退 DOM。真实 Claude Code 长任务和中文 IME 仍待验证，不能把自动 soak 当作交互长测结论。
 
 ## 2026-10-21：Windows DOM / WebGL 两小时 React workspace soak
 
@@ -28,7 +28,7 @@ renderer-health 与 359 条完整 Windows 原生样本：目标 WebGL PTY 全程
 React 错误签名或 context loss；一条无脚本归因的 3.879–4.407 秒长帧仍未解释。进程组内存峰值后
 回落，但 idle 观察不能证明泄漏已解决。六小时预期时长已过，shell 提示符未被 app.log 记录，故
 `Start-Sleep` 返回无法独立确认；筛选日志和摘要见 [Windows 记录](../../quality/terminal-renderer-windows-2026-10-20/README.md#current-development-window)。
-该 soak 记录形成时，真实 Claude Code、持续 PTY/ACK、中文 IME 与物理选区仍待交互验证，默认仍为 DOM；当前 Windows 默认状态见本计划顶部更新。
+该 soak 记录形成时，真实 Claude Code、持续 PTY/ACK、中文 IME 与物理选区仍待交互验证，默认仍为 DOM；当前三平台默认状态见本计划顶部更新。
 
 ## 2026-10-21：修复 Windows WebGL 网格与 backing resize
 
@@ -72,7 +72,7 @@ CPU 增量 6.59/2.05s。只有一次合成 run，不能当作性能结论或泄�
 ## 2026-10-20：Windows GPU Chromium 预检与 Tauri 开发开关
 
 最初基于 PR #348 分支增加 `VITE_FILETERM_TERMINAL_RENDERER` 开发版对照开关；后续 Windows 设置页已提供
-DOM/WebGL 选择：新安装默认 DOM，旧配置缺少 renderer 字段时迁移 WebGL，之后保存的用户选择跨版本保留。
+DOM/WebGL 选择：新安装和旧配置缺少 renderer 字段时默认 WebGL，之后保存的用户选择跨版本保留。
 加载失败、WebGL 初始化失败和 context loss 都回 DOM；终端销毁时释放 addon、主动丢失
 WebGL context，并在 renderer 变化后重新挂接 xterm 阶段诊断。普通生产版不记录默认 renderer 事件。
 
@@ -191,7 +191,7 @@ CPU 降速、4,000 批回放约 87.45 秒完成，4,000 次全部确认，最终
 
 | 参考                                                                                                                                                                                   | 已核对的做法                                                                   | 对 FileTerm 的判断                                                                                                                                               |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [VS Code 终端渲染](https://code.visualstudio.com/docs/terminal/appearance#_gpu-acceleration)                                                                                           | 默认 WebGL，失败回退 DOM；图形字符和重叠符号有 GPU 绘制支持                    | Windows 设置支持 DOM/WebGL，旧配置迁移 WebGL、新安装默认 DOM；块字 glyph 可触发该终端回退 DOM。真实负载仍需现场对照，不能直接宣称 WebGL 更省内存。               |
+| [VS Code 终端渲染](https://code.visualstudio.com/docs/terminal/appearance#_gpu-acceleration)                                                                                           | 默认 WebGL，失败回退 DOM；图形字符和重叠符号有 GPU 绘制支持                    | Windows、macOS、Linux 设置支持 DOM/WebGL；默认 WebGL，块字 glyph 可触发该终端回退 DOM。真实负载仍需现场对照，不能直接宣称 WebGL 更省内存。                       |
 | [VS Code 输出流控](https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalProcess.ts) 与 [xterm 流控指南](https://xtermjs.org/docs/guides/flowcontrol/)   | 依据尚未解析确认的字符水位暂停/恢复 PTY，回调代表解析完成；批量确认减少调用    | FileTerm 已有每窗 4 批解析信用和有界输出队列，过载会跳过显示。共享 SSH 不能照搬暂停整个连接；输入方向仍缺两级通道的总字节预算。输出与键盘输入是不同方向的背压。  |
 | [Ghostty 同步输出说明](https://ghostty.org/docs/help/synchronized-output)                                                                                                              | 明确列出 Claude Code 的大范围重绘/撕裂案例，建议应用使用同步输出和减少全屏擦除 | 所安装 xterm 6 的 `InputHandler.ts` / `RenderService.ts` 已实现 DEC 2026、行范围合并和安全超时。先验证碎片化帧及额外适配器开销；不能把撕裂报告当成内存泄漏证据。 |
 | [Windows Terminal 渲染源码](https://github.com/microsoft/terminal/blob/main/src/renderer/base/renderer.cpp)                                                                            | 对可见区域与 dirty areas 求交后绘制，支持同步输出                              | 额外符号/着色工作也应围绕实际变化行合并。`TerminalLogColorizer` 当前每次写入完成都在解析确认回调之前扫描着色，是待剖析的实际热路径。                             |

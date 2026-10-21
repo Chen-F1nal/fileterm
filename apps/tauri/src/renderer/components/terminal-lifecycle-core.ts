@@ -11,7 +11,7 @@ import { isClinkAutosuggestHelpUrl } from '../app/terminal-transcript'
 import { registerTerminalEmojiWidths } from '../xterm-adapters/terminal-emoji-widths'
 import { t } from '../i18n'
 import { getConfiguredMonoFontFamily } from '../app/font-metrics'
-import { getTerminalRendererPreference } from '../app/terminal-renderer-preference'
+import { getTerminalRendererPreference, supportsTerminalRenderer } from '../app/terminal-renderer-preference'
 import { getTerminalLogColorPalette, TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { registerTerminalForegroundAdapter } from '../xterm-adapters/terminal-foreground-adapter'
 import { registerTerminalRenderCacheLimits } from '../xterm-adapters/terminal-render-cache'
@@ -214,7 +214,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   const rendererOverride = import.meta.env.DEV ? import.meta.env.VITE_FILETERM_TERMINAL_RENDERER : undefined
   const requestedRenderer =
     rendererOverride === 'dom' || rendererOverride === 'webgl' ? rendererOverride : getTerminalRendererPreference()
-  const shouldUseWebgl = window.fileterm?.platform === 'win32' && requestedRenderer === 'webgl'
+  const shouldUseWebgl = supportsTerminalRenderer(window.fileterm?.platform) && requestedRenderer === 'webgl'
   if (shouldUseWebgl) {
     enableDomRendererAdapters()
     const blockCell = terminal.buffer.active.getNullCell()
