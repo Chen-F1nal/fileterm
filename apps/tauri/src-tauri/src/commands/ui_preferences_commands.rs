@@ -13,6 +13,9 @@ pub fn app_get_ui_preferences(app: AppHandle) -> Result<UiPreferences, AppError>
             theme: DEFAULT_UI_THEME.to_string(),
             locale: default_ui_locale().to_string(),
             terminal_renderer: default_terminal_renderer(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: default_auto_check_updates(),
@@ -72,6 +75,12 @@ pub fn app_set_ui_preferences(
     }
     if let Some(locale) = input.locale {
         preferences.locale = locale;
+    }
+    if let Some(categories) = input.diagnostic_log_categories {
+        preferences.diagnostic_log_categories.extend(categories);
+    }
+    if let Some(weight) = input.terminal_font_weight {
+        preferences.terminal_font_weight = weight;
     }
     if let Some(terminal_renderer) = input.terminal_renderer {
         preferences.terminal_renderer = terminal_renderer;
@@ -206,6 +215,7 @@ pub fn app_set_ui_preferences(
     let content = serde_json::to_string_pretty(&preferences)
         .map_err(|error| AppError::Serialization(error.to_string()))?;
     std::fs::write(path, content).map_err(|error| AppError::Storage(error.to_string()))?;
+    crate::services::logging::set_categories(preferences.diagnostic_log_categories.clone());
     if previous_app_icon != preferences.app_icon {
         if let Err(error) = crate::app_icon::set_app_icon(&app, &preferences.app_icon) {
             crate::services::logging::warn(
@@ -341,6 +351,8 @@ pub fn app_toggle_terminal_zoom_lock(app: AppHandle) -> Result<UiPreferences, Ap
             theme: None,
             locale: None,
             terminal_renderer: None,
+            terminal_font_weight: None,
+            diagnostic_log_categories: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,
@@ -378,6 +390,8 @@ pub fn app_toggle_ui_zoom_lock(app: AppHandle) -> Result<UiPreferences, AppError
             theme: None,
             locale: None,
             terminal_renderer: None,
+            terminal_font_weight: None,
+            diagnostic_log_categories: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,
@@ -422,6 +436,8 @@ pub fn app_adjust_ui_zoom(app: AppHandle, operation: &str) -> Result<UiPreferenc
             theme: None,
             locale: None,
             terminal_renderer: None,
+            terminal_font_weight: None,
+            diagnostic_log_categories: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,

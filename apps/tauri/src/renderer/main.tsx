@@ -9,6 +9,7 @@ import { getLocale, setLocale, t } from './i18n'
 import { resolveRendererPlatform } from './lib/renderer-platform'
 import { applyThemeVariables, type ThemeMode } from './app/theme-config'
 import { applyUiZoomPercent } from './app/ui-zoom'
+import { setTerminalFontWeight } from './app/font-metrics'
 import { setTerminalRendererPreference } from './app/terminal-renderer-preference'
 import { MainWindowReveal } from './lib/main-window-reveal'
 import './styles/index.css'
@@ -104,6 +105,7 @@ void createTauriApi()
       })
       .then(async (initialUiPreferences) => {
         setTerminalRendererPreference(initialUiPreferences?.terminalRenderer ?? 'webgl')
+        setTerminalFontWeight(initialUiPreferences?.terminalFontWeight ?? 400)
         const searchParams = new URLSearchParams(window.location.search)
         const queryTheme = searchParams.get('theme')
         const isThemeMode = (val: unknown): val is ThemeMode =>

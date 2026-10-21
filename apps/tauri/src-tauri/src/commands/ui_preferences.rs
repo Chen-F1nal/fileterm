@@ -35,6 +35,12 @@ pub struct UiPreferences {
     pub locale: String,
     #[serde(default = "default_terminal_renderer")]
     pub terminal_renderer: String,
+    #[serde(default = "default_terminal_font_weight")]
+    pub terminal_font_weight: u16,
+    #[serde(default = "crate::services::logging::default_categories")]
+    pub diagnostic_log_categories: BTreeMap<String, bool>,
+    #[serde(default)]
+    diagnostic_log_defaults_version: u8,
     #[serde(default = "default_theme_config")]
     pub theme_config: ThemeConfig,
     #[serde(default)]
@@ -93,6 +99,8 @@ pub struct UiPreferencesInput {
     pub theme: Option<String>,
     pub locale: Option<String>,
     pub terminal_renderer: Option<String>,
+    pub terminal_font_weight: Option<u16>,
+    pub diagnostic_log_categories: Option<BTreeMap<String, bool>>,
     pub theme_config: Option<ThemeConfig>,
     pub custom_themes: Option<Vec<SavedTheme>>,
     pub auto_check_updates: Option<bool>,
@@ -143,6 +151,10 @@ fn ui_locale_for_system_tag(locale: Option<&str>) -> &'static str {
 
 fn default_ui_locale() -> &'static str {
     ui_locale_for_system_tag(sys_locale::get_locale().as_deref())
+}
+
+fn default_terminal_font_weight() -> u16 {
+    400
 }
 
 fn default_terminal_renderer() -> String {
@@ -481,6 +493,16 @@ fn normalize_saved_themes(themes: Vec<SavedTheme>) -> Vec<SavedTheme> {
 }
 
 fn normalize_ui_preferences(mut preferences: UiPreferences) -> UiPreferences {
+    if preferences.diagnostic_log_defaults_version < 2 {
+        preferences.diagnostic_log_categories = crate::services::logging::migrate_categories(preferences.diagnostic_log_categories);
+        preferences.diagnostic_log_defaults_version = 2;
+    }
+    if !matches!(preferences.terminal_font_weight, 400 | 500 | 600) {
+        preferences.terminal_font_weight = default_terminal_font_weight();
+    }
+    preferences.diagnostic_log_categories = crate::services::logging::normalize_categories(
+        preferences.diagnostic_log_categories,
+    );
     if !matches!(preferences.terminal_renderer.as_str(), "dom" | "webgl") {
         preferences.terminal_renderer = INVALID_TERMINAL_RENDERER_FALLBACK.to_string();
     }

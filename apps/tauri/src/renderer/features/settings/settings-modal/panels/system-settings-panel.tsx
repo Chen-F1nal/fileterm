@@ -1,3 +1,4 @@
+import { DiagnosticLogSettings } from './diagnostic-log-settings'
 import type { FileTermDesktopApi } from '@fileterm/core'
 import { type LocaleMessages } from '../../../../i18n'
 import { useSettingsModalContext } from '../context'
@@ -34,6 +35,7 @@ export function SystemSettingsPanel() {
 
       <section className="settings-section">
         <h3>{t.systemLogsInfo}</h3>
+        <DiagnosticLogSettings desktopApi={desktopApi} t={t} />
         <div className="logs-shortcut-card">
           <p>{t.settingsLogsDescription}</p>
           <button className="flat-button compact" onClick={onOpenLogsDirectory} type="button">

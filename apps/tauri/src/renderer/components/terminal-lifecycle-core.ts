@@ -10,7 +10,7 @@ import type { TerminalZoomOperation } from '@fileterm/core'
 import { isClinkAutosuggestHelpUrl } from '../app/terminal-transcript'
 import { registerTerminalEmojiWidths } from '../xterm-adapters/terminal-emoji-widths'
 import { t } from '../i18n'
-import { getConfiguredMonoFontFamily } from '../app/font-metrics'
+import { getConfiguredMonoFontFamily, getTerminalFontWeight } from '../app/font-metrics'
 import { getTerminalRendererPreference, supportsTerminalRenderer } from '../app/terminal-renderer-preference'
 import { getTerminalLogColorPalette, TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { registerTerminalForegroundAdapter } from '../xterm-adapters/terminal-foreground-adapter'
@@ -117,6 +117,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     ...getTerminalCompatibilityOptions(isWindowsPty),
     fontFamily: getConfiguredMonoFontFamily(),
     fontSize: scaleTerminalFontSizeForUiZoom(getTerminalFontSize(options.profileIdRef.current)),
+    fontWeight: getTerminalFontWeight(),
     lineHeight: 1.05,
     cursorBlink: true,
     cursorStyle: 'bar',

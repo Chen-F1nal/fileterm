@@ -606,7 +606,7 @@ mod ui_preferences_tests {
 
     use super::{
         default_app_icon, default_local_terminal_shells, default_overview_section_order,
-        default_terminal_renderer,
+        default_terminal_renderer, default_terminal_font_weight,
         default_compact_tab_bar, default_tab_bar_layout, default_ui_locale,
         default_resource_monitoring_metric_order, default_resource_monitoring_metrics,
         default_theme_config, default_update_channel, normalize_local_terminal_shells,
@@ -775,6 +775,9 @@ mod ui_preferences_tests {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
             terminal_renderer: "dom".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: vec![
                 SavedTheme {
@@ -835,6 +838,9 @@ mod ui_preferences_tests {
             theme: "fileterm-light".to_string(),
             locale: "zhCN".to_string(),
             terminal_renderer: "dom".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: custom_theme,
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -873,6 +879,9 @@ mod ui_preferences_tests {
             theme: "unknown-theme".to_string(),
             locale: "unknown-locale".to_string(),
             terminal_renderer: "invalid".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
@@ -981,6 +990,9 @@ mod ui_preferences_tests {
             theme: "default-light".to_string(),
             locale: "enUS".to_string(),
             terminal_renderer: "webgl".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
@@ -1039,6 +1051,9 @@ mod ui_preferences_tests {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
             terminal_renderer: "dom".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -1098,6 +1113,9 @@ mod ui_preferences_tests {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
             terminal_renderer: "dom".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -1147,6 +1165,9 @@ mod ui_preferences_tests {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
             terminal_renderer: "dom".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: true,
@@ -1351,6 +1372,9 @@ mod ui_preferences_tests {
             theme: "default-dark".to_string(),
             locale: "zhCN".to_string(),
             terminal_renderer: "dom".to_string(),
+            terminal_font_weight: default_terminal_font_weight(),
+            diagnostic_log_categories: crate::services::logging::default_categories(),
+            diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
             auto_check_updates: false,
@@ -1386,6 +1410,34 @@ mod ui_preferences_tests {
         assert_eq!(preferences["showMacosMenuBarIcon"], false);
         assert_eq!(preferences["updateChannel"], "beta");
         assert_eq!(preferences["terminalRenderer"], "dom");
+        assert_eq!(preferences["terminalFontWeight"], 400);
+        assert_eq!(preferences["diagnosticLogCategories"]["connection"], false);
+        assert_eq!(preferences["diagnosticLogCategories"]["performance"], false);
+        let mut previous_defaults = preferences.clone();
+        previous_defaults["diagnosticLogDefaultsVersion"] = serde_json::json!(1);
+        previous_defaults["diagnosticLogCategories"]["performance"] = serde_json::json!(true);
+        let mut migrated = normalize_ui_preferences(serde_json::from_value(previous_defaults).unwrap());
+        assert_eq!(migrated.diagnostic_log_defaults_version, 2);
+        assert!(migrated.diagnostic_log_categories.values().all(|enabled| !enabled));
+        // A user can enable the same combination after migration without it being reset again.
+        migrated.diagnostic_log_categories.insert("performance".into(), true);
+        assert!(normalize_ui_preferences(migrated).diagnostic_log_categories["performance"]);
+
+        let mut legacy = preferences.clone();
+        legacy.as_object_mut().unwrap().remove("terminalFontWeight");
+        legacy.as_object_mut().unwrap().remove("diagnosticLogCategories");
+        let mut loaded: UiPreferences = serde_json::from_value(legacy).unwrap();
+        assert_eq!(loaded.terminal_font_weight, 400);
+        assert_eq!(loaded.diagnostic_log_categories, crate::services::logging::default_categories());
+        loaded.terminal_font_weight = 500;
+        assert_eq!(normalize_ui_preferences(loaded).terminal_font_weight, 500);
+        for weight in [0, 100, 450, 600, 700] {
+            let mut value = preferences.clone();
+            value["terminalFontWeight"] = serde_json::json!(weight);
+            let loaded: UiPreferences = serde_json::from_value(value).unwrap();
+            assert_eq!(normalize_ui_preferences(loaded).terminal_font_weight, if weight == 600 { 600 } else { 400 });
+        }
+
         assert_eq!(preferences["tabBarLayout"], "host-groups");
         assert_eq!(preferences["compactTabBar"], true);
         assert_eq!(preferences["overviewShowStats"], false);

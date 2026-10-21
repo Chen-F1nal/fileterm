@@ -2146,6 +2146,26 @@ export const UI_ZOOM_PERCENT_STEP = 10
 
 export type AppIconVariant = 'classic' | 'material' | 'clean'
 export type TerminalRenderer = 'dom' | 'webgl'
+export type TerminalFontWeight = 400 | 500 | 600
+
+export const DIAGNOSTIC_LOG_CATEGORIES = [
+  'app',
+  'workspace',
+  'connection',
+  'terminal',
+  'monitoring',
+  'performance',
+  'files',
+  'transfer',
+  'storage',
+  'security',
+  'updates',
+  'integration',
+  'logging',
+  'other'
+] as const
+export type DiagnosticLogCategory = (typeof DIAGNOSTIC_LOG_CATEGORIES)[number]
+export type DiagnosticLogCategories = Record<DiagnosticLogCategory, boolean>
 
 /** Session tabs grouped under a host list, or every tab in one row. */
 export type TabBarLayout = 'host-groups' | 'single-row'
@@ -2157,6 +2177,9 @@ export interface UiPreferences {
   theme: ThemeMode
   locale: 'zhCN' | 'enUS'
   terminalRenderer: TerminalRenderer
+  terminalFontWeight: TerminalFontWeight
+  diagnosticLogCategories: DiagnosticLogCategories
+  diagnosticLogDefaultsVersion: number
   themeConfig: ThemeConfig
   filetermThemeResetAppVersion: string | null
   customThemes: SavedTheme[]
@@ -2187,6 +2210,8 @@ export interface UiPreferencesInput {
   theme?: UiPreferences['theme']
   locale?: UiPreferences['locale']
   terminalRenderer?: UiPreferences['terminalRenderer']
+  terminalFontWeight?: TerminalFontWeight
+  diagnosticLogCategories?: Partial<DiagnosticLogCategories>
   themeConfig?: ThemeConfig
   customThemes?: SavedTheme[]
   autoCheckUpdates?: boolean

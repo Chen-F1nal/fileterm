@@ -30,6 +30,7 @@ import {
 import { emptyState, localPreviewFiles, previewLocalPath, previewState } from '../app/app-data'
 import { withParentRow } from '../app/app-utils'
 import { t } from '../i18n'
+import { setTerminalFontWeight } from '../app/font-metrics'
 import { setTerminalRendererPreference } from '../app/terminal-renderer-preference'
 import { resolveRendererPlatform } from '../lib/renderer-platform'
 import type { ThemeMode } from './use-theme-mode'
@@ -257,6 +258,7 @@ export function useWorkspaceIpcSync({
 
     return desktopApi.onUiPreferencesChanged((preferences) => {
       setTerminalRendererPreference(preferences.terminalRenderer)
+      setTerminalFontWeight(preferences.terminalFontWeight)
       lastPersistedUiPreferencesRef.current = syncedUiPreferencesFrom(preferences)
       if (isThemeMode(preferences.theme)) {
         onThemeModeChangeRef.current(preferences.theme)
@@ -298,6 +300,7 @@ export function useWorkspaceIpcSync({
           return
         }
         setTerminalRendererPreference(preferences.terminalRenderer)
+        setTerminalFontWeight(preferences.terminalFontWeight)
         lastPersistedUiPreferencesRef.current = syncedUiPreferencesFrom(preferences)
         setCanPersistUiPreferences(true)
         if (isThemeMode(preferences.theme)) {

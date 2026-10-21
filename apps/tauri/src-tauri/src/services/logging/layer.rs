@@ -134,6 +134,9 @@ where
             .as_deref()
             .map(LogCategory::from_name)
             .unwrap_or_else(|| LogCategory::from_scope(scope));
+        if !super::preferences::enabled(level, category) {
+            return;
+        }
         let span_path = context.event_scope(event).map(|spans| {
             spans
                 .from_root()
