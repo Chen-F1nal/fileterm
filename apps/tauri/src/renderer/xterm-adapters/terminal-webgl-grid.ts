@@ -1,5 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { isWebglAtlasCacheFull, resetWebglAtlasCache } from './terminal-webgl-atlas-cache'
+import { registerWebglTextureSlots } from './terminal-webgl-textures'
 
 type WebglGridRenderer = {
   _gl?: WebGL2RenderingContext
@@ -33,6 +34,8 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
     throw new Error('Unsupported xterm WebGL grid; use DOM')
   }
 
+  const textures = registerWebglTextureSlots(renderer._gl, renderer._glyphRenderer.value)
+
   // Keep upstream integer cell widths: fractional atlas bounds read invalid pixel indices.
   // shortcut: xterm 6 / addon-webgl 0.19 internals; recheck on either upgrade.
   const originalBackingResize = renderer._setCanvasDevicePixelDimensions
@@ -52,6 +55,7 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
     renderer.handleCharSizeChanged()
   } catch (error) {
     renderer._setCanvasDevicePixelDimensions = originalBackingResize
+    textures.dispose()
     throw error
   }
 
@@ -92,6 +96,7 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
 
   return {
     dispose() {
+      textures.dispose()
       webglTerminals.delete(registration)
       if (renderer.renderRows === render) renderer.renderRows = originalRender
       if (terminal.clearTextureAtlas === clearAtlas) terminal.clearTextureAtlas = originalClearAtlas

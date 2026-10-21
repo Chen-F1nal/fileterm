@@ -1,5 +1,9 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-21：Windows WebView2 纹理槽保留
+
+在当前 Windows Tauri 开发版和独立 Claude Code PTY 中接续 PR #351。真实 WebView2 复现字号变化后 CPU 图集降至 1 页，而历史纹理请求仍为 47,535,432 字节；修复未使用槽与旧 mip levels 后降至 1,398,160 字节，临时 runtime 销毁归零。两轮真实 Claude 短请求完成；12 分钟逐进程记录有峰值后回落，但不能归因于修复，也不能代替数小时/整夜负载验收。环境、原始本地归档、门禁与限制见 [Windows 纹理接续记录](../../quality/terminal-windows-texture-storage-2026-10-21.md)。整体长期卡死任务继续保持进行中。
+
 ## 2026-10-21：RGB 图集增长与清理后旧字形保留
 
 先提交上一轮修复 `ae67e84f`。新增 RGB 输出对照，修复前 6,000 批图集约 127 MiB、GC 后 heap 约 82 MiB；修复后同批并额外持续五分钟，图集稳定 33 MiB、GC 后 heap 约 9.5 MiB；修复重复清理仍保留旧字形，以及清空后的合并页面未复用。缓存回收按共享终端最大视口保留工作空间，不改原始颜色与终端历史。扩展长测和 Windows 验收边界见[缓存增长复核](../../quality/terminal-webgl-cache-growth-2026-10-21.md)。

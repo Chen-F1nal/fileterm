@@ -2,6 +2,8 @@
 
 ## 当前状态
 
+Windows 接续已完成一次短测：真实 WebView2 确认并修复非活动纹理槽/旧 mip levels 保留；真实 Claude 两轮短请求通过，长期卡死和真实 GPU/native 根因仍待确认。新证据与门禁结果见 [Windows 纹理接续记录](terminal-windows-texture-storage-2026-10-21.md)。以下待验证步骤保留为本次接续的原始交接背景。
+
 工作分支：`fix/logging-controls-terminal-font`。
 
 - `91eac3cd`：日志分类默认降噪、设置紧凑布局与字体字重。

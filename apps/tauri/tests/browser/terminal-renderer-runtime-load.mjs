@@ -299,6 +299,8 @@ try {
                 const slots = renderer._glyphRenderer.value._atlasTextures.map((slot, index) => ({
                   index,
                   active: index < pages,
+                  width: renderer._charAtlas.pages[index]?.canvas.width ?? 1,
+                  height: renderer._charAtlas.pages[index]?.canvas.height ?? 1,
                   ...window.webglTextureTrace.describe(slot.texture)
                 }))
                 return { pages, slots, ...window.webglTextureTrace.snapshot() }
@@ -329,6 +331,21 @@ try {
       if (textureProbe) {
         assert.equal(textureProbe.before.unknownTextures, 0)
         assert.equal(textureProbe.after.unknownTextures, 0)
+        for (const phase of [textureProbe.before, textureProbe.after]) {
+          for (const slot of phase.slots) {
+            let { width, height } = slot
+            let bytes = width * height * 4
+            let levels = 1
+            while (slot.active && (width > 1 || height > 1)) {
+              width = Math.max(1, Math.floor(width / 2))
+              height = Math.max(1, Math.floor(height / 2))
+              bytes += width * height * 4
+              levels++
+            }
+            assert.equal(slot.bytes, bytes, 'atlas slots must retain only current page storage')
+            assert.equal(slot.levels, levels, 'atlas slots must release obsolete mip levels')
+          }
+        }
       }
       assert.deepEqual(errors, [])
       const result = {

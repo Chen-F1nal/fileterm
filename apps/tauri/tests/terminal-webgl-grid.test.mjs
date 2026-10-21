@@ -18,7 +18,11 @@ vm.runInNewContext(
     readFileSync(new URL('../src/renderer/xterm-adapters/terminal-webgl-grid.ts', import.meta.url), 'utf8'),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }
   ).outputText,
-  { exports, require: () => atlasCache }
+  {
+    exports,
+    require: (name) =>
+      name === './terminal-webgl-atlas-cache' ? atlasCache : { registerWebglTextureSlots: () => ({ dispose() {} }) }
+  }
 )
 const { registerTerminalWebglGrid } = exports
 
