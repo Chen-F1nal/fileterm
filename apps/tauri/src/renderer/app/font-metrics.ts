@@ -9,6 +9,16 @@
 import { APP_EVENT, onAppEvent } from '../lib/app-events'
 import { MONO_FONT_FALLBACK } from './font-stacks'
 
+export function getTerminalFontWeight(): 400 | 500 | 600 {
+  if (typeof document === 'undefined') return 400
+  const weight = Number(getComputedStyle(document.documentElement).getPropertyValue('--terminal-font-weight'))
+  return weight === 500 || weight === 600 ? weight : 400
+}
+
+export function setTerminalFontWeight(weight: number) {
+  document.documentElement.style.setProperty('--terminal-font-weight', String(weight))
+}
+
 export const FILETERM_MONO_FONT_FAMILY = MONO_FONT_FALLBACK
 
 export function getConfiguredMonoFontFamily() {
@@ -75,7 +85,11 @@ export function observeCanvasTextMetrics(onMetricsChanged: (fontFamily: string) 
   window.visualViewport?.addEventListener('resize', onViewportResize)
   const loadConfiguredFonts = () => {
     const family = getConfiguredMonoFontFamily()
-    void Promise.all([document.fonts.load(`400 12px ${family}`), document.fonts.load(`600 13px ${family}`)])
+    void Promise.all([
+      document.fonts.load(`${getTerminalFontWeight()} 12px ${family}`),
+      document.fonts.load(`600 13px ${family}`),
+      document.fonts.load(`700 12px ${family}`)
+    ])
       .catch(() => {
         // Keep bundled fallbacks usable when an imported face fails decoding.
       })
@@ -90,10 +104,13 @@ export function observeCanvasTextMetrics(onMetricsChanged: (fontFamily: string) 
   document.fonts.addEventListener('loadingerror', notify)
 
   let observedFamily = getConfiguredMonoFontFamily()
+  let observedWeight = getTerminalFontWeight()
   const fontObserver = new MutationObserver(() => {
     const nextFamily = getConfiguredMonoFontFamily()
-    if (nextFamily !== observedFamily) {
+    const nextWeight = getTerminalFontWeight()
+    if (nextFamily !== observedFamily || nextWeight !== observedWeight) {
       observedFamily = nextFamily
+      observedWeight = nextWeight
       notify()
       loadConfiguredFonts()
     }

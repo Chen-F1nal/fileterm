@@ -15,6 +15,10 @@ async fn set_ftp_state(
         .iter_mut()
         .find(|tab| tab.id == tab_id)
     {
+        if tab.status != status {
+            crate::services::logging::session(app, "INFO", "app:connection", tab_id,
+                format!("state={:?}->{status:?}", tab.status));
+        }
         tab.status = status;
     }
     if let Some(session) = state.sessions.write().await.get_mut(tab_id) {

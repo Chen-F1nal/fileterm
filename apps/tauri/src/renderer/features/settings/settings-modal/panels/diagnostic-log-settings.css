@@ -1,0 +1,91 @@
+.diagnostic-log-settings {
+  container-type: inline-size;
+}
+
+.diagnostic-log-intro {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.diagnostic-log-intro p,
+.diagnostic-log-help {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.diagnostic-log-intro p + p,
+.diagnostic-log-help {
+  color: var(--text-muted);
+}
+
+.diagnostic-log-help {
+  margin-top: 12px;
+}
+
+.diagnostic-log-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.diagnostic-log-card {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.diagnostic-log-card:has(input:checked) {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.diagnostic-log-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.diagnostic-log-card:focus-within {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.diagnostic-log-card:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.diagnostic-log-card-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.diagnostic-log-card .command-toggle {
+  flex: 0 0 auto;
+  gap: 0;
+}
+
+@container (max-width: 660px) {
+  .diagnostic-log-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 420px) {
+  .diagnostic-log-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

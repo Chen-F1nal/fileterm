@@ -500,6 +500,7 @@ fn start_session_worker(
 }
 
 async fn stop_session_worker(state: &crate::services::workspace::WorkspaceState, tab_id: &str) {
+    crate::services::logging::write_global("INFO", &format!("app:connection:{tab_id}"), "session stop requested");
     state.connection_operations.forget_tab(tab_id).await;
     crate::sessions::local_terminal::deactivate_local_terminal_runtime(state, tab_id).await;
     if let Some((_, cancellation)) = state

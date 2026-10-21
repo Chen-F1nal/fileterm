@@ -9,7 +9,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { createTerminalScrollController } from './terminal-scroll-controller'
 import { TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { t } from '../i18n'
-import { getConfiguredMonoFontFamily } from '../app/font-metrics'
+import { getConfiguredMonoFontFamily, getTerminalFontWeight } from '../app/font-metrics'
 import {
   getTerminalFontSize,
   hydrateTerminalFontSizes,
@@ -469,6 +469,12 @@ export function useTerminalView({
       if (terminal && terminal.options.fontFamily !== configuredFontFamily) {
         terminal.options.fontFamily = configuredFontFamily
         refreshTerminalRender(terminal)
+      }
+      if (terminal && terminal.options.fontWeight !== getTerminalFontWeight()) {
+        terminal.options.fontWeight = getTerminalFontWeight()
+        refreshTerminalRender(terminal)
+        lastSyncedSizeRef.current = null
+        if (fitAddonRef.current) syncTerminalSize(fitAddonRef.current, terminal, { force: true })
       }
       if (terminal) {
         applyTerminalFontSize(getTerminalFontSize(profileIdRef.current))

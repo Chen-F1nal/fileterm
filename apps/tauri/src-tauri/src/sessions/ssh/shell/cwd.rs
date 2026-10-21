@@ -47,6 +47,10 @@ async fn update_tab_status_and_emit_with_snapshot(
     {
         let mut tabs = state.tabs.write().await;
         if let Some(tab) = tabs.iter_mut().find(|t| t.id == tab_id) {
+            if tab.status != status {
+                crate::services::logging::session(app, "INFO", "app:connection", tab_id,
+                    format!("state={:?}->{status:?}", tab.status));
+            }
             tab.status = status;
         }
     }

@@ -6,6 +6,7 @@ pub enum LogCategory {
     Connection,
     Terminal,
     Monitoring,
+    Performance,
     Files,
     Transfer,
     Storage,
@@ -22,6 +23,9 @@ impl LogCategory {
     }
 
     pub fn from_scope(scope: &str) -> Self {
+        if matches!(scope, "renderer:performance" | "app:windows-performance") {
+            return Self::Performance;
+        }
         if scope == "renderer:monitoring" {
             return Self::Monitoring;
         }
@@ -46,16 +50,17 @@ impl LogCategory {
             "app" => Some(Self::App),
             "window" | "fonts" | "panic" => Some(Self::App),
             "workspace" | "renderer" => Some(Self::Workspace),
-            "connection" | "ssh" | "ssh-probe" | "ssh-interaction" | "ftp" | "telnet"
-            | "serial" | "connection-test" | "worker" => Some(Self::Connection),
+            "russh" | "russh_sftp" | "connection" | "ssh" | "ssh-probe" | "ssh-interaction"
+            | "ftp" | "telnet" | "serial" | "connection-test" | "worker" => Some(Self::Connection),
             "terminal" | "local" => Some(Self::Terminal),
+            "performance" => Some(Self::Performance),
             "metrics" | "monitoring" => Some(Self::Monitoring),
             "sftp" | "files" | "local-files" => Some(Self::Files),
             "transfer" => Some(Self::Transfer),
             "storage" | "profile" => Some(Self::Storage),
             "security" => Some(Self::Security),
             "update" | "updates" => Some(Self::Updates),
-            "mcp" | "ai" | "webdav" | "s3" => Some(Self::Integration),
+            "integration" | "mcp" | "ai" | "webdav" | "s3" => Some(Self::Integration),
             "logging" => Some(Self::Logging),
             _ => None,
         }
@@ -68,6 +73,7 @@ impl LogCategory {
             Self::Connection => "connection",
             Self::Terminal => "terminal",
             Self::Monitoring => "monitoring",
+            Self::Performance => "performance",
             Self::Files => "files",
             Self::Transfer => "transfer",
             Self::Storage => "storage",

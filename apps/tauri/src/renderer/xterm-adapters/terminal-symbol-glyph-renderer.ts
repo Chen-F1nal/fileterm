@@ -5,6 +5,9 @@ import { isBoxDrawingGlyph } from './box-drawing'
 const SOURCE_CLASS = 'xterm-fitted-symbol-source'
 type SourceStyle = { width: string; spacing: string; text: string }
 type GlyphCell = { text: string; width: number }
+type TerminalDimensions = {
+  _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number } } } } }
+}
 
 /** DOM xterm fits a fallback glyph's advance with negative letter-spacing,
  * which does not shrink its ink. The next ANSI/selection span can then paint
@@ -18,6 +21,8 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   if (!rows || !view || !context) return { dispose() {} }
   const sources = new Map<HTMLElement, SourceStyle>()
   const metrics = new Map<string, { left: number; width: number }>()
+  const fonts = new Map<string, string>()
+  let fontOptions = ''
   const reusableCell = terminal.buffer.active.getNullCell()
 
   const collectRow = (row: HTMLElement, rowIndex: number, cellWidth: number, updates: Array<() => void>) => {
@@ -45,8 +50,13 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       if (/[\u2580-\u259f]/u.test(text)) continue
       const columns = cells.reduce((total, cell) => total + cell.width, 0)
       if (columns === 0) continue
-      const style = view.getComputedStyle(source)
-      const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+      const fontKey = `${source.classList.contains('xterm-bold')};${source.classList.contains('xterm-italic')};${source.style.fontStyle};${source.style.fontWeight};${source.style.fontSize};${source.style.fontFamily}`
+      let font = fonts.get(fontKey)
+      if (!font) {
+        const style = view.getComputedStyle(source)
+        font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+        fonts.set(fontKey, font)
+      }
       context.font = font
       const fits = cells.map((cell) => {
         if (!/[\p{Symbol}\p{Punctuation}]/u.test(cell.text)) return undefined
@@ -111,6 +121,11 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
     }
   }
   const renderRows = trackRendererWork('symbol-layout', (indexes: number[]) => {
+    const options = `${terminal.options.fontFamily};${terminal.options.fontSize};${terminal.options.fontWeight};${terminal.options.fontWeightBold}`
+    if (options !== fontOptions) {
+      fontOptions = options
+      fonts.clear()
+    }
     for (const source of sources.keys()) if (!rows.contains(source)) sources.delete(source)
     const affected = indexes.filter((index) => {
       const row = rows.children[index]
@@ -128,7 +143,13 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       )
     })
     if (!affected.length) return
-    const cellWidth = rows.getBoundingClientRect().width / terminal.cols
+    // Reuse xterm's calibrated CSS grid; retain geometry fallback for unknown internals.
+    const measuredWidth = (terminal as unknown as TerminalDimensions)._core?._renderService?.dimensions?.css?.cell
+      ?.width
+    const cellWidth =
+      typeof measuredWidth === 'number' && Number.isFinite(measuredWidth) && measuredWidth > 0
+        ? measuredWidth
+        : rows.getBoundingClientRect().width / terminal.cols
     const updates: Array<() => void> = []
     // Measure all affected rows before changing DOM, avoiding a layout flush per symbol.
     for (const index of affected) {
@@ -145,9 +166,9 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   const observer = new view.MutationObserver((records) => {
     const changed = new Set<HTMLElement>()
     for (const record of records) {
-      let row = record.target instanceof view.HTMLElement ? record.target : record.target.parentElement
-      while (row && row.parentElement !== rows) row = row.parentElement
-      if (row) changed.add(row)
+      // xterm replaces a row's direct children; nested mutations are our own
+      // symbol/block wrappers and must not trigger a second full row scan.
+      if (record.target instanceof view.HTMLElement && record.target.parentElement === rows) changed.add(record.target)
     }
     const children = Array.from(rows.children)
     const indexes = [...changed].map((row) => children.indexOf(row)).filter((index) => index >= 0)
@@ -167,6 +188,7 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       }
       sources.clear()
       metrics.clear()
+      fonts.clear()
     }
   }
 }

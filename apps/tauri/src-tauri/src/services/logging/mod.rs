@@ -6,6 +6,7 @@ mod format;
 mod layer;
 mod level;
 mod panic;
+mod preferences;
 #[cfg(any(target_os = "windows", test))]
 mod windows_performance;
 mod writer;
@@ -16,6 +17,9 @@ pub(crate) use windows_performance::webview_processes::track as track_webview_pr
 pub use category::LogCategory;
 pub use level::LogLevel;
 pub use panic::install_panic_hook;
+pub use preferences::{
+    default_categories, migrate_categories, normalize_categories, set_categories,
+};
 
 use crate::storage::state_path;
 use std::path::PathBuf;
@@ -90,6 +94,9 @@ pub fn write_global(level: &str, scope: &str, message: impl AsRef<str>) {
 }
 
 fn dispatch_event(directory: PathBuf, level: LogLevel, scope: &str, message: &str) {
+    if !preferences::enabled(level, LogCategory::from_scope(scope)) {
+        return;
+    }
     #[cfg(target_os = "windows")]
     windows_performance::observe(scope, message);
     if TRACING_LAYER_ACTIVE.load(Ordering::Acquire) {

@@ -1,4 +1,6 @@
-import type { AppIconVariant, FileTermDesktopApi, TerminalRenderer } from '@fileterm/core'
+import { useEffect, useRef, useState } from 'react'
+import { getTerminalFontWeight, setTerminalFontWeight } from '../../../../app/font-metrics'
+import type { TerminalFontWeight, AppIconVariant, FileTermDesktopApi, TerminalRenderer } from '@fileterm/core'
 import { MAX_UI_ZOOM_PERCENT, MIN_UI_ZOOM_PERCENT, UI_ZOOM_PERCENT_STEP } from '@fileterm/core'
 import { DropdownSelect } from '../../../common/dropdown-select'
 import { RadioCardGroup } from '../../../common/radio-card-group'
@@ -70,10 +72,55 @@ export function TerminalDisplaySettingsSection() {
     setTerminalZoomLockPreference
   } = useSettingsModalContext<TerminalDisplaySettingsContext>()
   const showRendererPreference = supportsTerminalRenderer(desktopApi?.platform)
+  const [weight, setWeight] = useState(getTerminalFontWeight)
+  const [savingWeight, setSavingWeight] = useState(false)
+  const [weightError, setWeightError] = useState(false)
+  const savingWeightRef = useRef(false)
+  useEffect(
+    () => desktopApi?.onUiPreferencesChanged((preferences) => setWeight(preferences.terminalFontWeight)),
+    [desktopApi]
+  )
+  const saveWeight = async (nextWeight: TerminalFontWeight) => {
+    if (!desktopApi || savingWeightRef.current) return
+    savingWeightRef.current = true
+    setSavingWeight(true)
+    setWeightError(false)
+    try {
+      const preferences = await desktopApi.setUiPreferences({ terminalFontWeight: nextWeight })
+      setWeight(preferences.terminalFontWeight)
+      setTerminalFontWeight(preferences.terminalFontWeight)
+    } catch {
+      setWeightError(true)
+    } finally {
+      savingWeightRef.current = false
+      setSavingWeight(false)
+    }
+  }
 
   return (
     <section className="settings-section">
       <h3>{t.terminalDisplaySettings}</h3>
+      <div className="theme-config-control" aria-busy={savingWeight}>
+        <span className="theme-config-label">{t.terminalFontWeight}</span>
+        <DropdownSelect
+          ariaLabel={t.terminalFontWeight}
+          className="theme-config-select"
+          disabled={!desktopApi || savingWeight}
+          value={String(weight)}
+          onChange={(value) => void saveWeight(Number(value) as TerminalFontWeight)}
+          options={[
+            { value: '400', label: t.terminalFontWeightNormal },
+            { value: '500', label: t.terminalFontWeightMedium },
+            { value: '600', label: t.terminalFontWeightSemibold }
+          ]}
+        />
+      </div>
+      <p className="settings-tools-hint">{t.terminalFontWeightHint}</p>
+      {weightError ? (
+        <p className="modal-error" role="alert">
+          {t.terminalFontWeightSaveFailed}
+        </p>
+      ) : null}
       {showRendererPreference ? (
         <>
           <p className="settings-tools-hint">{t.terminalDisplaySettingsHint}</p>

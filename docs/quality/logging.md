@@ -4,15 +4,16 @@
 
 Rust 统一入口为 `apps/tauri/src-tauri/src/services/logging/mod.rs`。持久化管线使用 `tracing` subscriber 和自定义 layer，旧的 `logging::debug/info/warn/error/session/write_global` 等 API 作为兼容 facade，把原有调用转成 tracing event。
 
-| 模块        | 职责                                                |
-| ----------- | --------------------------------------------------- |
-| mod.rs      | 稳定 facade、日志目录、subscriber 注册与旧调用适配  |
-| layer.rs    | tracing 字段和 span 提取、级别转换、写入统一 writer |
-| level.rs    | TRACE / DEBUG / INFO / WARN / ERROR 类型与解析      |
-| category.rs | scope 到统一功能分类的映射                          |
-| format.rs   | 秘密脱敏、控制字符转义、单行和长度限制、行格式化    |
-| writer.rs   | 有界队列、后台线程、文件写入、轮转、退出排空        |
-| panic.rs    | panic 位置和消息捕获，同时保留原 stderr 行为        |
+| 模块           | 职责                                                |
+| -------------- | --------------------------------------------------- |
+| mod.rs         | 稳定 facade、日志目录、subscriber 注册与旧调用适配  |
+| layer.rs       | tracing 字段和 span 提取、级别转换、写入统一 writer |
+| level.rs       | TRACE / DEBUG / INFO / WARN / ERROR 类型与解析      |
+| preferences.rs | 分类默认值、规范化与运行时开关                      |
+| category.rs    | scope 到统一功能分类的映射                          |
+| format.rs      | 秘密脱敏、控制字符转义、单行和长度限制、行格式化    |
+| writer.rs      | 有界队列、后台线程、文件写入、轮转、退出排空        |
+| panic.rs       | panic 位置和消息捕获，同时保留原 stderr 行为        |
 
 前端入口为 `apps/tauri/src/renderer/lib/diagnostic-log.ts`，统一 scope 常量和写入失败处理。
 调用链为 renderer → writeDiagnosticLog IPC → Rust tracing event → subscriber layer → writer，组件不直接写文件。`tracing-log` 把依赖通过 `log` facade 发出的记录接入同一订阅器。
@@ -24,7 +25,7 @@ Rust 统一入口为 `apps/tauri/src-tauri/src/services/logging/mod.rs`。持久
 ```
 
 - level 表示严重程度。
-- category 表示统一功能域：app、workspace、connection、terminal、monitoring、files、transfer、storage、security、updates、integration、logging、other。
+- category 表示统一功能域：app、workspace、connection、terminal、monitoring、performance、files、transfer、storage、security、updates、integration、logging、other。
 - scope 保留原功能名和标签 ID，例如 ssh:tab-id、metrics:tab-id、renderer:workspace。
 - 未识别的 scope 归入 other，不丢弃日志；增加业务日志时同步扩充 category.rs 映射。
 - 新 Rust 代码优先使用 `tracing::{debug, info, warn, error}` 并记录具名字段；需要贯穿函数调用的上下文时使用 span / `#[instrument]`。不要把凭据、终端输入或完整远端输出作为字段传入。
@@ -40,7 +41,7 @@ tracing::info!(
 );
 ```
 
-分类用于检索，所有功能的事件仍写入同一个 app.log，方便按时间和 tab_id 串联跨层问题。
+分类用于检索和记录开关，启用的事件仍写入同一个 app.log，方便按时间和 tab_id 串联跨层问题。
 历史行没有 category 字段，新旧行仍兼容原来的时间戳/级别/scope 前缀。
 
 ## 文件与保留
@@ -54,7 +55,7 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 
 ## 级别过滤
 
-使用 tracing-subscriber `EnvFilter`，默认保留 DEBUG 及以上，延续原来的诊断行为。启动前可设置 `FILETERM_LOG_LEVEL` 为 TRACE、DEBUG、INFO、WARN、ERROR，或使用 tracing-subscriber 的 target 过滤指令；大小写不敏感，无法解析时回退到 DEBUG。
+使用 tracing-subscriber `EnvFilter`，级别默认保留 DEBUG 及以上，再应用下方的分类记录设置。启动前可设置 `FILETERM_LOG_LEVEL` 为 TRACE、DEBUG、INFO、WARN、ERROR，或使用 tracing-subscriber 的 target 过滤指令；大小写不敏感，无法解析时回退到 DEBUG。
 该设置在进程启动时读取，修改后需重启。过滤在事件格式化、脱敏和排队前完成，不影响原 renderer console 输出。
 
 ## 写入和限流
@@ -78,7 +79,7 @@ app.log 在下一条日志导致超过 2 MiB 前轮转为 app.log.1，仅保留�
 | `renderer-health.native`                         | 随上述记录，由 Rust 附加                                                             | `transferTasks`、`transferRuns`、`transferProgressSamples`、`terminalOutput.windows`、`terminalOutput.inFlight`、`terminalOutput.queuedBatches`、`terminalOutput.queuedBytes`、`terminalOutput.queuedTabs`       | 只记录数量；锁忙时相应值为 `null`，不是累计历史数或内存字节数                        |
 | `event-loop-gap` / `renderer:performance`        | WARN；可见页面的 1 秒心跳间隔达到 2 秒，最多每 30 秒一次                             | `elapsedMs`、预期/恢复时间锚点、页面是否聚焦、应用版本与平台                                                                                                                                                     | 在 renderer 恢复后才能记录；时间锚点只界定心跳缺口，不能证明阻塞起点或原因           |
 | `terminal-output-parse` / `renderer:performance` | WARN；终端输出解析耗时达到 1 秒、监听器失败或输出发生跳过，最多每 30 秒一次          | `elapsedMs`、待处理字符数和批次数、监听器数、是否有监听器失败、跳过的字节数                                                                                                                                      | 记录确认链路的耗时和积压，不包含终端输出正文                                         |
-| `terminal-renderer` / `renderer:performance`     | INFO；终端 renderer 初始化、WebGL 加载/激活或 DOM 回退时                             | `renderer`、`reason`、Chromium/Edge 版本、GPU vendor/renderer、硬件加速启发式结果                                                                                                                                | 当前只由 Windows 开发版 WebGL 测试开关请求 WebGL；GPU 字符串不可用时字段为 `null`    |
+| `terminal-renderer` / `renderer:performance`     | INFO：初始化/加载/激活；WARN：加载/激活失败或 context loss 回退时                    | `renderer`、`reason`、Chromium/Edge 版本、GPU vendor/renderer、硬件加速启发式结果                                                                                                                                | 三平台按设置选择 renderer；GPU 字符串不可用时字段为 `null`                           |
 | `terminal:output` / category `terminal`          | WARN；renderer 等待输出额度达到 1 秒，或某窗口待发送队列已满；最多每窗口每 30 秒一次 | 等待时记录窗口/标签标识、等待毫秒和额度上限；队列满时记录窗口/标签标识、累计跳过字节数与 `since_last_ack_ms`                                                                                                     | 表示输出显示遇到背压或发生跳过，不包含终端输出正文；跳过后终端会提示可用 Ctrl+L 重绘 |
 
 当前排查分支（尚未发布，beta.9 不含以下新增字段）补充：
@@ -255,3 +256,53 @@ Windows 的效率等级数值越高，表示内在性能较高、能效较低；
 ## 范围
 
 诊断 app.log、终端会话 transcript 和 WebView console 是三个不同入口。诊断日志不自动保存终端输出，console 也不会自动归入文件日志。
+
+## 分类记录设置
+
+设置 → 系统与日志提供各类别的详细诊断记录开关，通过现有 UI preferences 的
+`diagnosticLogCategories` 保存，保存成功后立即应用；启动时在旧数据迁移完成后加载。
+旧配置自动补全默认值，未知类别不会保存；局部更新只覆盖提交的类别。
+
+十四类详细诊断全部默认关闭，包括 SSH 协议/包、逐批终端处理、资源轮询和周期性能摘要。
+应用、安全、更新和日志系统的基础 INFO 记录不受详情开关影响；各类 WARN/ERROR 同样始终保留。
+本次尚未发布的设置中曾保存的三种默认组合（十二类、四类或仅性能开启）会在读取时迁移为新默认，
+迁移版本为 2，下一次保存偏好时落盘；不覆盖迁移后的手动选择。其他自定义组合保持不变。
+`renderer:performance` 与 `app:windows-performance` 独立归入 `performance`，避免被工作区
+或应用日志开关一起关闭。开关控制详细 TRACE/DEBUG/INFO；上述基础 INFO 和 WARN/ERROR 始终通过类别过滤，
+但仍受既有 `FILETERM_LOG_LEVEL` 最低级别限制。用户关闭性能详情后，性能告警仍会记录。
+已进入队列的记录仍可落盘，已有日志不删除；轮转、脱敏、队列容量与会话 transcript 策略保持原样。
+内部 writer 的丢弃/故障摘要继续保留，不经过可关闭的详细诊断类别过滤。
+
+React 崩溃见 `renderer:error`（workspace 类别、ERROR），不需要打开详情也会保留。
+长时间运行 Claude Code 后的卡顿主要结合 `renderer:performance` 的
+`event-loop-gap`、`renderer-long-frame`、`renderer-progress-slow` 和
+`terminal-output-parse` 告警；终端输出积压告警还见 `terminal:output`。
+这些 WARN/ERROR 默认保留；分钟健康摘要需要手动开启性能详情。
+完全冻结时 JavaScript 无法提交新日志，已有日志不能独立确认卡死根因。
+
+基础连接生命周期使用 `app:connection:<tab-id>`，只保存连接状态变化、重连开始、停止请求和断开结果，不记录终端文本、主机认证交互或协议包。
+SSH、FTP、本地终端、Telnet 和串口的状态更新仅在状态实际改变时写入基本记录，目录刷新不重复写“已连接”。应用正常退出另记一条 `application exiting` 后有界排空。
+
+### 继续排查 React 崩溃
+
+- 不开任何详情也会保存 React ErrorBoundary、全局异常与未处理 Promise 拒绝的 ERROR，包括 JavaScript stack、React componentStack 和当时的有限性能/队列上下文。
+- 复现前开启“工作区”“性能与卡顿”“终端”三项，补充工作区事件、分钟性能摘要及终端处理上下文。
+- 若问题由侧栏监控或图表刷新触发，再加开“资源监控”；只有连接/认证本身异常时才打开“连接与协议”。
+- 出问题后及时复制 `app.log` 和 `app.log.1`，提供出错时间、触发操作、是否切标签/分屏或开监控。协议详情无需为了捕获 React 错误而开启。
+
+策略参考：[PuTTY Event Log](https://the.earth.li/~sgtatham/putty/0.85/htmldoc/Chapter3.html#using-eventlog)、[OpenSSH LogLevel](https://man.openbsd.org/ssh_config#LogLevel)、[SecureCRT 排障跟踪](https://www.vandyke.com/support/tips/configure-trace-options-debug-logging-in-securecrt.html)、[WinSCP 日志级别](https://winscp.net/eng/docs/ui_pref_logging)。
+这些资料区分重要连接事件与按需开启的详细调试；FileTerm 的具体基础事件清单属于本项目设计，不是其他产品默认落盘策略的逐项复制。
+
+## WebGL 字形图集与实际回退
+
+`terminalResources.perTerminal[].renderer` 表示实际后端；设置页的 WebGL 选择不保证所有实例均为 WebGL。
+`terminal-renderer` 的 `load-failed` / `activation-failed` / `context-loss` 为 WARN，默认保留。
+块字符不再触发自动回退。
+
+资源摘要增加 `uniqueWebglAtlasPages`、`uniqueWebglAtlasBytesEstimate`、`unknownWebglAtlases` 和
+`webglAtlasEstimateTruncated`，每终端增加 `webglAtlasPages`。图集 canvas 不在 DOM 中，旧的
+`canvasBackingBytesEstimate` 不含它们。新估计按页宽×高×4计算，每个共享图集仅计一次，
+每图集最多读取 64 页；超限是下界，未知私有结构不当作零。它只估计 CPU 侧 RGBA 图集，
+不包含 GPU 纹理副本、mipmap、分配器/驱动和浏览器其他内存，不能直接与任务管理器 RSS 相等。
+
+`terminalResources.uniqueWebglAtlasGlyphs` 统计共享 CPU 图集保留的字形对象数，图集只计一次；页面不暴露计数时为 `null`，64 页上限继续沿用截断标记。可与图集字节估计交叉观察“页面占用稳定但旧字形引用增加”的情况；不是 GPU 对象计数。

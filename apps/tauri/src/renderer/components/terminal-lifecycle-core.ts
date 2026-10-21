@@ -10,7 +10,7 @@ import type { TerminalZoomOperation } from '@fileterm/core'
 import { isClinkAutosuggestHelpUrl } from '../app/terminal-transcript'
 import { registerTerminalEmojiWidths } from '../xterm-adapters/terminal-emoji-widths'
 import { t } from '../i18n'
-import { getConfiguredMonoFontFamily } from '../app/font-metrics'
+import { getConfiguredMonoFontFamily, getTerminalFontWeight } from '../app/font-metrics'
 import { getTerminalRendererPreference, supportsTerminalRenderer } from '../app/terminal-renderer-preference'
 import { getTerminalLogColorPalette, TerminalLogColorizer } from '../xterm-adapters/terminal-log-colorizer'
 import { registerTerminalForegroundAdapter } from '../xterm-adapters/terminal-foreground-adapter'
@@ -35,24 +35,6 @@ import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 type WebglAddonRuntime = WebglAddon & { _renderer?: { _gl?: WebGL2RenderingContext } }
 type TerminalRendererView = Terminal & {
   _core?: { _renderService?: { _renderer?: { value?: unknown } } }
-}
-
-function hasBlockGlyph(
-  terminal: Terminal,
-  start: number,
-  end: number,
-  cell: ReturnType<Terminal['buffer']['active']['getNullCell']>
-) {
-  const buffer = terminal.buffer.active
-  for (let row = Math.max(0, start); row <= Math.min(end, terminal.rows - 1); row++) {
-    const line = buffer.getLine(buffer.viewportY + row)
-    if (!line) continue
-    for (let column = 0; column < Math.min(terminal.cols, line.length); column++) {
-      const codepoint = line.getCell(column, cell)?.getCode() ?? 0
-      if (codepoint >= 0x2580 && codepoint <= 0x259f) return true
-    }
-  }
-  return false
 }
 
 function releaseWebglAddon(addon: WebglAddonRuntime) {
@@ -88,7 +70,7 @@ function logTerminalRenderer(renderer: 'dom' | 'webgl', reason: string, tabId: s
   }
   const gpu = addon ? getWebglDetails(addon) : null
   writeDiagnosticLog(
-    'INFO',
+    renderer === 'dom' && reason !== 'preference' && reason !== 'webgl-loading' ? 'WARN' : 'INFO',
     DIAGNOSTIC_SCOPES.performance,
     JSON.stringify({ event: 'terminal-renderer', tabId, renderer, reason, browser, ...gpu })
   )
@@ -117,6 +99,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     ...getTerminalCompatibilityOptions(isWindowsPty),
     fontFamily: getConfiguredMonoFontFamily(),
     fontSize: scaleTerminalFontSizeForUiZoom(getTerminalFontSize(options.profileIdRef.current)),
+    fontWeight: getTerminalFontWeight(),
     lineHeight: 1.05,
     cursorBlink: true,
     cursorStyle: 'bar',
@@ -161,8 +144,6 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   let webglAddon: WebglAddonRuntime | null = null
   let webglContextLoss: IDisposable | null = null
   let webglGrid: IDisposable | null = null
-  let blockGlyphFallback: IDisposable | null = null
-  let blockGlyphFallbackRequested = false
   let disposed = false
   const enableDomRendererAdapters = () => {
     if (domRendererAdapters.length) return
@@ -187,11 +168,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   const fitRendererGrid = () => {
     if (host.clientWidth > 0 && host.clientHeight > 0) fitAddon.fit()
   }
-  const fallbackToDom = (
-    reason: 'load-failed' | 'activation-failed' | 'context-loss' | 'block-glyph-compatibility'
-  ) => {
-    blockGlyphFallback?.dispose()
-    blockGlyphFallback = null
+  const fallbackToDom = (reason: 'load-failed' | 'activation-failed' | 'context-loss') => {
     const addon = webglAddon
     webglAddon = null
     webglContextLoss?.dispose()
@@ -217,22 +194,10 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   const shouldUseWebgl = supportsTerminalRenderer(window.fileterm?.platform) && requestedRenderer === 'webgl'
   if (shouldUseWebgl) {
     enableDomRendererAdapters()
-    const blockCell = terminal.buffer.active.getNullCell()
-    blockGlyphFallback = terminal.onRender(({ start, end }) => {
-      if (blockGlyphFallbackRequested || !hasBlockGlyph(terminal, start, end, blockCell)) return
-      blockGlyphFallbackRequested = true
-      queueMicrotask(() => {
-        if (!disposed && webglAddon) fallbackToDom('block-glyph-compatibility')
-      })
-    })
     logTerminalRenderer('dom', 'webgl-loading', options.tabIdRef.current)
     void import('@xterm/addon-webgl')
       .then(({ WebglAddon: WebglAddonConstructor }) => {
         if (disposed) return
-        if (blockGlyphFallbackRequested) {
-          fallbackToDom('block-glyph-compatibility')
-          return
-        }
         const addon = new WebglAddonConstructor() as WebglAddonRuntime
         disableDomRendererAdapters()
         try {
@@ -248,8 +213,6 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
           fitRendererGrid()
           logTerminalRenderer('webgl', 'active', options.tabIdRef.current, addon)
         } catch {
-          blockGlyphFallback?.dispose()
-          blockGlyphFallback = null
           webglContextLoss?.dispose()
           webglContextLoss = null
           webglGrid?.dispose()
@@ -263,11 +226,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
           enableDomRendererAdapters()
           refreshRendererAdapters()
           fitRendererGrid()
-          logTerminalRenderer(
-            'dom',
-            blockGlyphFallbackRequested ? 'block-glyph-compatibility' : 'activation-failed',
-            options.tabIdRef.current
-          )
+          logTerminalRenderer('dom', 'activation-failed', options.tabIdRef.current)
         }
       })
       .catch(() => fallbackToDom('load-failed'))
@@ -469,8 +428,6 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     clearGlobalTerminalState: () => clearTerminalGlobalState(terminal),
     disposeCore: () => {
       disposed = true
-      blockGlyphFallback?.dispose()
-      blockGlyphFallback = null
       webglContextLoss?.dispose()
       webglContextLoss = null
       webglGrid?.dispose()

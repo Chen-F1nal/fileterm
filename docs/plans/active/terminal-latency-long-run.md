@@ -1,5 +1,21 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-22：现场报告的 workspace 重放与 DOM 开销
+
+核对用户 app-log-1021.md 的完整内嵌样本为 beta.11；内容触发 DOM 回退已有修复，不能据此认定 WebGL context 崩溃。生产 React 受阻渲染复现 300 个监控事件执行 90,600 次 updater，改为按 IPC 顺序更新独立快照并由 useSyncExternalStore 订阅后为 300 次。减少 symbol observer 重扫、复用实际字体样式与校准网格；十终端目录/监控/传输对照通过，但原生远端刷新错位、长期 native/GPU 增长、DOM block 开销和既有粗体比例失败仍未解决。证据与门禁见 [本轮复核](../../quality/terminal-log-followup-2026-10-22.md)。
+
+## 2026-10-21：Windows WebView2 纹理槽保留
+
+在当前 Windows Tauri 开发版和独立 Claude Code PTY 中接续 PR #351。真实 WebView2 复现字号变化后 CPU 图集降至 1 页，而历史纹理请求仍为 47,535,432 字节；修复未使用槽与旧 mip levels 后降至 1,398,160 字节，临时 runtime 销毁归零。两轮真实 Claude 短请求完成；12 分钟逐进程记录有峰值后回落，但不能归因于修复，也不能代替数小时/整夜负载验收。环境、原始本地归档、门禁与限制见 [Windows 纹理接续记录](../../quality/terminal-windows-texture-storage-2026-10-21.md)。整体长期卡死任务继续保持进行中。
+
+## 2026-10-21：RGB 图集增长与清理后旧字形保留
+
+先提交上一轮修复 `ae67e84f`。新增 RGB 输出对照，修复前 6,000 批图集约 127 MiB、GC 后 heap 约 82 MiB；修复后同批并额外持续五分钟，图集稳定 33 MiB、GC 后 heap 约 9.5 MiB；修复重复清理仍保留旧字形，以及清空后的合并页面未复用。缓存回收按共享终端最大视口保留工作空间，不改原始颜色与终端历史。扩展长测和 Windows 验收边界见[缓存增长复核](../../quality/terminal-webgl-cache-growth-2026-10-21.md)。
+
+## 2026-10-21：块字符误回退与共享图集失效
+
+先提交日志设置与字重改动 `91eac3cd`。已复现块字符强制回退 DOM，以及一个 WebGL 终端清理共享图集后另一个终端保留旧坐标的错画；移除内容回退并同步共享图集模型失效。双终端像素差异由 1,316 降至 0，失败回退保留并改为 WARN。五分钟混排持续输出未复现卡死，图集稳定于 13 MiB，关闭后登记归零；该结果仅来自本机 Chrome，不能代替 Windows 现场验收。范围和待验收项见[本轮报告](../../quality/terminal-webgl-fallback-shared-atlas-2026-10-21.md)。真实 Windows/Claude Code 与整夜冻结仍未确认解决。
+
 ## 2026-10-21：协议回复绕过 React 更新与 schema 3
 
 交叉核对 beta10 报告和本机剩余 beta11 轮转日志，修复 xterm 自动查询回复误入活动标签/IME/菜单更新路径：已连接后台终端也能回复查询，自动回复不清选区或更新菜单；串口占用、历史回放与初始 ConPTY 回复规则保留。新增 `terminal-input` 阶段、异常时解析/ACK 快照和最慢四个长任务时间线，启动标记升级 schema 3。DOM/WebGL 生产 React + xterm 查询与监控回归通过，现场 #185 唯一原因和无脚本长帧仍未确认。证据、边界与外部归档文件名见[本轮复核](../../quality/terminal-log-analysis-repair-2026-10-21.md#2026-10-21beta10-与本机-beta11-日志交叉复核)。

@@ -22,6 +22,7 @@ pub async fn app_reconnect_tab(
                 return get_workspace_snapshot(app).await;
             }
 
+            crate::services::logging::session(&app, "INFO", "app:connection", &tab_id, "reconnect started");
             stop_session_worker(&state, &tab_id).await;
             {
                 let mut sessions = state.sessions.write().await;
@@ -104,6 +105,7 @@ pub async fn app_reconnect_tab(
             }
 
             // Terminate existing worker
+            crate::services::logging::session(&app, "INFO", "app:connection", &tab_id, "reconnect started");
             stop_session_worker(&state, &tab_id).await;
 
             // Set connecting status. Preserve the existing transcript so the
@@ -297,6 +299,7 @@ pub async fn app_disconnect_tab(
         crate::services::WorkspaceTabStatus::Closed,
     )
     .await;
+    crate::services::logging::session(&app, "INFO", "app:connection", &tab_id, "disconnected");
     get_workspace_snapshot(app).await
 }
 

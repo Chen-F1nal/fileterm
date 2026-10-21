@@ -26,6 +26,10 @@ pub fn run() {
                 );
             }
             migration_result?;
+            match crate::commands::app_get_ui_preferences(app.handle().clone()) {
+                Ok(preferences) => crate::services::logging::set_categories(preferences.diagnostic_log_categories),
+                Err(error) => crate::services::logging::warn(app.handle(), "logging", format!("unable to load log preferences: {error}")),
+            }
 
             match crate::storage::ensure_portable_marker() {
                 Ok(Some(marker)) => crate::services::logging::info(
@@ -716,6 +720,7 @@ pub fn run() {
                 crate::sessions::local_files::cleanup_network_mounts();
             }
             if matches!(_event, tauri::RunEvent::Exit) {
+                crate::services::logging::info(_app_handle, "app", "application exiting");
                 crate::services::logging::flush();
             }
         });

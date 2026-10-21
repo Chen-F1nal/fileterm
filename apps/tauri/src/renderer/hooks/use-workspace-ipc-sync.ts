@@ -1,4 +1,5 @@
 import { trackRendererWork } from '../lib/renderer-work-log'
+import { useWorkspaceState } from './use-workspace-state'
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 import type {
   UseWorkspaceIpcSyncOptions,
@@ -19,7 +20,7 @@ import {
   mergeMonitoringSnapshot as mergeMonitoring
 } from './workspace-monitoring'
 import { retainTransferHistory, updateTransferHistory as updateTransfers } from '../features/transfers/transfer-history'
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   type LocalFileItem,
   type RemoteFilesUpdate,
@@ -30,6 +31,7 @@ import {
 import { emptyState, localPreviewFiles, previewLocalPath, previewState } from '../app/app-data'
 import { withParentRow } from '../app/app-utils'
 import { t } from '../i18n'
+import { setTerminalFontWeight } from '../app/font-metrics'
 import { setTerminalRendererPreference } from '../app/terminal-renderer-preference'
 import { resolveRendererPlatform } from '../lib/renderer-platform'
 import type { ThemeMode } from './use-theme-mode'
@@ -101,7 +103,7 @@ export function useWorkspaceIpcSync({
   onError,
   onStatusMessage
 }: UseWorkspaceIpcSyncOptions): UseWorkspaceIpcSyncResult {
-  const [workspace, setWorkspace] = useState<WorkspaceSnapshot>(emptyState)
+  const [workspace, setWorkspace] = useWorkspaceState(emptyState)
   const [localPath, setLocalPath] = useState(previewLocalPath)
   const [localItems, setLocalItems] = useState<LocalFileItem[]>(localPreviewFiles)
   const [isLocalDirectoryLoading, setIsLocalDirectoryLoading] = useState(false)
@@ -195,40 +197,36 @@ export function useWorkspaceIpcSync({
   }, [])
 
   const applyRemoteFilesUpdate = useCallback(({ tabId, path, files }: RemoteFilesUpdate) => {
-    startTransition(() => {
-      setWorkspace(
-        trackRendererWork('remote-files', (current: WorkspaceSnapshot) => {
-          const currentSession = current.sessions[tabId]
-          if (!currentSession || currentSession.remotePath !== path) {
-            return current
-          }
+    setWorkspace(
+      trackRendererWork('remote-files', (current: WorkspaceSnapshot) => {
+        const currentSession = current.sessions[tabId]
+        if (!currentSession || currentSession.remotePath !== path) {
+          return current
+        }
 
-          return {
-            ...current,
-            sessions: {
-              ...current.sessions,
-              [tabId]: {
-                ...currentSession,
-                remoteFiles: files,
-                remoteFilesLoading: false
-              }
+        return {
+          ...current,
+          sessions: {
+            ...current.sessions,
+            [tabId]: {
+              ...currentSession,
+              remoteFiles: files,
+              remoteFilesLoading: false
             }
           }
-        })
-      )
-    })
+        }
+      })
+    )
   }, [])
 
   const applyTransferUpdate = useCallback((transfer: TransferTask) => {
-    startTransition(() => {
-      setWorkspace((current) => {
-        const transfers = updateTransferHistory(current.transfers, transfer)
-        if (transfers === current.transfers) return current
-        return {
-          ...current,
-          transfers
-        }
-      })
+    setWorkspace((current) => {
+      const transfers = updateTransferHistory(current.transfers, transfer)
+      if (transfers === current.transfers) return current
+      return {
+        ...current,
+        transfers
+      }
     })
   }, [])
 
@@ -257,6 +255,7 @@ export function useWorkspaceIpcSync({
 
     return desktopApi.onUiPreferencesChanged((preferences) => {
       setTerminalRendererPreference(preferences.terminalRenderer)
+      setTerminalFontWeight(preferences.terminalFontWeight)
       lastPersistedUiPreferencesRef.current = syncedUiPreferencesFrom(preferences)
       if (isThemeMode(preferences.theme)) {
         onThemeModeChangeRef.current(preferences.theme)
@@ -298,6 +297,7 @@ export function useWorkspaceIpcSync({
           return
         }
         setTerminalRendererPreference(preferences.terminalRenderer)
+        setTerminalFontWeight(preferences.terminalFontWeight)
         lastPersistedUiPreferencesRef.current = syncedUiPreferencesFrom(preferences)
         setCanPersistUiPreferences(true)
         if (isThemeMode(preferences.theme)) {
