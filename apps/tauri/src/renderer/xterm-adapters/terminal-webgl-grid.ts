@@ -78,8 +78,11 @@ export function registerTerminalWebglGrid(terminal: Terminal): IDisposable {
   webglTerminals.add(registration)
   const originalRender = renderer.renderRows
   const render = function (this: WebglGridRenderer, start: number, end: number) {
+    const gl = this._gl!
+    // shortcut: addon-webgl 0.19 squares coverage alpha; remove when upstream uses separate alpha factors.
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
     // Historical RGB variants must not grow forever; keep room for four visible RGBA surfaces.
-    let surfacePixels = this._gl!.canvas.width * this._gl!.canvas.height
+    let surfacePixels = gl.canvas.width * gl.canvas.height
     for (const peer of webglTerminals) {
       if (peer.renderer._charAtlas === this._charAtlas && peer.renderer._gl)
         surfacePixels = Math.max(surfacePixels, peer.renderer._gl.canvas.width * peer.renderer._gl.canvas.height)

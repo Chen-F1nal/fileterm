@@ -26,6 +26,39 @@ vm.runInNewContext(
 )
 const { registerTerminalWebglGrid } = exports
 
+test('glyph drawing keeps RGB blending and restores coverage alpha after upstream state resets', () => {
+  let factors = []
+  let draws = 0
+  const gl = {
+    canvas: { width: 800, height: 600 },
+    SRC_ALPHA: 0x0302,
+    ONE_MINUS_SRC_ALPHA: 0x0303,
+    ONE: 1,
+    blendFuncSeparate: (...values) => {
+      factors = values
+    }
+  }
+  const draw = () => {
+    assert.deepEqual(factors, [gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA])
+    draws++
+  }
+  const renderer = {
+    _gl: gl,
+    _setCanvasDevicePixelDimensions() {},
+    _glyphRenderer: { value: { handleResize() {} } },
+    _clearModel() {},
+    handleCharSizeChanged() {},
+    renderRows: draw
+  }
+  const adapter = registerTerminalWebglGrid({ _core: { _renderService: { _renderer: { value: renderer } } } })
+  renderer.renderRows(0, 1)
+  factors = [gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA]
+  renderer.renderRows(0, 1)
+  assert.equal(draws, 2)
+  adapter.dispose()
+  assert.equal(renderer.renderRows, draw)
+})
+
 test('fractional font measurements never replace the upstream integer atlas grid', () => {
   const gl = { drawingBufferWidth: 800, drawingBufferHeight: 600 }
   let resizes = 0
@@ -245,7 +278,7 @@ test('rendering recycles an oversized RGB cache before drawing without repeatedl
     page._usedPixels += 100
   }
   const renderer = {
-    _gl: { canvas: { width: 900, height: 600 } },
+    _gl: { canvas: { width: 900, height: 600 }, blendFuncSeparate() {} },
     _charAtlas: atlas,
     _setCanvasDevicePixelDimensions() {},
     _glyphRenderer: { value: { handleResize() {} } },
