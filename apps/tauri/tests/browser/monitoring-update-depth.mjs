@@ -110,6 +110,14 @@ await build({
             map: null
           }
         }
+        if (relative === 'apps/tauri/src/renderer/features/system/network-history.ts')
+          return {
+            code: code.replace(
+              '  const width = 100',
+              '  window.networkPathBuilds = (window.networkPathBuilds || 0) + 1; const width = 100'
+            ),
+            map: null
+          }
         if (baseline && baselineFiles.includes(relative)) return { code, map: null }
       }
     },
@@ -174,6 +182,17 @@ try {
   await page.waitForFunction(() => window.writes.length === 360)
   assert.deepEqual(await page.evaluate(() => window.writes), Array(360).fill('x'))
 
+  for (const empty of [false, true]) {
+    const builds = await page.evaluate((empty) => {
+      const networkSamples = empty ? [] : [{ rx: 4, tx: 8, sampledAt: 1 }]
+      window.updateMetrics({ networkSamples })
+      window.networkPathBuilds = 0
+      for (let i = 0; i < 100; i++) window.updateMetrics({ cpuPercent: i, networkSamples })
+      return window.networkPathBuilds
+    }, empty)
+    console.log(JSON.stringify({ event: 'unchanged-network-history', empty, commits: 100, pathBuilds: builds }))
+    assert.equal(builds, 0, 'unchanged network history must not rebuild paths on unrelated metrics updates')
+  }
   const paths = () => page.locator('.network-path').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('d')))
   const before = await paths()
   await page.evaluate(() =>

@@ -12,6 +12,9 @@ vm.runInNewContext(
   ).outputText,
   { exports: atlasCache }
 )
+const textureHooks = []
+let failDisplay = false
+let baselineDisposals = 0
 const exports = {}
 vm.runInNewContext(
   ts.transpileModule(
@@ -20,11 +23,92 @@ vm.runInNewContext(
   ).outputText,
   {
     exports,
-    require: (name) =>
-      name === './terminal-webgl-atlas-cache' ? atlasCache : { registerWebglTextureSlots: () => ({ dispose() {} }) }
+    require: (name) => {
+      if (name === './terminal-webgl-atlas-cache') return atlasCache
+      if (name === './terminal-webgl-graphic-glyphs') return { registerWebglGraphicGlyphs() {} }
+      if (name === './terminal-webgl-text-baseline')
+        return {
+          createWebglTextBaseline: () => ({
+            refresh() {},
+            dispose() {
+              baselineDisposals++
+            }
+          })
+        }
+      if (name === './terminal-webgl-display-grid')
+        return {
+          createWebglDisplayGrid: () => {
+            if (failDisplay) throw new Error('unsupported display')
+            return { refresh() {}, releaseGlyph() {}, dispose() {} }
+          }
+        }
+      return {
+        registerWebglTextureSlots: (_, glyph) => {
+          const hook = {
+            glyph,
+            disposed: false,
+            dispose() {
+              this.disposed = true
+            }
+          }
+          textureHooks.push(hook)
+          return hook
+        }
+      }
+    }
   }
 )
 const { registerTerminalWebglGrid } = exports
+
+test('opaque atlas mode follows live theme alpha, rebuilds all rows on switches, and restores the original option', () => {
+  const operations = []
+  const background = { rgba: 0xffffffff }
+  const gl = {
+    canvas: { width: 800, height: 600 },
+    COLOR_BUFFER_BIT: 0x4000,
+    clear(mask) {
+      assert.equal(mask, this.COLOR_BUFFER_BIT)
+      operations.push('clear-buffer')
+    },
+    blendFuncSeparate() {}
+  }
+  const renderer = {
+    _gl: gl,
+    _setCanvasDevicePixelDimensions() {},
+    _glyphRenderer: { value: { handleResize() {} } },
+    _clearModel(glyphs) {
+      assert.equal(glyphs, true)
+      operations.push('clear-model')
+    },
+    handleCharSizeChanged() {},
+    renderRows(start, end) {
+      operations.push([start, end])
+    }
+  }
+  const terminal = {
+    rows: 24,
+    options: { allowTransparency: true },
+    _core: { _themeService: { colors: { background } }, _renderService: { _renderer: { value: renderer } } }
+  }
+  const adapter = registerTerminalWebglGrid(terminal)
+  renderer.renderRows(8, 8)
+  assert.equal(terminal.options.allowTransparency, false)
+  assert.deepEqual(operations.splice(0), ['clear-model', [0, 23]])
+  renderer.renderRows(8, 8)
+  assert.deepEqual(operations.splice(0), [[8, 8]], 'unchanged alpha must not rebuild the atlas')
+  background.rgba = 0xffffff66
+  renderer.renderRows(8, 8)
+  assert.equal(terminal.options.allowTransparency, true)
+  assert.deepEqual(operations.splice(0), ['clear-model', 'clear-buffer', [0, 23]])
+  renderer.renderRows(8, 8)
+  assert.deepEqual(operations.splice(0), ['clear-buffer', [8, 8]])
+  background.rgba = 0x000000ff
+  renderer.renderRows(8, 8)
+  assert.equal(terminal.options.allowTransparency, false)
+  assert.deepEqual(operations.splice(0), ['clear-model', [0, 23]])
+  adapter.dispose()
+  assert.equal(terminal.options.allowTransparency, true)
+})
 
 test('glyph drawing keeps RGB blending and restores coverage alpha after upstream state resets', () => {
   let factors = []
@@ -55,7 +139,16 @@ test('glyph drawing keeps RGB blending and restores coverage alpha after upstrea
   factors = [gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA]
   renderer.renderRows(0, 1)
   assert.equal(draws, 2)
+  const previous = textureHooks.at(-1)
+  renderer._glyphRenderer.value = { handleResize() {} }
+  renderer.renderRows(0, 1)
+  assert.equal(previous.disposed, true, 'context restoration releases the old texture hook')
+  assert.equal(textureHooks.at(-1).glyph, renderer._glyphRenderer.value)
+  const current = textureHooks.at(-1)
+  renderer.renderRows(0, 1)
+  assert.equal(textureHooks.at(-1), current, 'stable frames reuse the hook')
   adapter.dispose()
+  assert.equal(current.disposed, true)
   assert.equal(renderer.renderRows, draw)
 })
 
@@ -311,4 +404,29 @@ test('rendering recycles an oversized RGB cache before drawing without repeatedl
   largeAdapter.dispose()
   adapter.dispose()
   assert.equal(renderer.renderRows, original)
+})
+
+test('failed display setup releases baseline listeners and texture hooks before DOM fallback', () => {
+  const resize = () => {}
+  const renderer = {
+    _gl: {},
+    _glyphRenderer: { value: { handleResize() {} } },
+    _setCanvasDevicePixelDimensions: resize,
+    handleCharSizeChanged() {},
+    _clearModel() {},
+    renderRows() {}
+  }
+  const disposals = baselineDisposals
+  failDisplay = true
+  try {
+    assert.throws(
+      () => registerTerminalWebglGrid({ _core: { _renderService: { _renderer: { value: renderer } } } }),
+      /unsupported display/
+    )
+  } finally {
+    failDisplay = false
+  }
+  assert.equal(textureHooks.at(-1).disposed, true)
+  assert.equal(baselineDisposals, disposals + 1)
+  assert.equal(renderer._setCanvasDevicePixelDimensions, resize)
 })

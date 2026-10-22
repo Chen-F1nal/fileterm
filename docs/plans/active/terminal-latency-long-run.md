@@ -1096,3 +1096,25 @@ Windows 11 原生十二小时、真实交互程序与实际 SFTP 并发仍待复
 
 本次全范围类型、lint、格式、92 项 renderer、775 项 Rust/contract 与 Clippy 通过。
 CSS contract 通过，保留既有 11 处重要性声明提示。
+
+## 2026-10-22：Refs #353，监控历史重复分配
+
+反馈来自 macOS 27.0.1 / Apple Silicon / v2.2.31：2 个 SSH、4 个端口映射、15 秒资源监控，WebContent 长期约一个核心及 800MB。提供的 JSC 数组分配/GC 栈不能单独定位组件、证明泄漏，或等同本轮 Windows WebView2 问题。beta12 已含图表动画去 React state、workspace reducer 去重放；当前本地字体补丁尚未发布。
+
+### 本轮复现及最小修补
+
+1. 实际 NetworkPanel 在网络历史引用不变时，100 次仅 CPU 等无关指标变化仍执行 200 次 buildLinePath，重复分配两条曲线的点数组和字符串。生产 React 浏览器夹具先保留失败，再将曲线几何按 samples memo；空历史使用稳定空数组，避免每次创建填充窗口。保留组件正常重渲染，以便流量标签、语言、网卡和其他指标更新，不以整个组件 memo 阻断更新。
+2. 全量 workspace 快照携带相同 generation/revision 时，原合并逻辑仍把反序列化后的历史对象替换到前端。现在仅对双方都已有数据的同版本历史复用引用；监控状态和其他 session 字段仍使用新快照，新版本/新 generation、首次加载及显式清空保留原行为。未改变 Rust 采样频率、历史容量、SSH/隧道配置或事件投递。
+3. 新回归确认旧代码在相同历史下重建 200 次曲线，修补后非空/空历史均为 0 次；actual hook 的 100 次全量快照更新保留历史引用，目录字段仍更新。已有 360 次监控/输入、恢复断点、网卡选择、200 批解析/ACK 和卸载清理继续验证。
+
+### 验证与边界
+
+- 当前 Windows Chromium 的 DOM/WebGL 及 Windows Playwright WebKit 27.2 的 DOM 图表回归通过。WebKit 引擎测试不是 macOS Tauri/WKWebView 原生验收。
+- monitoring-terminal-stream 的旧诊断断言依赖最后一条告警，可能被 LoAF 告警覆盖；大量输出还会先触发 event-loop-gap，导致随后主动阻塞受生产 30 秒限流。测试改为等待告警冷却并匹配新 event-loop-gap，保留诊断内容和 200 批解析断言，没有改生产阈值或限流。
+- 两项源码改动只减少已复现的重复计算；不能由曲线调用次数推出 CPU 降幅或内存释放量，未证明 #353 的数小时持续高 CPU 已完整修复。
+- 基线失败及修补后的输出归档在本地 `D:\CodeFiles\renderer-validation-archive\issue353-2026-10-22\`。未使用用户真实 SSH/隧道或更改持久化设置；现有字体候选原样保留。本轮未推送、合并、发版或关闭 Issue。
+- 待 macOS 同一原生版本、同 PID/启动时间下复测 2 SSH + 4 端口映射 + 15 秒监控：分别记录输出停止、监控关闭、侧栏收起、会话关闭后的 CPU/heap/native 内存与采样栈，继续区分 terminal/monitoring/IPC/布局及 GC 开销。
+
+本轮门禁：完整 typecheck、198 项 renderer、806 项 Rust（1 项 ignored）、10 CLI、23 contract、3 scheduler、严格全目标/全特性 Clippy、改动文件 ESLint 通过。CSS contract 通过，保留既有 11 处 !important 与约 6 处旧颜色值提示。全量 lint 的 76,074 项均为 CRLF 格式冲突，全量 Prettier 标记 477 文件；未为此重排无关文件。workspace 重放回归仍为 300 个事件/300 次 reducer。
+
+Chromium 与 Windows WebKit 的 monitoring-terminal-stream 均通过：100 次相同监控版本的全量快照保留历史引用，后台模拟无 RAF 时继续处理监控和排空输出，主动阻塞后的 event-loop-gap 告警内容与资源计数断言通过。

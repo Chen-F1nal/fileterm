@@ -39,7 +39,7 @@ window.fileterm={platform:'darwin',getSnapshot:async()=>snapshot,
  getSecuritySettings:async()=>({lockEnabled:false,idleLockMinutes:0}),
  listImportedFonts:async()=>[],listLocalDirectory:async()=>({path:'/tmp',items:[]}),isCurrentWindowMaximized:async()=>false,
  writeDiagnosticLog:async(...args)=>{if(args[1]==='renderer:performance')window.performanceReports.push(args)},resizeTerminal:async()=>{},
- onWorkspaceSnapshot:async()=>()=>{},onUiPreferencesChanged:noop,onSecuritySettingsChanged:noop,
+ onWorkspaceSnapshot:async callback=>{window.listeners.snapshot=callback;return ()=>{}},onUiPreferencesChanged:noop,onSecuritySettingsChanged:noop,
  onWindowMaximizedChange:noop,onWindowCloseRequest:noop,onRequestCloseActiveWorkspaceItem:noop,
  onNewTabRequest:noop,onSplitPaneRequest:noop,onFocusPaneRequest:noop,onActionApprovalRequest:noop,
  onTransferUpdate:noop,onRemoteFilesChanged:noop,onTerminalState:noop,
@@ -54,6 +54,7 @@ window.emitSample=(revision)=>{
 }
 function Fixture(){
  const shell=useAppShellState({searchParams:new URLSearchParams(),initialUiPreferences:{},desktopApi:window.fileterm,isConnectionFormWindow:false,isMainWorkspaceWindow:true,isConnectionManagerWindow:false,rendererPlatform:'darwin'})
+ window.currentWorkspace=shell.workspace
  const current=shell.workspace.sessions.tab
  if(!current)return null
  return <div style={{display:'flex',height:700,width:1000}}>
@@ -109,6 +110,23 @@ try {
   await page.evaluate(() => window.clearInterval(window.sampleTimer))
   await page.waitForFunction(() => Number(document.querySelector('#revision').textContent) === window.received)
 
+  // Tunnel/directory snapshots may repeat all 600 historical samples without a new monitoring revision.
+  await page.evaluate(() => {
+    window.historyBeforeSnapshots = window.currentWorkspace.sessions.tab.systemMetrics
+    for (let index = 0; index < 100; index++) {
+      const next = structuredClone(window.currentWorkspace)
+      next.workspaceRevision = index + 1
+      next.sessions.tab.remotePath = '/snapshot-' + index
+      window.listeners.snapshot(next)
+    }
+  })
+  await page.waitForFunction(() => window.currentWorkspace.sessions.tab.remotePath === '/snapshot-99')
+  assert.equal(
+    await page.evaluate(() => window.currentWorkspace.sessions.tab.systemMetrics === window.historyBeforeSnapshots),
+    true,
+    'full snapshot updates preserve unchanged monitoring history identity'
+  )
+
   // Model an occluded/background WebView: parsing must continue without RAF.
   await page.evaluate(() => {
     window.requestAnimationFrame = () => 0
@@ -124,6 +142,14 @@ try {
   await page.waitForFunction(() => document.querySelector('#revision').textContent === '101', undefined, {
     polling: 50
   })
+  // Large output can itself report a gap; respect the production logger's 30-second rate limit.
+  const gapCooldown = await page.evaluate(() => {
+    const previous = window.performanceReports
+      .map((report) => JSON.parse(report[2]))
+      .findLast((report) => report.event === 'event-loop-gap')
+    return previous ? Math.max(0, 31000 - (performance.timeOrigin + performance.now() - previous.resumedAtUnixMs)) : 0
+  })
+  if (gapCooldown) await page.waitForTimeout(gapCooldown)
   const previousReports = await page.evaluate(() => window.performanceReports.length)
   await page.evaluate(() => {
     const started = performance.now()
@@ -131,10 +157,17 @@ try {
       // Deliberately block without throwing to exercise the recovered-stall diagnostic.
     }
   })
-  await page.waitForFunction((previous) => window.performanceReports.length > previous, previousReports, {
-    polling: 50
-  })
-  const report = await page.evaluate(() => window.performanceReports.at(-1))
+  await page.waitForFunction(
+    (previous) =>
+      window.performanceReports.slice(previous).some((report) => JSON.parse(report[2]).event === 'event-loop-gap'),
+    previousReports,
+    {
+      polling: 50
+    }
+  )
+  const report = await page.evaluate(() =>
+    window.performanceReports.findLast((report) => JSON.parse(report[2]).event === 'event-loop-gap')
+  )
   assert.equal(report[0], 'WARN')
   const detail = JSON.parse(report[2])
   assert.equal(detail.event, 'event-loop-gap')

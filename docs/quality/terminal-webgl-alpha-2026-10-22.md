@@ -14,7 +14,19 @@ FileTerm 使用 `allowTransparency: true`，xterm addon-webgl 0.19 将字形覆�
 
 在既有 `registerTerminalWebglGrid` 的绘制入口使用 `blendFuncSeparate(SRC_ALPHA, ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA)`。保留 RGB 混合和透明主题能力，修正 alpha 合成；每次绘制前设置，覆盖上游 context 恢复重新初始化混合状态的情况。
 
-生产改动只有现有适配器内的状态设置，没有更改字体、字重、网格、主题颜色、renderer 偏好或 DOM 回退。没有新增定时器、像素读回、字符扫描或纹理分配；新增一次每绘制调用的 GL 状态设置，未据此宣称性能零开销。
+最初的 alpha 修正只有现有适配器内的状态设置，没有更改字体、字重、网格、主题颜色、renderer 偏好或 DOM 回退。没有新增定时器、像素读回、字符扫描或纹理分配；新增一次每绘制调用的 GL 状态设置，未据此宣称性能零开销。
+
+### 后续本地候选：保留不透明字形的抗锯齿
+
+alpha 修正后仍能复现 DOM 与 WebGL 的笔画差异。进一步确认，统一 `allowTransparency: true` 会让不透明主题也使用透明 Canvas 字形图集，不能保留 Windows 不透明文字的彩色子像素边缘。
+
+当前未推送的本地候选在绘制时按 xterm 实际背景 alpha 选择图集透明性，仅在模式变化时更新 `allowTransparency`、清空字形模型并重建全部行，避免旧图集坐标残留。透明主题每次绘制前清空 framebuffer，避免同一合成帧中的重复绘制积累背景 alpha；释放时恢复原选项。颜色、字重和网格保持原值。图集模式变化会走上游图集替换/分配，稳定模式不重复切换；不是所有绘制都重新分配图集。
+
+新增回归覆盖模式切换时的部分行重绘入口、透明背景重复绘制、Windows 子像素边缘、图集/Canvas alpha 模式和 ANSI/RGB 原色。Chromium 原生 100%、125%、150%、200% 倍率通过；原生 WebView2 的 12/14/16/24px 对照及真实 Claude Code 2.1.308 启动界面已留证据。实际字体由 CDP 确认为 Consolas，GPU 为 NVIDIA D3D11，新绘制 GL 错误为 0。
+
+本轮类型检查、192 项 renderer 测试、806 项 Rust 单测（1 项既有辅助 ignored）、10 项 CLI、23 项 contract、3 项 scheduler 与严格全目标全特性 Clippy 通过。Rust 首轮因本轮验证 exe 仍在运行而无法移除文件；原生检查结束、确认会话/终端均为零后，仅停止 PID/创建时间匹配的本轮进程，重跑通过。全量本地 lint 的 77,023 项错误均为 `Delete CR`；Prettier 标记 482 个文件。本次修改文件的 ESLint/Prettier 和 diff 空白检查通过，未重排无关文件。
+
+**DOM/WebGL 视觉一致性尚未通过。** 后续本地候选已对齐显示网格、复用 DOM 线框/块字几何并校准 ASCII 基线，四档矩阵及原生 125% 对照已留存；文字边缘像素和混合脚本仍待验收。PR #352 保持草稿，没有推送本轮候选或发布。完整环境、临时会话清理和后续工作见[视觉一致性计划](../plans/active/terminal-dom-webgl-visual-parity-2026-10-22.md)。
 
 ## 验证
 
