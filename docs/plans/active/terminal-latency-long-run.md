@@ -1112,9 +1112,19 @@ CSS contract 通过，保留既有 11 处重要性声明提示。
 - 当前 Windows Chromium 的 DOM/WebGL 及 Windows Playwright WebKit 27.2 的 DOM 图表回归通过。WebKit 引擎测试不是 macOS Tauri/WKWebView 原生验收。
 - monitoring-terminal-stream 的旧诊断断言依赖最后一条告警，可能被 LoAF 告警覆盖；大量输出还会先触发 event-loop-gap，导致随后主动阻塞受生产 30 秒限流。测试改为等待告警冷却并匹配新 event-loop-gap，保留诊断内容和 200 批解析断言，没有改生产阈值或限流。
 - 两项源码改动只减少已复现的重复计算；不能由曲线调用次数推出 CPU 降幅或内存释放量，未证明 #353 的数小时持续高 CPU 已完整修复。
-- 基线失败及修补后的输出归档在本地 `D:\CodeFiles\renderer-validation-archive\issue353-2026-10-22\`。未使用用户真实 SSH/隧道或更改持久化设置；现有字体候选原样保留。本轮未推送、合并、发版或关闭 Issue。
+- 基线失败及修补后的输出归档在本地 `D:\CodeFiles\renderer-validation-archive\issue353-2026-10-22\`。未使用用户真实 SSH/隧道或更改持久化设置；现有字体候选原样保留。监控补丁随后按用户要求追加至 PR #352（`464b7456`）；PR 仍为 draft，未合并、发版或关闭 Issue。
 - 待 macOS 同一原生版本、同 PID/启动时间下复测 2 SSH + 4 端口映射 + 15 秒监控：分别记录输出停止、监控关闭、侧栏收起、会话关闭后的 CPU/heap/native 内存与采样栈，继续区分 terminal/monitoring/IPC/布局及 GC 开销。
 
 本轮门禁：完整 typecheck、198 项 renderer、806 项 Rust（1 项 ignored）、10 CLI、23 contract、3 scheduler、严格全目标/全特性 Clippy、改动文件 ESLint 通过。CSS contract 通过，保留既有 11 处 !important 与约 6 处旧颜色值提示。全量 lint 的 76,074 项均为 CRLF 格式冲突，全量 Prettier 标记 477 文件；未为此重排无关文件。workspace 重放回归仍为 300 个事件/300 次 reducer。
 
 Chromium 与 Windows WebKit 的 monitoring-terminal-stream 均通过：100 次相同监控版本的全量快照保留历史引用，后台模拟无 RAF 时继续处理监控和排空输出，主动阻塞后的 event-loop-gap 告警内容与资源计数断言通过。
+
+## 2026-10-22：WebGL addon 0.19 光标闪烁定时器保活终端
+
+FileTerm 当前锁定 `@xterm/xterm@6.0.0` 和 `@xterm/addon-webgl@0.19.0`，运行时启用 `cursorBlink`，scrollback 上限为 6000 行。addon 0.19 创建 WebGL renderer 的 `CursorBlinkStateManager`，但没有把 manager 注册到 renderer 的 dispose store；聚焦后运行的 blink timer 会继续引用 renderer 和整棵 terminal/scrollback 对象，即使 tab 已关闭。xterm 上游 [PR #5817](https://github.com/xtermjs/xterm.js/pull/5817) 已修复此遗漏，但 npm 当前 `latest` 仍是 addon 0.19.0；Tabby 的 [问题复现与内存测量](https://github.com/Eugeny/tabby/issues/11718) 也使用了显式 dispose manager 的临时兼容措施。electerm 的默认 `cursorBlink` 为 false，并且在终端卸载时 dispose WebGL addon；这避开了常见的聚焦闪烁触发条件。
+
+FileTerm 的 `releaseWebglAddon` 现在先 dispose `_cursorBlinkStateManager`，再 dispose addon 和丢弃 WebGL context，异常时仍继续完成后两步。浏览器生命周期回归在聚焦并确认 blink interval 已启动后拦截 manager.dispose：修改前因 manager 未销毁而失败，修改后 manager.dispose 被调用、context 丢失且 host 节点清空。结果在本地 `D:\CodeFiles\renderer-validation-archive\issue353-2026-10-22\webgl-dispose-before.log` 与 `webgl-dispose-after.json`。
+
+这解释的是**关闭聚焦的 WebGL 终端后内存不回收**，尤其是多次开关终端、且缓冲区已有较多 scrollback 的场景；它不能单独解释一个始终打开的 Claude Code 终端从 120 MB 持续涨至 1 GB。FileTerm 另外已将输出限制为每窗口 4 个解析未确认批次、每批最多 16 KiB，native 队列有固定容量，超限记录并跳过显示字节；原生 transcript 限 200,000 字符，xterm scrollback 限 6000 行。因此仍须把活跃终端的图集/纹理存储增长与已关闭终端保活分别测量，并在 Tauri/WebView2 下复测 PID/启动时间对应的 private bytes、GPU/native memory 和 tab churn。
+
+本次回归使用 Windows Playwright Chromium 156、RTX 3070 Laptop / driver 32.0.16.1742，不是原生 Tauri/WebView2；不能据此声称单个长会话的 1 GB 增长已解决。队列实际最多 8 批/标签、128 批/窗口；native transcript 限 200,000 字节，renderer transcript 回放上限为 200,000 个 JS 字符单元。

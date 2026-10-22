@@ -32,21 +32,32 @@ import { createTerminalInputWriteQueue } from './terminal-input-write-queue'
 import type { TerminalLifecycleOptions, TerminalLifecycleRuntime } from './terminal-lifecycle-types'
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 
-type WebglAddonRuntime = WebglAddon & { _renderer?: { _gl?: WebGL2RenderingContext } }
+type WebglAddonRuntime = WebglAddon & {
+  _renderer?: {
+    _cursorBlinkStateManager?: { dispose(): void }
+    _gl?: WebGL2RenderingContext
+  }
+}
 type TerminalRendererView = Terminal & {
   _core?: { _renderService?: { _renderer?: { value?: unknown } } }
 }
 
 function releaseWebglAddon(addon: WebglAddonRuntime) {
-  const gl = addon._renderer?._gl
+  const renderer = addon._renderer
+  const gl = renderer?._gl
   try {
-    addon.dispose()
+    // shortcut: addon-webgl 0.19 omits this timer from its dispose store; remove after 0.20 ships.
+    renderer?._cursorBlinkStateManager?.dispose()
   } finally {
-    // shortcut: addon-webgl 0.19.0 retains context after dispose; remove when upstream releases it explicitly.
     try {
-      gl?.getExtension('WEBGL_lose_context')?.loseContext()
-    } catch {
-      // The context may already be lost by the time the fallback runs.
+      addon.dispose()
+    } finally {
+      // shortcut: addon-webgl 0.19.0 retains context after dispose; remove when upstream releases it explicitly.
+      try {
+        gl?.getExtension('WEBGL_lose_context')?.loseContext()
+      } catch {
+        // The context may already be lost by the time the fallback runs.
+      }
     }
   }
 }
