@@ -1125,6 +1125,8 @@ FileTerm 当前锁定 `@xterm/xterm@6.0.0` 和 `@xterm/addon-webgl@0.19.0`，运
 
 FileTerm 的 `releaseWebglAddon` 现在先 dispose `_cursorBlinkStateManager`，再 dispose addon 和丢弃 WebGL context，异常时仍继续完成后两步。浏览器生命周期回归在聚焦并确认 blink interval 已启动后拦截 manager.dispose：修改前因 manager 未销毁而失败，修改后 manager.dispose 被调用、context 丢失且 host 节点清空。结果在本地 `D:\CodeFiles\renderer-validation-archive\issue353-2026-10-22\webgl-dispose-before.log` 与 `webgl-dispose-after.json`。
 
+Tabby 的同一问题还记录了另一条独立的活跃会话卡顿路径：其自定义 `OSCProcessor` 对未结束的 `ESC ]` 序列无限缓存，并在每个输出 chunk 上重复拼接和扫描；45 秒测试中 renderer RSS 从 615 MB 到 1,284 MB，主线程往返延迟从 0 增至 2,390 ms。这不是 xterm/WebGL 根因。检查 FileTerm 的终端路径未发现等价的 renderer OSC 中间件：OSC 52 由 xterm parser 处理，本地 OSC 7 sidecar 限 16 KiB，SSH CWD 扫描缓冲区约 8 KiB。该特定的无界缓存路径目前没有对应实现，但仍不能据此解释或排除 FileTerm 活跃 Claude 会话的其他 WebView2 内存增长原因。
+
 这解释的是**关闭聚焦的 WebGL 终端后内存不回收**，尤其是多次开关终端、且缓冲区已有较多 scrollback 的场景；它不能单独解释一个始终打开的 Claude Code 终端从 120 MB 持续涨至 1 GB。FileTerm 另外已将输出限制为每窗口 4 个解析未确认批次、每批最多 16 KiB，native 队列有固定容量，超限记录并跳过显示字节；原生 transcript 限 200,000 字符，xterm scrollback 限 6000 行。因此仍须把活跃终端的图集/纹理存储增长与已关闭终端保活分别测量，并在 Tauri/WebView2 下复测 PID/启动时间对应的 private bytes、GPU/native memory 和 tab churn。
 
 本次回归使用 Windows Playwright Chromium 156、RTX 3070 Laptop / driver 32.0.16.1742，不是原生 Tauri/WebView2；不能据此声称单个长会话的 1 GB 增长已解决。队列实际最多 8 批/标签、128 批/窗口；native transcript 限 200,000 字节，renderer transcript 回放上限为 200,000 个 JS 字符单元。
