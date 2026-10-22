@@ -19,6 +19,7 @@
 | `terminal-vim-selection.ts`                                   | Vim 接管鼠标后，从 buffer 恢复 Visual 选区用于复制                             |
 | `terminal-webgl-grid.ts`                                      | WebGL backing resize 同步与共享字形图集清理后的跨终端失效                      |
 | `terminal-render-recovery.ts`                                 | 字体/DPI 缓存校准、普通/备用屏幕切换重绘和标签激活渲染恢复                     |
+| `terminal-disposal.ts`                                        | WebGL 光标/恢复定时器、原生 context 与终端隐藏 resize 队列清理                 |
 | `terminal-wheel-compat.ts`                                    | 将 WebView 重定向到 document 的滚轮事件交还 xterm                              |
 | `terminal-options.ts`                                         | TUI、ConPTY、本地选择等兼容选项                                                |
 | `xterm-compat.css`                                            | 禁用影响 DOM renderer 单元格测量的中文标点间距                                 |

@@ -65,6 +65,9 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     syncTerminalSize
   } = runtime
   const host = hostRef.current!
+  let disposed = false
+  let surfaceRefreshFrame: number | null = null
+  let pendingPreserveVisibleBuffer = false
 
   const screenBufferRenderDisposable = registerTerminalBufferRenderRecovery(
     terminal,
@@ -89,6 +92,7 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
   )
 
   const osc52Disposable = terminal.parser.registerOscHandler(52, async (payload) => {
+    if (disposed) return true
     const parsed = splitOscPayload(payload)
     if (!parsed || !isOsc52TargetSupported(parsed.target)) {
       return false
@@ -99,14 +103,16 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     }
 
     if (parsed.data === '?') {
+      const tabId = tabIdRef.current
       let clipboardText = ''
       try {
         clipboardText = await readClipboardText()
       } catch {
         clipboardText = ''
       }
+      if (disposed || tabIdRef.current !== tabId) return true
       const encoded = encodeBase64Utf8(clipboardText)
-      await window.fileterm?.writeTerminal(tabIdRef.current, `\u001b]52;${parsed.target || 'c'};${encoded}\u0007`)
+      await window.fileterm?.writeTerminal(tabId, `\u001b]52;${parsed.target || 'c'};${encoded}\u0007`)
       return true
     }
 
@@ -123,14 +129,16 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
   activeTerminalTabIdRef.current = tabIdRef.current
 
   const resize = (force = false, freezeCols = false, preserveVisibleBuffer = false) => {
+    if (disposed) return
     syncTerminalSize(fitAddon, terminal, { force, freezeCols, preserveVisibleBuffer })
   }
   const scheduleResize = (force = false, freezeCols = false, preserveVisibleBuffer = false) => {
-    if (!isActiveRef.current) {
+    if (disposed || !isActiveRef.current) {
       return
     }
     pendingResizeForceRef.current = pendingResizeForceRef.current || force
     pendingResizeFreezeColsRef.current = pendingResizeFreezeColsRef.current || freezeCols
+    pendingPreserveVisibleBuffer ||= preserveVisibleBuffer
 
     if (resizeTimerRef.current !== null) {
       window.cancelAnimationFrame(resizeTimerRef.current)
@@ -140,15 +148,18 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       resizeTimerRef.current = null
       const shouldForce = pendingResizeForceRef.current
       const shouldFreezeCols = pendingResizeFreezeColsRef.current
+      const shouldPreserveVisibleBuffer = pendingPreserveVisibleBuffer
       pendingResizeForceRef.current = false
       pendingResizeFreezeColsRef.current = false
-      resize(shouldForce, shouldFreezeCols, preserveVisibleBuffer)
+      pendingPreserveVisibleBuffer = false
+      resize(shouldForce, shouldFreezeCols, shouldPreserveVisibleBuffer)
     })
   }
 
   const disposeCanvasTextMetrics = observeTerminalFontMetrics(terminal, () => scheduleResize(true))
 
   const scheduleSettledHorizontalResize = () => {
+    if (disposed) return
     if (resizeSettleTimerRef.current !== null) {
       window.clearTimeout(resizeSettleTimerRef.current)
     }
@@ -156,11 +167,12 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     resizeSettleTimerRef.current = window.setTimeout(() => {
       resizeSettleTimerRef.current = null
       isHorizontalResizeActiveRef.current = false
-      window.requestAnimationFrame(() => scheduleResize(true, false, true))
+      scheduleResize(true, false, true)
     }, TERMINAL_RESIZE_SETTLE_MS)
   }
 
   const resizeObserver = new ResizeObserver(() => {
+    if (disposed) return
     const host = hostRef.current
     if (!host) {
       return
@@ -182,8 +194,10 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
       // for another terminal write to make the missing canvas repaint.
       terminal.clearTextureAtlas()
       scheduleResize(true)
-      window.requestAnimationFrame(() => {
-        if (isActiveRef.current) {
+      if (surfaceRefreshFrame !== null) window.cancelAnimationFrame(surfaceRefreshFrame)
+      surfaceRefreshFrame = window.requestAnimationFrame(() => {
+        surfaceRefreshFrame = null
+        if (!disposed && isActiveRef.current) {
           terminal.refresh(0, Math.max(terminal.rows - 1, 0))
         }
       })
@@ -210,11 +224,11 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
   resizeObserver.observe(host)
 
   const onWindowFocus = () => {
-    window.requestAnimationFrame(() => scheduleResize(true))
+    scheduleResize(true)
   }
   const onVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
-      window.requestAnimationFrame(() => scheduleResize(true))
+      scheduleResize(true)
     }
   }
 
@@ -228,6 +242,7 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     )
 
     const prepareOutput = trackRendererWork('output-prepare', (chunk: string) => {
+      if (disposed) return
       const shouldTrimHydratedBacklog = Date.now() < suppressHydratedChunksUntilRef.current
       if (shouldTrimHydratedBacklog) {
         // IPC ordering can leave one queued batch behind an authoritative
@@ -252,7 +267,7 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
 
     const offState = window.fileterm?.onTerminalState(
       trackRendererWork('terminal-status', ({ tabId: nextTabId, summary, transcript, connected, status }) => {
-        if (nextTabId !== tabIdRef.current) {
+        if (disposed || nextTabId !== tabIdRef.current) {
           return
         }
         onStatusRef.current?.(localizeTerminalText(summary))
@@ -268,10 +283,11 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
         if (!wasConnectedRef.current && connected) {
           lastSyncedSizeRef.current = null
           preserveVisibleBufferRef.current = false
-          window.requestAnimationFrame(() => scheduleResize(true))
+          scheduleResize(true)
         }
         if (isDisconnecting) {
           terminal.write(buildExitAlternateScreenSequence(), () => {
+            if (disposed) return
             const visibleTranscript = snapshotTerminalBuffer(terminal)
             const reconnectHint = onReconnectRef.current ? `\r\n${reconnectHintRef.current}` : ''
             if (reconnectHint) {
@@ -312,6 +328,10 @@ export function registerTerminalOutputHandlers(runtime: TerminalLifecycleRuntime
     onVisibilityChange,
     registerSessionEvents,
     dispose: () => {
+      if (disposed) return
+      disposed = true
+      if (surfaceRefreshFrame !== null) window.cancelAnimationFrame(surfaceRefreshFrame)
+      surfaceRefreshFrame = null
       screenBufferRenderDisposable.dispose()
       searchResultsDisposable.dispose()
       uiState.dispose()

@@ -165,28 +165,35 @@ impl LocalOsc7CwdTracker {
             }
 
             let payload = &self.buffer[LOCAL_OSC7_MARKER.len()..];
-            let bel_end = payload.find('\u{7}').map(|index| (index + 1, 1));
-            let st_end = payload.find("\x1b\\").map(|index| (index + 2, 2));
-            let Some((end, terminator_len)) = [bel_end, st_end]
-                .into_iter()
-                .flatten()
-                .min_by_key(|(end, _)| *end)
+            let Some(end) = payload
+                .bytes()
+                .position(|byte| matches!(byte, 0x07 | 0x18 | 0x1a | 0x1b))
             else {
                 break;
             };
+            let terminator_len = match payload.as_bytes()[end] {
+                0x07 => 1,
+                0x1b if end + 1 == payload.len() => break,
+                0x1b if payload.as_bytes()[end + 1] == b'\\' => 2,
+                _ => {
+                    // CAN/SUB and a new escape abort this OSC; preserve the next escape.
+                    self.buffer.drain(..LOCAL_OSC7_MARKER.len() + end);
+                    continue;
+                }
+            };
 
-            if let Some(cwd) = decode_osc7_cwd(&payload[..end - terminator_len]) {
-                latest_cwd = Some(cwd);
+            if LOCAL_OSC7_MARKER.len() + end + terminator_len <= LOCAL_OSC7_BUFFER_LIMIT {
+                if let Some(cwd) = decode_osc7_cwd(&payload[..end]) {
+                    latest_cwd = Some(cwd);
+                }
             }
-            self.buffer.drain(..LOCAL_OSC7_MARKER.len() + end);
+            self.buffer
+                .drain(..LOCAL_OSC7_MARKER.len() + end + terminator_len);
         }
 
         if self.buffer.len() > LOCAL_OSC7_BUFFER_LIMIT {
-            if let Some(start) = self.buffer.rfind(LOCAL_OSC7_MARKER) {
-                self.buffer.drain(..start);
-            } else {
-                self.buffer.clear();
-            }
+            // Keeping the last full marker retains everything when that marker is at offset zero.
+            retain_osc7_prefix(&mut self.buffer);
         }
         latest_cwd
     }

@@ -13,13 +13,14 @@ export function subscribe<T>(eventName: string, listener: (payload: T) => void) 
     __TAURI_EVENT_PLUGIN_INTERNALS__?: { unregisterListener?: (event: string, eventId: number) => void }
   }
   let active = true
+  let activeListener: ((payload: T) => void) | null = listener
   let eventId: number | null = null
   let unlistenStarted = false
 
   const callbackId = transformCallback((event: unknown) => {
     if (!active) return
     const payload = (event as { payload?: T })?.payload
-    if (payload !== undefined) listener(payload)
+    if (payload !== undefined) activeListener?.(payload)
   })
 
   const unregisterFrontend = (id: number) => {
@@ -48,10 +49,16 @@ export function subscribe<T>(eventName: string, listener: (payload: T) => void) 
       eventId = id
       if (!active) stopListening()
     })
-    .catch(() => internals.__TAURI_INTERNALS__?.unregisterCallback?.(callbackId))
+    .catch(() => {
+      active = false
+      activeListener = null
+      internals.__TAURI_INTERNALS__?.unregisterCallback?.(callbackId)
+    })
 
   return () => {
     active = false
+    // An inert native callback may outlive unlisten; it must not retain the closed terminal.
+    activeListener = null
     stopListening()
   }
 }
@@ -67,15 +74,17 @@ export function subscribeReady<T>(eventName: string, listener: (payload: T) => v
     __TAURI_EVENT_PLUGIN_INTERNALS__?: { unregisterListener?: (event: string, eventId: number) => void }
   }
   let active = true
+  let activeListener: ((payload: T) => void) | null = listener
   let eventId: number | null = null
   let unlistenStarted = false
   const callbackId = transformCallback((event: unknown) => {
     if (!active) return
     const payload = (event as { payload?: T })?.payload
-    if (payload !== undefined) listener(payload)
+    if (payload !== undefined) activeListener?.(payload)
   })
   const stopListening = () => {
     active = false
+    activeListener = null
     if (eventId === null || unlistenStarted) return
     unlistenStarted = true
     const registeredEventId = eventId
@@ -98,6 +107,7 @@ export function subscribeReady<T>(eventName: string, listener: (payload: T) => v
     })
     .catch((error) => {
       active = false
+      activeListener = null
       internals.__TAURI_INTERNALS__?.unregisterCallback?.(callbackId)
       throw error
     })

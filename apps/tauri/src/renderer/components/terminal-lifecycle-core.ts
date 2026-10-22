@@ -1,7 +1,7 @@
 import { registerTerminalDiagnostics } from '../xterm-adapters/terminal-diagnostics'
 import { getTerminalCompatibilityOptions } from '../xterm-adapters/terminal-options'
 import { Terminal, type IDisposable } from '@xterm/xterm'
-import type { WebglAddon } from '@xterm/addon-webgl'
+import { disposeTerminal, releaseWebglAddon, type WebglAddonRuntime } from '../xterm-adapters/terminal-disposal'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -32,34 +32,8 @@ import { createTerminalInputWriteQueue } from './terminal-input-write-queue'
 import type { TerminalLifecycleOptions, TerminalLifecycleRuntime } from './terminal-lifecycle-types'
 import { DIAGNOSTIC_SCOPES, writeDiagnosticLog } from '../lib/diagnostic-log'
 
-type WebglAddonRuntime = WebglAddon & {
-  _renderer?: {
-    _cursorBlinkStateManager?: { dispose(): void }
-    _gl?: WebGL2RenderingContext
-  }
-}
 type TerminalRendererView = Terminal & {
   _core?: { _renderService?: { _renderer?: { value?: unknown } } }
-}
-
-function releaseWebglAddon(addon: WebglAddonRuntime) {
-  const renderer = addon._renderer
-  const gl = renderer?._gl
-  try {
-    // shortcut: addon-webgl 0.19 omits this timer from its dispose store; remove after 0.20 ships.
-    renderer?._cursorBlinkStateManager?.dispose()
-  } finally {
-    try {
-      addon.dispose()
-    } finally {
-      // shortcut: addon-webgl 0.19.0 retains context after dispose; remove when upstream releases it explicitly.
-      try {
-        gl?.getExtension('WEBGL_lose_context')?.loseContext()
-      } catch {
-        // The context may already be lost by the time the fallback runs.
-      }
-    }
-  }
 }
 
 function getWebglDetails(addon: WebglAddonRuntime) {
@@ -294,14 +268,14 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   }
 
   const markTerminalFocused = () => {
-    if (!options.isActiveRef.current) {
+    if (disposed || !options.isActiveRef.current) {
       return
     }
     lastFocusedTerminal = terminal
     logTerminalZoom(terminal, 'terminal-focused', { tabId: options.tabIdRef.current })
   }
   const markTerminalUnderPointer = () => {
-    if (!options.isActiveRef.current) {
+    if (disposed || !options.isActiveRef.current) {
       return
     }
     terminalUnderPointer = terminal
@@ -318,7 +292,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   terminalTextarea?.addEventListener('focus', markTerminalFocused)
 
   const writeReconnectHint = () => {
-    if (!options.onReconnectRef.current || options.reconnectHintShownRef.current) {
+    if (disposed || !options.onReconnectRef.current || options.reconnectHintShownRef.current) {
       return
     }
 
@@ -327,6 +301,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
   }
   let lastInputBacklogWarning = -Infinity
   const handleTerminalWriteFailure = (error: unknown) => {
+    if (disposed) return
     if (String(error).includes('Terminal input backlog full')) {
       if (Date.now() - lastInputBacklogWarning >= 5000) {
         lastInputBacklogWarning = Date.now()
@@ -365,7 +340,12 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     void terminalInputWriteQueue.write(data, onFailure)
   }
   const requestReconnect = () => {
-    if (options.wasConnectedRef.current || options.connectingRef.current || options.isReconnectingRef.current) {
+    if (
+      disposed ||
+      options.wasConnectedRef.current ||
+      options.connectingRef.current ||
+      options.isReconnectingRef.current
+    ) {
       return false
     }
 
@@ -380,14 +360,18 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     // result may arrive seconds later, so waiting for terminal:state makes
     // a successful Enter look like a swallowed keypress.
     terminal.write(`\r\n${t.terminalReconnecting}\r\n`)
-    void Promise.resolve(reconnect())
+    void Promise.resolve()
+      .then(() => {
+        if (!disposed) return reconnect()
+      })
       .catch((cause) => {
+        if (disposed) return
         const message = cause instanceof Error ? cause.message : String(cause)
         terminal.write(`\r\n${t.connectionFailedPrefix}${message}\r\n`)
         writeReconnectHint()
       })
       .finally(() => {
-        if (!options.wasConnectedRef.current) {
+        if (!disposed && !options.wasConnectedRef.current) {
           options.isReconnectingRef.current = false
         }
       })
@@ -438,6 +422,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
     isTerminalUnderPointer: () => terminalUnderPointer === terminal,
     clearGlobalTerminalState: () => clearTerminalGlobalState(terminal),
     disposeCore: () => {
+      if (disposed) return
       disposed = true
       webglContextLoss?.dispose()
       webglContextLoss = null
@@ -465,7 +450,7 @@ export function createTerminalLifecycleRuntime(options: TerminalLifecycleOptions
       options.setTerminalScrollableElement(null)
       options.terminalRef.current = null
       clearTerminalGlobalState(terminal)
-      terminal.dispose()
+      disposeTerminal(terminal)
     }
   }
 }
