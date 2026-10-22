@@ -383,19 +383,43 @@ try {
       undefined,
       { timeout: 10000 }
     )
+    await page.evaluate(() => window.disposeRuntime.terminal.focus())
+    await page.waitForFunction(
+      () =>
+        Boolean(
+          window.disposeRuntime.terminal._core._renderService._renderer.value._cursorBlinkStateManager.value
+            ._blinkInterval
+        ),
+      undefined,
+      { timeout: 5000 }
+    )
     await page.evaluate(() => {
       const canvas = [...window.disposeRuntime.terminal.element.querySelectorAll('canvas')].find((item) =>
         item.getContext('webgl2')
       )
       window.disposedGl = canvas?.getContext('webgl2')
+      const renderer = window.disposeRuntime.terminal._core._renderService._renderer.value
+      const blinkStateManager = renderer._cursorBlinkStateManager
+      const disposeBlinkStateManager = blinkStateManager.dispose.bind(blinkStateManager)
+      window.blinkStateManagerDisposed = false
+      blinkStateManager.dispose = () => {
+        window.blinkStateManagerDisposed = true
+        disposeBlinkStateManager()
+      }
       window.disposeRuntime.disposeCore()
     })
     await page.waitForFunction(() => window.disposedGl?.isContextLost(), undefined, { timeout: 5000 })
     const normalDispose = await page.evaluate(() => ({
       contextLost: window.disposedGl.isContextLost(),
+      blinkStateManagerDisposed: window.blinkStateManagerDisposed,
       remainingHostChildren: window.disposeHost.childElementCount
     }))
     assert.equal(normalDispose.contextLost, true)
+    assert.equal(
+      normalDispose.blinkStateManagerDisposed,
+      true,
+      'WebGL disposal must stop the focused cursor blink manager'
+    )
     assert.equal(normalDispose.remainingHostChildren, 0)
     await page.evaluate(() => window.disposeHost.remove())
     await page.evaluate(() => {

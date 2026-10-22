@@ -1,5 +1,27 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-22：输入 Promise 链在关闭后仍占额度与重连迟到回调
+
+继续检查异步队列的资源所有权。原 renderer 输入队列以 Promise 链保序，`dispose()` 仅设置标记；一个已经发出的 IPC 长期不返回时，后续尚未发送的输入、失败回调及其全窗口额度都无法释放。改用明确的待发送列表，仍在微任务中按序发送并捕获事件发生时的 tab ID；销毁立即结算尚未发送项并清空数据/业务回调，已发送项的额度仍等实际完成或失败后归还，不提前放大共享预算。已发送项销毁后不再调用旧终端的失败处理。
+
+重连调用移入 Promise 的回调，以便同步抛错也进入既有失败提示和状态收尾；发起、失败和完成路径均检查 runtime 是否已经销毁，避免关闭后继续写提示或改动共享 refs。焦点和输入失败回调增加相同守卫。本轮仍按用户要求不新增或运行测试、不执行门禁或桌面验证；这些源码修补不能解释或确认修复此前 1 GiB 的 WebView 占用。
+
+## 2026-10-22：继续对照关闭标签后的订阅与延迟回调保留
+
+继续沿 Tabby 的 IPC listener 保留和后台输出路径检查。`subscribe` / `subscribeReady` 在原生退订失败时保留空转回调，原实现仍通过闭包引用业务 listener，可能持有已关闭终端。改为取消订阅时立即清空业务 listener 引用，原生退订确认和迟到事件防护仍按原顺序执行。
+
+终端输出模块取消几处重复嵌套、未登记的 rAF，统一走已有可取消的 resize 帧；单独的 surface refresh 帧增加登记和销毁取消。合并 resize 时累积保留视口的请求，避免后续普通 resize 覆盖。输出、断线后的写入回调和 resize 增加销毁守卫；OSC 52 查询在异步剪贴板读取后检查销毁状态与目标标签，避免关闭后向复用的标签发送迟到回复。
+
+代码路径检查未发现 Tabby 未聚焦标签那样的无界前端初始输出缓存：后台终端保持挂载并订阅，renderer transcript 限制 200,000 字符，native 输出按窗口最多四批在途且等待解析 ACK。以上仅为源码结论，本轮仍按用户要求不执行验证，不能证明此前约 1 GiB 的 WebView 占用已解决。
+
+## 2026-10-22：对照 Tabby 的销毁与未终止 OSC 问题补齐清理
+
+对照 [Tabby #11718](https://github.com/Eugeny/tabby/issues/11718) 检查现有实现：WebGL 光标闪烁管理器已有显式释放，输出 ACK 已等待 xterm 解析完成，renderer transcript 也已有长度限制。本轮补齐 xterm 6.0 隐藏 resize idle 队列与 addon-webgl 0.19 context 恢复定时器的销毁，将私有清理集中到 `xterm-adapters/terminal-disposal.ts`；runtime 销毁增加重复调用守卫。
+
+另外发现 Rust 本地终端 OSC 7 CWD 跟踪器的长度限制失效：未终止 marker 位于偏移零时，原来的 `rfind` 裁剪保留全部缓存。改为超限只保留可能跨包的 marker 前缀，完整超长 OSC 不再用于目录更新；CAN/SUB 或新 escape 会中止当前 OSC，并保留下一个 escape 供后续目录标记解析。该旁路跟踪器不修改送往终端的原始输出，不能据此归因先前 WebView 约 1 GiB 的占用。
+
+按用户要求本轮仅修改代码与维护记录，未新增或运行测试，未执行类型、静态、格式或桌面验证。改动效果与长期 native/GPU 内存趋势待后续验证，整体任务保持进行中。
+
 ## 2026-10-22：现场报告的 workspace 重放与 DOM 开销
 
 核对用户 app-log-1021.md 的完整内嵌样本为 beta.11；内容触发 DOM 回退已有修复，不能据此认定 WebGL context 崩溃。生产 React 受阻渲染复现 300 个监控事件执行 90,600 次 updater，改为按 IPC 顺序更新独立快照并由 useSyncExternalStore 订阅后为 300 次。减少 symbol observer 重扫、复用实际字体样式与校准网格；十终端目录/监控/传输对照通过，但原生远端刷新错位、长期 native/GPU 增长、DOM block 开销和既有粗体比例失败仍未解决。证据与门禁见 [本轮复核](../../quality/terminal-log-followup-2026-10-22.md)。
@@ -1096,3 +1118,80 @@ Windows 11 原生十二小时、真实交互程序与实际 SFTP 并发仍待复
 
 本次全范围类型、lint、格式、92 项 renderer、775 项 Rust/contract 与 Clippy 通过。
 CSS contract 通过，保留既有 11 处重要性声明提示。
+
+## 2026-10-22：Refs #353，监控历史重复分配
+
+反馈来自 macOS 27.0.1 / Apple Silicon / v2.2.31：2 个 SSH、4 个端口映射、15 秒资源监控，WebContent 长期约一个核心及 800MB。提供的 JSC 数组分配/GC 栈不能单独定位组件、证明泄漏，或等同本轮 Windows WebView2 问题。beta12 已含图表动画去 React state、workspace reducer 去重放；当前本地字体补丁尚未发布。
+
+### 本轮复现及最小修补
+
+1. 实际 NetworkPanel 在网络历史引用不变时，100 次仅 CPU 等无关指标变化仍执行 200 次 buildLinePath，重复分配两条曲线的点数组和字符串。生产 React 浏览器夹具先保留失败，再将曲线几何按 samples memo；空历史使用稳定空数组，避免每次创建填充窗口。保留组件正常重渲染，以便流量标签、语言、网卡和其他指标更新，不以整个组件 memo 阻断更新。
+2. 全量 workspace 快照携带相同 generation/revision 时，原合并逻辑仍把反序列化后的历史对象替换到前端。现在仅对双方都已有数据的同版本历史复用引用；监控状态和其他 session 字段仍使用新快照，新版本/新 generation、首次加载及显式清空保留原行为。未改变 Rust 采样频率、历史容量、SSH/隧道配置或事件投递。
+3. 新回归确认旧代码在相同历史下重建 200 次曲线，修补后非空/空历史均为 0 次；actual hook 的 100 次全量快照更新保留历史引用，目录字段仍更新。已有 360 次监控/输入、恢复断点、网卡选择、200 批解析/ACK 和卸载清理继续验证。
+
+### 验证与边界
+
+- 当前 Windows Chromium 的 DOM/WebGL 及 Windows Playwright WebKit 27.2 的 DOM 图表回归通过。WebKit 引擎测试不是 macOS Tauri/WKWebView 原生验收。
+- monitoring-terminal-stream 的旧诊断断言依赖最后一条告警，可能被 LoAF 告警覆盖；大量输出还会先触发 event-loop-gap，导致随后主动阻塞受生产 30 秒限流。测试改为等待告警冷却并匹配新 event-loop-gap，保留诊断内容和 200 批解析断言，没有改生产阈值或限流。
+- 两项源码改动只减少已复现的重复计算；不能由曲线调用次数推出 CPU 降幅或内存释放量，未证明 #353 的数小时持续高 CPU 已完整修复。
+- 基线失败及修补后的输出归档在本地 `D:\CodeFiles\renderer-validation-archive\issue353-2026-10-22\`。未使用用户真实 SSH/隧道或更改持久化设置；现有字体候选原样保留。监控补丁随后按用户要求追加至 PR #352（`464b7456`）；PR 仍为 draft，未合并、发版或关闭 Issue。
+- 待 macOS 同一原生版本、同 PID/启动时间下复测 2 SSH + 4 端口映射 + 15 秒监控：分别记录输出停止、监控关闭、侧栏收起、会话关闭后的 CPU/heap/native 内存与采样栈，继续区分 terminal/monitoring/IPC/布局及 GC 开销。
+
+本轮门禁：完整 typecheck、198 项 renderer、806 项 Rust（1 项 ignored）、10 CLI、23 contract、3 scheduler、严格全目标/全特性 Clippy、改动文件 ESLint 通过。CSS contract 通过，保留既有 11 处 !important 与约 6 处旧颜色值提示。全量 lint 的 76,074 项均为 CRLF 格式冲突，全量 Prettier 标记 477 文件；未为此重排无关文件。workspace 重放回归仍为 300 个事件/300 次 reducer。
+
+Chromium 与 Windows WebKit 的 monitoring-terminal-stream 均通过：100 次相同监控版本的全量快照保留历史引用，后台模拟无 RAF 时继续处理监控和排空输出，主动阻塞后的 event-loop-gap 告警内容与资源计数断言通过。
+
+## 2026-10-22：WebGL addon 0.19 光标闪烁定时器保活终端
+
+FileTerm 当前锁定 `@xterm/xterm@6.0.0` 和 `@xterm/addon-webgl@0.19.0`，运行时启用 `cursorBlink`，scrollback 上限为 6000 行。addon 0.19 创建 WebGL renderer 的 `CursorBlinkStateManager`，但没有把 manager 注册到 renderer 的 dispose store；聚焦后运行的 blink timer 会继续引用 renderer 和整棵 terminal/scrollback 对象，即使 tab 已关闭。xterm 上游 [PR #5817](https://github.com/xtermjs/xterm.js/pull/5817) 已修复此遗漏，但 npm 当前 `latest` 仍是 addon 0.19.0；Tabby 的 [问题复现与内存测量](https://github.com/Eugeny/tabby/issues/11718) 也使用了显式 dispose manager 的临时兼容措施。electerm 的默认 `cursorBlink` 为 false，并且在终端卸载时 dispose WebGL addon；这避开了常见的聚焦闪烁触发条件。
+
+FileTerm 的 `releaseWebglAddon` 现在先 dispose `_cursorBlinkStateManager`，再 dispose addon 和丢弃 WebGL context，异常时仍继续完成后两步。浏览器生命周期回归在聚焦并确认 blink interval 已启动后拦截 manager.dispose：修改前因 manager 未销毁而失败，修改后 manager.dispose 被调用、context 丢失且 host 节点清空。结果在本地 `D:\CodeFiles\renderer-validation-archive\issue353-2026-10-22\webgl-dispose-before.log` 与 `webgl-dispose-after.json`。
+
+Tabby 的同一问题还记录了另一条独立的活跃会话卡顿路径：其自定义 `OSCProcessor` 对未结束的 `ESC ]` 序列无限缓存，并在每个输出 chunk 上重复拼接和扫描；45 秒测试中 renderer RSS 从 615 MB 到 1,284 MB，主线程往返延迟从 0 增至 2,390 ms。这不是 xterm/WebGL 根因。检查 FileTerm 的终端路径未发现等价的 renderer OSC 中间件：OSC 52 由 xterm parser 处理，本地 OSC 7 sidecar 限 16 KiB，SSH CWD 扫描缓冲区约 8 KiB。该特定的无界缓存路径目前没有对应实现，但仍不能据此解释或排除 FileTerm 活跃 Claude 会话的其他 WebView2 内存增长原因。
+
+这解释的是**关闭聚焦的 WebGL 终端后内存不回收**，尤其是多次开关终端、且缓冲区已有较多 scrollback 的场景；它不能单独解释一个始终打开的 Claude Code 终端从 120 MB 持续涨至 1 GB。FileTerm 另外已将输出限制为每窗口 4 个解析未确认批次、每批最多 16 KiB，native 队列有固定容量，超限记录并跳过显示字节；原生 transcript 限 200,000 字符，xterm scrollback 限 6000 行。因此仍须把活跃终端的图集/纹理存储增长与已关闭终端保活分别测量，并在 Tauri/WebView2 下复测 PID/启动时间对应的 private bytes、GPU/native memory 和 tab churn。
+
+本次回归使用 Windows Playwright Chromium 156、RTX 3070 Laptop / driver 32.0.16.1742，不是原生 Tauri/WebView2；不能据此声称单个长会话的 1 GB 增长已解决。队列实际最多 8 批/标签、128 批/窗口；native transcript 限 200,000 字节，renderer transcript 回放上限为 200,000 个 JS 字符单元。
+
+## 2026-10-22：降低活跃 WebGL 终端的图集峰值
+
+Tabby [#11718](https://github.com/Eugeny/tabby/issues/11718) 的约 390 MB 是关闭 20 个标签后的 renderer RSS，约 405 MB 是单个异常 OSC 流修补后的 renderer RSS；不是十个活跃终端的浏览器进程组峰值。[#5667](https://github.com/Eugeny/tabby/discussions/5667) 的 400 MB+ 又是另一位用户创建三个 SSH 配置后的反馈。不得将这些数字当成 FileTerm 相同负载的上限保证。
+
+参考 [VS Code xterm 生命周期](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts)、[Tabby frontend](https://github.com/Eugeny/tabby/blob/master/tabby-terminal/src/frontends/xtermFrontend.ts) 和 [electerm 初始化](https://github.com/electerm/electerm/blob/master/src/client/components/terminal/mixins/term-init.js) 检查 WebGL、解析背压和销毁路径。FileTerm 已有这些机制，本轮修补的是其自己的图集保留策略：
+
+- 小视口图集预算下限由 32 MiB 降至 4 MiB；仍按共享终端的最大物理像素视口保留四份 RGBA surface 空间，不降低滚动历史、颜色精度或输出完整性。
+- 原清理逻辑清空字形但保留全部画布页，每个 context 仍持有这些空白页的纹理。现在复用最大普通页、保留 oversized glyph 专用页，清除冗余画布 backing pixels 并通知移除；既有纹理适配器将闲置槽缩回 1×1。所有共享终端的旧字形坐标同时失效。
+- 长测夹具新增 WebGL 路径和去重图集字节采样，避免将 DOM-only 压测误称为默认 WebGL 路径的验证。
+
+Windows Chromium 十个终端、每个 6000 行历史、相同动态 RGB/组合字形负载，各 60 秒，未强制 GC；每十秒采样进程 private bytes：
+
+| 指标                             | 修改前     | 修改后    |
+| -------------------------------- | ---------- | --------- |
+| 图集画布采样峰值                 | 34 MiB     | 4 MiB     |
+| GPU 进程私有内存采样峰值         | 784.9 MiB  | 293.9 MiB |
+| 浏览器进程组私有内存合计采样峰值 | 1157.7 MiB | 612.4 MiB |
+| 每终端完成写入批数               | 156        | 200       |
+| P95 事件循环间隔                 | 403.1 ms   | 322.3 ms  |
+
+仅降低预算而保留空白页的中间方案存在吞吐/延迟退步，未作为最终实现。以上是有限时间合成压测的采样峰值，不是精确瞬时峰值或真实 SSH/Claude 长任务结论；private bytes 也不等于独占显存。
+
+回归覆盖小视口旧预算不回收、大视口共享预算、最大页复用、冗余页像素释放、移除通知、oversized glyph 支持，以及共享终端重绘。生产生命周期夹具追加 20 次清理，纹理尺寸/闲置槽/销毁归零检查通过。
+
+原始数据与复现 runner 保存在本地 `D:\CodeFiles\renderer-validation-archive\peak-memory-2026-10-22\`。DOM fallback 峰值和真实远程长任务仍需单独测量。
+
+### 原生 WebView2 同长对照
+
+使用同一台 Windows 机器、同一 FileTerm dev 进程及 Vite 页面，旧版注入 HEAD 中的图集代码，新版使用工作区实现；均运行 300 秒、10 个活跃终端、每个约 6000 行 scrollback、相同 RGB/组合字形输出。每 5 秒采样一次以指定 `fileterm.exe` 为根的 WebView2 子进程树 private bytes。表内峰值是采样所得，进程组一栏是在每个采样点先求进程 private bytes 总和，再取峰值。
+
+| 指标                                 |      旧策略 |    新策略 |
+| ------------------------------------ | ----------: | --------: |
+| 图集 canvas backing bytes            |     106 MiB |     4 MiB |
+| GPU 子进程 private bytes             | 1,977.9 MiB | 276.1 MiB |
+| renderer 子进程 private bytes        |   566.2 MiB | 461.0 MiB |
+| WebView2 子进程组 private bytes 总和 | 2,532.3 MiB | 779.0 MiB |
+| 每终端完成写入轮数                   |       1,811 |     3,291 |
+| P95 event-loop 间隔                  |    165.0 ms |   99.5 ms |
+| 最大 event-loop 间隔                 |  1,159.2 ms |  216.2 ms |
+| 输入/点击延迟 P95                    |    2,408 ms |    848 ms |
+
+修改版压测的诊断日志记录了两条 `renderer-progress-slow`（synthetic interaction duration 达 1,200 ms）；测试返回页面时另记录一条约 2,029 ms 的 `event-loop-gap` 和一条 `renderer-long-frame`。旧版同长压测记录一条 `renderer-long-frame`。两段压测窗口内没有 ERROR/FATAL。进程 private bytes 不是独占显存，5 秒采样也可能漏掉瞬时峰值；这些数值说明本机合成工作负载下的 WebView2 进程开销有明显下降，不能保证所有远程长任务都稳定在 Tabby issue 报告的 renderer RSS 范围内。

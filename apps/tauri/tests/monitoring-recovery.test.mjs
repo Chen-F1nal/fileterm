@@ -127,3 +127,32 @@ test('initial padding connects to live samples but preserves explicit recovery g
     35
   )
 })
+
+test('equal monitoring revisions reuse history while applying unrelated snapshot changes', () => {
+  const current = workspace(health(2, 5, 'healthy'))
+  const incoming = structuredClone(current)
+  incoming.sessions.tab.remotePath = '/changed'
+  incoming.sessions.tab.connected = false
+  const next = mergeMonitoringSnapshot(current, incoming)
+  assert.equal(next.sessions.tab.systemMetrics, current.sessions.tab.systemMetrics)
+  assert.equal(next.sessions.tab.monitoring, incoming.sessions.tab.monitoring)
+  assert.equal(next.sessions.tab.remotePath, '/changed')
+  assert.equal(next.sessions.tab.connected, false)
+  const newer = workspace(health(2, 6, 'healthy'))
+  newer.sessions.tab.systemMetrics = { networkSamples: [{ rx: 99, tx: 99 }] }
+  assert.equal(mergeMonitoringSnapshot(current, newer).sessions.tab.systemMetrics, newer.sessions.tab.systemMetrics)
+  const missing = workspace(health(2, 5, 'healthy'))
+  missing.sessions.tab.systemMetrics = undefined
+  assert.equal(
+    mergeMonitoringSnapshot(missing, incoming).sessions.tab.systemMetrics,
+    incoming.sessions.tab.systemMetrics,
+    'an equal revision must still hydrate missing initial metrics'
+  )
+  const cleared = structuredClone(incoming)
+  cleared.sessions.tab.systemMetrics = undefined
+  assert.equal(
+    mergeMonitoringSnapshot(current, cleared).sessions.tab.systemMetrics,
+    undefined,
+    'an explicit metrics clear must not resurrect old history'
+  )
+})

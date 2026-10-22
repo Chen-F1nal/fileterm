@@ -13,6 +13,7 @@ type WebglAtlas = {
   _cacheMapCombined: { clear(): void }
   _didWarmUp: boolean
   _requestClearModel: boolean
+  _onRemoveTextureAtlasCanvas?: { fire(canvas: AtlasPage['canvas']): void }
 }
 
 export function isWebglAtlasCacheFull(value: unknown, budget: number): boolean {
@@ -44,6 +45,7 @@ export function resetWebglAtlasCache(value: unknown): boolean {
     typeof atlas._cacheMapCombined?.clear !== 'function' ||
     typeof atlas._didWarmUp !== 'boolean' ||
     typeof atlas._requestClearModel !== 'boolean' ||
+    (atlas._onRemoveTextureAtlasCanvas !== undefined && typeof atlas._onRemoveTextureAtlasCanvas.fire !== 'function') ||
     !atlas.pages.every(
       (page) => typeof page.clear === 'function' && Array.isArray(page._glyphs) && typeof page._usedPixels === 'number'
     )
@@ -57,9 +59,19 @@ export function resetWebglAtlasCache(value: unknown): boolean {
   }
   atlas._cacheMap.clear()
   atlas._cacheMapCombined.clear()
-  atlas._activePages = atlas.pages
+  const reusable = atlas.pages
     .filter((page) => page !== atlas._overflowSizePage)
-    .sort((a, b) => b.canvas.width - a.canvas.width)
+    .sort((a, b) => b.canvas.width - a.canvas.width)[0]
+  // Empty pages still cost one texture per context. Reuse the largest page;
+  // release the rest after invalidating every glyph coordinate.
+  const retained = atlas.pages.filter((page) => page === reusable || page === atlas._overflowSizePage)
+  for (const page of atlas.pages) {
+    if (retained.includes(page)) continue
+    atlas._onRemoveTextureAtlasCanvas?.fire(page.canvas)
+    page.canvas.width = page.canvas.height = 0
+  }
+  atlas.pages.splice(0, atlas.pages.length, ...retained)
+  atlas._activePages = reusable ? [reusable] : []
   atlas._didWarmUp = false
   // The caller invalidates all owners explicitly; do not leave upstream's sticky full-redraw flag set.
   atlas._requestClearModel = false

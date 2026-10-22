@@ -6,6 +6,8 @@ import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
 import { DropdownSelect } from '../common/dropdown-select'
 
+const EMPTY_SAMPLES: SystemMetrics['networkSamples'] = []
+
 export function NetworkMetricPanel({ metrics }: { metrics?: SystemMetrics }) {
   return (
     <div className="system-network-panel">
@@ -34,7 +36,7 @@ function NetworkPanel({ metrics }: { metrics?: SystemMetrics }) {
     ? metrics.networkSamplesByInterface[selectedInterface]
     : metrics?.networkSamples.length
       ? metrics.networkSamples
-      : []
+      : EMPTY_SAMPLES
   const samples = useMemo(() => buildScrollingWindow(rawSamples, visibleSampleCount), [rawSamples])
   const chartRef = useRef<SVGGElement | null>(null)
   const animationFrameRef = useRef<number | null>(null)
@@ -42,10 +44,10 @@ function NetworkPanel({ metrics }: { metrics?: SystemMetrics }) {
   const previousLastSampleRef = useRef(rawSamples.at(-1))
   const previousSampleCountRef = useRef(rawSamples.length)
 
-  const activityValues = samples.map((sample) => Math.max(sample.rx, sample.tx))
-  const maxValue = Math.max(...activityValues, 1)
-  const txPath = buildLinePath(samples, 'tx', maxValue)
-  const rxPath = buildLinePath(samples, 'rx', maxValue)
+  const { maxValue, txPath, rxPath } = useMemo(() => {
+    const maxValue = Math.max(...samples.map((sample) => Math.max(sample.rx, sample.tx)), 1)
+    return { maxValue, txPath: buildLinePath(samples, 'tx', maxValue), rxPath: buildLinePath(samples, 'rx', maxValue) }
+  }, [samples])
   const chartScale = [maxValue, maxValue * 0.66, maxValue * 0.33]
 
   useEffect(() => {

@@ -1,24 +1,17 @@
 import { trackRendererWork } from '../lib/renderer-work-log'
 import type { IBufferCell, Terminal } from '@xterm/xterm'
-import { drawBoxDrawingGlyph, isBoxDrawingGlyph } from './box-drawing'
+import { drawTerminalGraphicGlyph, isGraphicGlyph } from './terminal-graphic-glyphs'
 
-const BLOCK_ELEMENT_START = 0x2580
-const BLOCK_ELEMENT_END = 0x259f
 const BLOCK_GLYPH_CLASS = 'xterm-block-glyph'
 const BLOCK_GLYPH_PLACEHOLDER_CLASS = 'xterm-block-glyph-placeholder'
 const BLOCK_GLYPH_SOURCE_CLASS = 'xterm-block-glyph-source'
 const BLOCK_GLYPH_TEXT_CLASS = 'xterm-block-glyph-text'
 
-type BlockGlyphRect = { x: number; y: number; width: number; height: number }
 type GlyphColor = { css: string; rgba: number }
 type GlyphPalette = { foreground: GlyphColor; background: GlyphColor; ansi: GlyphColor[] }
 type ThemeServiceView = { _core?: { _themeService?: { colors?: GlyphPalette } } }
 type SourceBackground = { resolved: string; inline: string; priority: string }
 type BufferGlyph = { codepoint: number; column: number; color: string }
-
-function isGraphicGlyph(codepoint: number) {
-  return (codepoint >= BLOCK_ELEMENT_START && codepoint <= BLOCK_ELEMENT_END) || isBoxDrawingGlyph(codepoint)
-}
 
 function getGlyphForeground(cell: IBufferCell, palette: GlyphPalette, drawBoldTextInBrightColors: boolean) {
   const inverse = Boolean(cell.isInverse())
@@ -52,80 +45,6 @@ function restoreSourceBackground(source: HTMLElement, backgrounds: WeakMap<HTMLE
   else source.style.removeProperty('background-color')
   source.classList.remove(BLOCK_GLYPH_SOURCE_CLASS)
   backgrounds.delete(source)
-}
-
-function snapSize(size: number, fraction: number, pixelRatio: number) {
-  return Math.round(size * fraction * pixelRatio) / pixelRatio
-}
-
-function getBlockGlyphRects(codepoint: number, width: number, height: number, pixelRatio: number): BlockGlyphRect[] {
-  const halfWidth = snapSize(width, 0.5, pixelRatio)
-  const halfHeight = snapSize(height, 0.5, pixelRatio)
-  const full = [{ x: 0, y: 0, width, height }]
-  if (codepoint === 0x2580) {
-    return [{ x: 0, y: 0, width, height: halfHeight }]
-  }
-  if (codepoint >= 0x2581 && codepoint <= 0x2587) {
-    const blockHeight = snapSize(height, (codepoint - 0x2580) / 8, pixelRatio)
-    return [{ x: 0, y: height - blockHeight, width, height: blockHeight }]
-  }
-  if (codepoint === 0x2588) {
-    return full
-  }
-  if (codepoint >= 0x2589 && codepoint <= 0x258f) {
-    const blockWidth = snapSize(width, (0x2590 - codepoint) / 8, pixelRatio)
-    return [{ x: 0, y: 0, width: blockWidth, height }]
-  }
-  if (codepoint === 0x2590) {
-    return [{ x: width - halfWidth, y: 0, width: halfWidth, height }]
-  }
-  if (codepoint >= 0x2591 && codepoint <= 0x2593) {
-    const patterns = [
-      [{ x: 0, y: 0 }],
-      [
-        { x: 0, y: 0 },
-        { x: halfWidth, y: halfHeight }
-      ],
-      [
-        { x: 0, y: 0 },
-        { x: halfWidth, y: 0 },
-        { x: 0, y: halfHeight }
-      ]
-    ]
-    return patterns[codepoint - 0x2591].map(({ x, y }) => ({
-      x,
-      y,
-      width: halfWidth,
-      height: halfHeight
-    }))
-  }
-  if (codepoint === 0x2594) {
-    return [{ x: 0, y: 0, width, height: snapSize(height, 0.125, pixelRatio) }]
-  }
-  if (codepoint === 0x2595) {
-    const blockWidth = snapSize(width, 0.125, pixelRatio)
-    return [{ x: width - blockWidth, y: 0, width: blockWidth, height }]
-  }
-
-  const quadrants: Record<number, Array<'top left' | 'top right' | 'bottom left' | 'bottom right'>> = {
-    0x2596: ['bottom left'],
-    0x2597: ['bottom right'],
-    0x2598: ['top left'],
-    0x2599: ['top left', 'bottom left', 'bottom right'],
-    0x259a: ['top left', 'bottom right'],
-    0x259b: ['top left', 'top right', 'bottom left'],
-    0x259c: ['top left', 'top right', 'bottom right'],
-    0x259d: ['top right'],
-    0x259e: ['top right', 'bottom left'],
-    0x259f: ['top right', 'bottom left', 'bottom right']
-  }
-  const quadrantRects: Record<'top left' | 'top right' | 'bottom left' | 'bottom right', BlockGlyphRect> = {
-    'top left': { x: 0, y: 0, width: halfWidth, height: halfHeight },
-    'top right': { x: width - halfWidth, y: 0, width: halfWidth, height: halfHeight },
-    'bottom left': { x: 0, y: height - halfHeight, width: halfWidth, height: halfHeight },
-    'bottom right': { x: width - halfWidth, y: height - halfHeight, width: halfWidth, height: halfHeight }
-  }
-  return (quadrants[codepoint] ?? []).map((quadrant) => quadrantRects[quadrant])
 }
 
 function replaceBlockGlyphs(
@@ -240,23 +159,7 @@ function replaceBlockGlyphs(
     context.fillStyle = background
     context.fillRect(cellLeft, 0, cellRight - cellLeft, pixelHeight)
     context.fillStyle = color
-    if (isBoxDrawingGlyph(codepoint)) {
-      context.strokeStyle = color
-      const curved = codepoint >= 0x256d && codepoint <= 0x2573
-      if (curved) {
-        context.save()
-        context.beginPath()
-        context.rect(cellLeft, 0, cellRight - cellLeft, pixelHeight)
-        context.clip()
-      }
-      drawBoxDrawingGlyph(context, codepoint, cellLeft, cellRight - cellLeft, pixelHeight, lineThickness)
-      if (curved) context.restore()
-      continue
-    }
-    const rectangles = getBlockGlyphRects(codepoint, cellRight - cellLeft, pixelHeight, 1)
-    for (const rectangle of rectangles) {
-      context.fillRect(cellLeft + rectangle.x, rectangle.y, rectangle.width, rectangle.height)
-    }
+    drawTerminalGraphicGlyph(context, codepoint, cellLeft, cellRight - cellLeft, pixelHeight, lineThickness)
   }
 
   Object.assign(canvas.style, {

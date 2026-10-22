@@ -16,6 +16,16 @@ export function mergeMonitoringSnapshot(current: WorkspaceSnapshot, incoming: Wo
           ? { capabilities: { ...next.capabilities, resourceMonitoring: false } }
           : {})
       }
+    } else if (
+      a &&
+      b &&
+      a.generation === b.generation &&
+      a.revision === b.revision &&
+      previous.systemMetrics != null &&
+      next.systemMetrics != null
+    ) {
+      // Reuse unchanged histories without blocking initial hydration or explicit clearing.
+      sessions[tabId] = { ...next, systemMetrics: previous.systemMetrics }
     }
   }
   return { ...incoming, sessions }
