@@ -12,6 +12,8 @@ const root = fileURLToPath(new URL('../../../../', import.meta.url)).replace(/\/
 const require = createRequire(import.meta.url)
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const baseline = process.env.FILETERM_PERF_BASELINE === '1'
+const renderer = process.env.FILETERM_SOAK_RENDERER || 'dom'
+assert.ok(['dom', 'webgl'].includes(renderer), 'FILETERM_SOAK_RENDERER must be dom or webgl')
 const durationMs = Number(process.env.FILETERM_SOAK_MS || 60000)
 const baselineDirectory = baseline ? mkdtempSync(join(tmpdir(), 'fileterm-perf-baseline-')) : null
 assert.ok(Number.isFinite(durationMs) && durationMs >= 1000)
@@ -28,6 +30,9 @@ try {
   )
   await page.addStyleTag({ path: root + '/node_modules/@xterm/xterm/css/xterm.css' })
   await page.addScriptTag({ path: root + '/node_modules/@xterm/xterm/lib/xterm.js' })
+  if (renderer === 'webgl') {
+    await page.addScriptTag({ path: root + '/node_modules/@xterm/addon-webgl/lib/addon-webgl.js' })
+  }
   for (const [file, symbol] of [
     ['xterm-adapters/terminal-symbol-glyph-renderer', 'registerTerminalSymbolGlyphRenderer'],
     ['xterm-adapters/terminal-block-glyph-renderer', 'registerTerminalBlockGlyphRenderer'],
@@ -35,6 +40,8 @@ try {
     ['xterm-adapters/terminal-foreground-adapter', 'registerTerminalForegroundAdapter'],
     ['xterm-adapters/terminal-log-colorizer', 'TerminalLogColorizer'],
     ['xterm-adapters/terminal-render-cache', 'registerTerminalRenderCacheLimits'],
+    ['xterm-adapters/terminal-webgl-grid', 'registerTerminalWebglGrid'],
+    ['xterm-adapters/terminal-disposal', 'releaseWebglAddon'],
     ['features/workspace/file-panel-layout-observer', 'observeFilePanelLayout']
   ]) {
     if (baseline && ['registerTerminalRenderCacheLimits', 'observeFilePanelLayout'].includes(symbol)) continue
@@ -53,7 +60,7 @@ try {
     if (existsSync(path)) await loadTypeScript(page, path, symbol)
   }
   const resultPromise = page.evaluate(
-    async ({ baseline, durationMs }) => {
+    async ({ baseline, durationMs, renderer }) => {
       const frame = () => new Promise((resolve) => requestAnimationFrame(resolve))
       const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
       const palette = Object.fromEntries(
@@ -105,10 +112,16 @@ try {
           theme: { foreground: '#dddddd', background: '#111111' }
         })
         terminal.open(host)
+        const addon = renderer === 'webgl' ? new window.WebglAddon.WebglAddon() : null
+        if (addon) terminal.loadAddon(addon)
         const adapters = [
-          'registerTerminalSymbolGlyphRenderer',
-          'registerTerminalBlockGlyphRenderer',
-          'registerTerminalSelectionRenderer',
+          ...(addon
+            ? ['registerTerminalWebglGrid']
+            : [
+                'registerTerminalSymbolGlyphRenderer',
+                'registerTerminalBlockGlyphRenderer',
+                'registerTerminalSelectionRenderer'
+              ]),
           'registerTerminalForegroundAdapter',
           'registerTerminalRenderCacheLimits'
         ].flatMap((name) => (window[name] ? [window[name](terminal)] : []))
@@ -120,6 +133,7 @@ try {
           dispose: () => {
             colorizer.dispose()
             adapters.forEach((adapter) => adapter.dispose())
+            if (addon) window.releaseWebglAddon(addon)
             terminal.dispose()
           }
         }
@@ -160,6 +174,7 @@ try {
       let maxContrastEntries = 0
       let maxWidthEntries = 0
       let maxNodes = 0
+      let maxAtlasBytes = 0
       const count = (cache) =>
         Math.max(
           ...['_css', '_color'].map((kind) =>
@@ -167,6 +182,7 @@ try {
           )
         )
       const sample = () => {
+        const atlases = new Set()
         for (const { terminal } of runtimes) {
           const core = terminal._core
           maxContrastEntries = Math.max(
@@ -174,8 +190,18 @@ try {
             count(core._themeService.colors.contrastCache),
             count(core._themeService.colors.halfContrastCache)
           )
-          maxWidthEntries = Math.max(maxWidthEntries, core._renderService._renderer.value._widthCache._holey.size)
+          const activeRenderer = core._renderService._renderer.value
+          maxWidthEntries = Math.max(maxWidthEntries, activeRenderer._widthCache?._holey?.size || 0)
+          if (activeRenderer._charAtlas) atlases.add(activeRenderer._charAtlas)
         }
+        maxAtlasBytes = Math.max(
+          maxAtlasBytes,
+          [...atlases].reduce(
+            (sum, atlas) =>
+              sum + atlas.pages.reduce((bytes, page) => bytes + page.canvas.width * page.canvas.height * 4, 0),
+            0
+          )
+        )
         maxNodes = Math.max(maxNodes, document.querySelectorAll('*').length)
       }
       const started = performance.now()
@@ -231,6 +257,7 @@ try {
       gaps.sort((a, b) => a - b)
       return {
         baseline,
+        renderer,
         durationMs,
         writesPerTerminal: writes,
         unchangedPaletteMs,
@@ -241,13 +268,14 @@ try {
         maxContrastEntries,
         maxWidthEntries,
         maxNodes,
+        maxAtlasBytes,
         beforeDisposeNodes,
         afterDisposeNodes: document.querySelectorAll('*').length,
         p95EventLoopMs: gaps[Math.floor(gaps.length * 0.95)],
         maxEventLoopMs: gaps.at(-1)
       }
     },
-    { baseline, durationMs }
+    { baseline, durationMs, renderer }
   )
   const inputAndClickMs = []
   const inputStarted = performance.now()

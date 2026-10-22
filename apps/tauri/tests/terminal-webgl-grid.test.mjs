@@ -296,7 +296,7 @@ test('clearing a shared atlas invalidates peers once and disposed or unrelated t
   assert.equal(first.terminal.clearTextureAtlas, first.originalClear)
 })
 
-test('atlas reset releases old glyphs, reuses merged pages, and allows a reused cache to fill before resetting again', () => {
+test('atlas reset releases redundant backing pages, reuses the largest page and retains oversized-glyph support', () => {
   const page = (size) => ({
     canvas: { width: size, height: size },
     _glyphs: [{}],
@@ -308,6 +308,7 @@ test('atlas reset releases old glyphs, reuses merged pages, and allows a reused 
   const small = page(512),
     merged = page(4096),
     overflow = page(512)
+  const removed = []
   const atlas = {
     pages: [merged, small, overflow],
     _activePages: [small],
@@ -315,7 +316,8 @@ test('atlas reset releases old glyphs, reuses merged pages, and allows a reused 
     _cacheMap: new Map([['old', {}]]),
     _cacheMapCombined: new Map([['old', {}]]),
     _didWarmUp: true,
-    _requestClearModel: false
+    _requestClearModel: false,
+    _onRemoveTextureAtlasCanvas: { fire: (canvas) => removed.push(canvas) }
   }
   const budget = 32 * 1024 * 1024
   assert.equal(atlasCache.isWebglAtlasCacheFull(atlas, budget), true)
@@ -336,9 +338,12 @@ test('atlas reset releases old glyphs, reuses merged pages, and allows a reused 
   assert.equal(merged._glyphs.length, 1)
   assert.equal(atlas._cacheMap.size, 0)
   assert.equal(atlas._cacheMapCombined.size, 0)
-  assert.equal(atlas._activePages.length, 2)
+  assert.equal(atlas.pages.length, 2)
+  assert.equal(small.canvas.width * small.canvas.height, 0, 'release CPU backing pixels of removed pages')
+  assert.equal(atlas._activePages.length, 1)
   assert.equal(atlas._activePages[0], merged)
-  assert.equal(atlas._activePages[1], small)
+  assert.equal(atlas.pages.includes(overflow), true)
+  assert.deepEqual(removed, [small.canvas], 'notify addon listeners once for each removed page')
   assert.equal(atlas._didWarmUp, false)
   assert.equal(atlas._requestClearModel, false)
   assert.equal(
@@ -352,7 +357,7 @@ test('atlas reset releases old glyphs, reuses merged pages, and allows a reused 
 })
 
 test('rendering recycles an oversized RGB cache before drawing without repeatedly clearing retained backing pages', () => {
-  const page = { canvas: { width: 4096, height: 4096 }, _glyphs: [{}], _usedPixels: 4096 * 4096, clear() {} }
+  const page = { canvas: { width: 2048, height: 2048 }, _glyphs: [{}], _usedPixels: 2048 * 2048, clear() {} }
   const atlas = {
     pages: [page],
     _activePages: [page],
@@ -398,7 +403,7 @@ test('rendering recycles an oversized RGB cache before drawing without repeatedl
   const largeRenderer = { ...renderer, _gl: { canvas: { width: 5000, height: 3000 } } }
   const largeTerminal = { ...terminal, _core: { _renderService: { _renderer: { value: largeRenderer } } } }
   const largeAdapter = registerTerminalWebglGrid(largeTerminal)
-  page._usedPixels = 4096 * 4096
+  page._usedPixels = 2048 * 2048
   renderer.renderRows(0, 23)
   assert.equal(clears, 1, 'a small terminal must respect the shared atlas working set of its larger peer')
   largeAdapter.dispose()

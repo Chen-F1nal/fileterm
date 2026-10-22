@@ -1152,3 +1152,46 @@ Tabby 的同一问题还记录了另一条独立的活跃会话卡顿路径：�
 这解释的是**关闭聚焦的 WebGL 终端后内存不回收**，尤其是多次开关终端、且缓冲区已有较多 scrollback 的场景；它不能单独解释一个始终打开的 Claude Code 终端从 120 MB 持续涨至 1 GB。FileTerm 另外已将输出限制为每窗口 4 个解析未确认批次、每批最多 16 KiB，native 队列有固定容量，超限记录并跳过显示字节；原生 transcript 限 200,000 字符，xterm scrollback 限 6000 行。因此仍须把活跃终端的图集/纹理存储增长与已关闭终端保活分别测量，并在 Tauri/WebView2 下复测 PID/启动时间对应的 private bytes、GPU/native memory 和 tab churn。
 
 本次回归使用 Windows Playwright Chromium 156、RTX 3070 Laptop / driver 32.0.16.1742，不是原生 Tauri/WebView2；不能据此声称单个长会话的 1 GB 增长已解决。队列实际最多 8 批/标签、128 批/窗口；native transcript 限 200,000 字节，renderer transcript 回放上限为 200,000 个 JS 字符单元。
+
+## 2026-10-22：降低活跃 WebGL 终端的图集峰值
+
+Tabby [#11718](https://github.com/Eugeny/tabby/issues/11718) 的约 390 MB 是关闭 20 个标签后的 renderer RSS，约 405 MB 是单个异常 OSC 流修补后的 renderer RSS；不是十个活跃终端的浏览器进程组峰值。[#5667](https://github.com/Eugeny/tabby/discussions/5667) 的 400 MB+ 又是另一位用户创建三个 SSH 配置后的反馈。不得将这些数字当成 FileTerm 相同负载的上限保证。
+
+参考 [VS Code xterm 生命周期](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts)、[Tabby frontend](https://github.com/Eugeny/tabby/blob/master/tabby-terminal/src/frontends/xtermFrontend.ts) 和 [electerm 初始化](https://github.com/electerm/electerm/blob/master/src/client/components/terminal/mixins/term-init.js) 检查 WebGL、解析背压和销毁路径。FileTerm 已有这些机制，本轮修补的是其自己的图集保留策略：
+
+- 小视口图集预算下限由 32 MiB 降至 4 MiB；仍按共享终端的最大物理像素视口保留四份 RGBA surface 空间，不降低滚动历史、颜色精度或输出完整性。
+- 原清理逻辑清空字形但保留全部画布页，每个 context 仍持有这些空白页的纹理。现在复用最大普通页、保留 oversized glyph 专用页，清除冗余画布 backing pixels 并通知移除；既有纹理适配器将闲置槽缩回 1×1。所有共享终端的旧字形坐标同时失效。
+- 长测夹具新增 WebGL 路径和去重图集字节采样，避免将 DOM-only 压测误称为默认 WebGL 路径的验证。
+
+Windows Chromium 十个终端、每个 6000 行历史、相同动态 RGB/组合字形负载，各 60 秒，未强制 GC；每十秒采样进程 private bytes：
+
+| 指标                             | 修改前     | 修改后    |
+| -------------------------------- | ---------- | --------- |
+| 图集画布采样峰值                 | 34 MiB     | 4 MiB     |
+| GPU 进程私有内存采样峰值         | 784.9 MiB  | 293.9 MiB |
+| 浏览器进程组私有内存合计采样峰值 | 1157.7 MiB | 612.4 MiB |
+| 每终端完成写入批数               | 156        | 200       |
+| P95 事件循环间隔                 | 403.1 ms   | 322.3 ms  |
+
+仅降低预算而保留空白页的中间方案存在吞吐/延迟退步，未作为最终实现。以上是有限时间合成压测的采样峰值，不是精确瞬时峰值或真实 SSH/Claude 长任务结论；private bytes 也不等于独占显存。
+
+回归覆盖小视口旧预算不回收、大视口共享预算、最大页复用、冗余页像素释放、移除通知、oversized glyph 支持，以及共享终端重绘。生产生命周期夹具追加 20 次清理，纹理尺寸/闲置槽/销毁归零检查通过。
+
+原始数据与复现 runner 保存在本地 `D:\CodeFiles\renderer-validation-archive\peak-memory-2026-10-22\`。DOM fallback 峰值和真实远程长任务仍需单独测量。
+
+### 原生 WebView2 同长对照
+
+使用同一台 Windows 机器、同一 FileTerm dev 进程及 Vite 页面，旧版注入 HEAD 中的图集代码，新版使用工作区实现；均运行 300 秒、10 个活跃终端、每个约 6000 行 scrollback、相同 RGB/组合字形输出。每 5 秒采样一次以指定 `fileterm.exe` 为根的 WebView2 子进程树 private bytes。表内峰值是采样所得，进程组一栏是在每个采样点先求进程 private bytes 总和，再取峰值。
+
+| 指标                                 |      旧策略 |    新策略 |
+| ------------------------------------ | ----------: | --------: |
+| 图集 canvas backing bytes            |     106 MiB |     4 MiB |
+| GPU 子进程 private bytes             | 1,977.9 MiB | 276.1 MiB |
+| renderer 子进程 private bytes        |   566.2 MiB | 461.0 MiB |
+| WebView2 子进程组 private bytes 总和 | 2,532.3 MiB | 779.0 MiB |
+| 每终端完成写入轮数                   |       1,811 |     3,291 |
+| P95 event-loop 间隔                  |    165.0 ms |   99.5 ms |
+| 最大 event-loop 间隔                 |  1,159.2 ms |  216.2 ms |
+| 输入/点击延迟 P95                    |    2,408 ms |    848 ms |
+
+修改版压测的诊断日志记录了两条 `renderer-progress-slow`（synthetic interaction duration 达 1,200 ms）；测试返回页面时另记录一条约 2,029 ms 的 `event-loop-gap` 和一条 `renderer-long-frame`。旧版同长压测记录一条 `renderer-long-frame`。两段压测窗口内没有 ERROR/FATAL。进程 private bytes 不是独占显存，5 秒采样也可能漏掉瞬时峰值；这些数值说明本机合成工作负载下的 WebView2 进程开销有明显下降，不能保证所有远程长任务都稳定在 Tabby issue 报告的 renderer RSS 范围内。

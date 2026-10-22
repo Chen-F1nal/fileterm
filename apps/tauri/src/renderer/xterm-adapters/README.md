@@ -34,6 +34,6 @@
 
 单元测试在 `apps/tauri/tests/terminal-*.test.mjs`；真实 xterm 的字体、字宽、符号、框线和鼠标选区回归在 `apps/tauri/tests/browser/terminal-*.mjs`。这些 fixture 直接加载生产模块，移动文件时须同步路径。
 
-`terminal-webgl-atlas-cache.ts` 修正 addon-webgl 0.19 的清理引用与合并页复用，由 grid 适配器在绘制前按共享终端最大视口回收历史颜色变体；预算是缓存回收触发线，不是进程总内存上限。升级 xterm 时复核私有结构与 RGB/重复清理回归。
+`terminal-webgl-atlas-cache.ts` 修正 addon-webgl 0.19 的清理引用与合并页复用，由 grid 适配器在绘制前按共享终端最大视口回收历史颜色变体；小视口预算下限为 4 MiB，大视口保留四份可见 RGBA surface 的空间。清理时复用最大普通页、保留 oversized glyph 专用页，释放其余空白页的 backing pixels；各 context 的闲置纹理槽由 texture 适配器缩为 1×1。预算是缓存回收触发线，不是进程总内存上限。升级 xterm 时复核私有结构与 RGB/重复清理回归。
 
 `terminal-webgl-textures.ts` 随 grid 适配器管理每个 renderer 的纹理槽；页面尺寸变化时替换纹理对象，未使用槽保留 1×1 占位，避免合并或字体替换后留下旧 storage/mip levels。实际显存释放由驱动决定，测试 API 请求统计不代表显存；见 [Windows 复核](../../../../../docs/quality/terminal-windows-texture-storage-2026-10-21.md)。
