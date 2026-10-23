@@ -25,15 +25,20 @@
     "copyright": "Copyright © 2026 St0ff3l",
     "license": "MIT",
     "publisher": "St0ff3l",
-    "icon": ["icons/app/linux/32x32.png", "icons/app/linux/128x128.png", "icons/app/linux/128x128@2x.png"],
+    "icon": [
+      "icons/app/linux/32x32.png",
+      "icons/app/linux/128x128.png",
+      "icons/app/linux/128x128@2x.png",
+      "icons/app/shared/classic-1024.png"
+    ],
     "linux": {
       "appimage": {
         "files": {
           "/usr/share/applications/FileTerm.desktop": "linux/appimage/FileTerm.desktop",
           "/usr/share/applications/com.fileterm.desktop.desktop": "linux/appimage/com.fileterm.desktop.desktop",
           "/usr/share/metainfo/com.fileterm.desktop.metainfo.xml": "linux/com.fileterm.desktop.metainfo.xml",
-          "/usr/share/pixmaps/com.fileterm.desktop.png": "icons/app/linux/128x128.png",
-          "/usr/share/pixmaps/fileterm.png": "icons/app/linux/128x128.png",
+          "/usr/share/pixmaps/com.fileterm.desktop.png": "icons/app/shared/classic-1024.png",
+          "/usr/share/pixmaps/fileterm.png": "icons/app/shared/classic-1024.png",
           "/usr/share/licenses/file-term/LICENSE": "../../../LICENSE"
         }
       },
@@ -46,8 +51,8 @@
           "/usr/share/applications/FileTerm.desktop": "linux/FileTerm.desktop",
           "/usr/share/applications/com.fileterm.desktop.desktop": "linux/com.fileterm.desktop.desktop",
           "/usr/share/metainfo/com.fileterm.desktop.metainfo.xml": "linux/com.fileterm.desktop.metainfo.xml",
-          "/usr/share/pixmaps/com.fileterm.desktop.png": "icons/app/linux/128x128.png",
-          "/usr/share/pixmaps/fileterm.png": "icons/app/linux/128x128.png",
+          "/usr/share/pixmaps/com.fileterm.desktop.png": "icons/app/shared/classic-1024.png",
+          "/usr/share/pixmaps/fileterm.png": "icons/app/shared/classic-1024.png",
           "/usr/share/licenses/file-term/LICENSE": "../../../LICENSE"
         }
       },
@@ -65,8 +70,8 @@
           "/usr/share/applications/FileTerm.desktop": "linux/FileTerm.desktop",
           "/usr/share/applications/com.fileterm.desktop.desktop": "linux/com.fileterm.desktop.desktop",
           "/usr/share/metainfo/com.fileterm.desktop.metainfo.xml": "linux/com.fileterm.desktop.metainfo.xml",
-          "/usr/share/pixmaps/com.fileterm.desktop.png": "icons/app/linux/128x128.png",
-          "/usr/share/pixmaps/fileterm.png": "icons/app/linux/128x128.png",
+          "/usr/share/pixmaps/com.fileterm.desktop.png": "icons/app/shared/classic-1024.png",
+          "/usr/share/pixmaps/fileterm.png": "icons/app/shared/classic-1024.png",
           "/usr/share/licenses/file-term/LICENSE": "../../../LICENSE"
         }
       }

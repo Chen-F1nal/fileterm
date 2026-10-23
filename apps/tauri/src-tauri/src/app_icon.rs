@@ -9,14 +9,17 @@ mod linux;
 #[cfg(target_os = "windows")]
 mod windows;
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
 pub(crate) fn icon_bytes(variant: &str) -> &'static [u8] {
-    platform_icon_bytes(variant, 512)
+    platform_icon_bytes(variant, 1024)
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", test))]
 pub(crate) fn platform_icon_bytes(variant: &str, size: u16) -> &'static [u8] {
     match variant {
+        "material" if size == 1024 => include_bytes!("../icons/app/shared/material-1024.png"),
+        "clean" if size == 1024 => include_bytes!("../icons/app/shared/clean-1024.png"),
+        _ if size == 1024 => include_bytes!("../icons/app/shared/classic-1024.png"),
         "material" if size == 256 => {
             include_bytes!("../icons/app/shared/material-256.png")
         }
@@ -113,7 +116,7 @@ mod tests {
 
     #[cfg(target_os = "windows")]
     #[test]
-    fn windows_tray_uses_desktop_resolution_artwork() {
+    fn windows_tray_uses_256px_artwork() {
         for variant in ["classic", "material", "clean"] {
             let bytes = super::tray_icon_bytes(variant);
             assert_eq!(bytes, platform_icon_bytes(variant, 256));
@@ -178,12 +181,14 @@ mod tests {
     #[test]
     fn each_app_icon_variant_is_an_rgba_png() {
         for variant in ["classic", "material", "clean"] {
-            let bytes = platform_icon_bytes(variant, 512);
+            let bytes = super::icon_bytes(variant);
+            assert_eq!(bytes, platform_icon_bytes(variant, 1024));
             assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
             assert_eq!(&bytes[12..16], b"IHDR");
             assert_eq!(bytes[24], 8);
             assert_eq!(bytes[25], 6);
-            assert_icon_fills_canvas(bytes, 512);
+            assert_icon_fills_canvas(bytes, 1024);
+            assert_icon_fills_canvas(platform_icon_bytes(variant, 512), 512);
             assert_icon_fills_canvas(platform_icon_bytes(variant, 256), 256);
         }
     }

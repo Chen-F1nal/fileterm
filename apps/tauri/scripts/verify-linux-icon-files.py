@@ -8,11 +8,12 @@ import struct
 
 
 ICON_FILES = {
-    "usr/share/pixmaps/fileterm.png": ("app/linux/128x128.png", 128),
-    "usr/share/pixmaps/com.fileterm.desktop.png": ("app/linux/128x128.png", 128),
+    "usr/share/pixmaps/fileterm.png": ("app/shared/classic-1024.png", 1024),
+    "usr/share/pixmaps/com.fileterm.desktop.png": ("app/shared/classic-1024.png", 1024),
     "usr/share/icons/hicolor/32x32/apps/fileterm.png": ("app/linux/32x32.png", 32),
     "usr/share/icons/hicolor/128x128/apps/fileterm.png": ("app/linux/128x128.png", 128),
     "usr/share/icons/hicolor/256x256@2/apps/fileterm.png": ("app/linux/128x128@2x.png", 256),
+    "usr/share/icons/hicolor/1024x1024/apps/fileterm.png": ("app/shared/classic-1024.png", 1024),
 }
 
 
@@ -47,7 +48,7 @@ def verify(root, icons_dir, appimage=False):
             raise ValueError(f"Incorrect launcher visibility: {name}")
     if appimage:
         verify_appimage(root)
-    print(f"Verified Linux launcher IDs and five classic icon payloads: {root}")
+    print(f"Verified Linux launcher IDs and {len(ICON_FILES)} classic icon payloads: {root}")
 
 
 def verify_appimage(root):
@@ -59,9 +60,9 @@ def verify_appimage(root):
     for executable in ["AppRun", "AppRun.wrapped", "usr/bin/fileterm"]:
         if not (root / executable).is_file():
             raise ValueError(f"AppDir executable is missing: {executable}")
-    icon = (root / "usr/share/icons/hicolor/256x256@2/apps/fileterm.png").read_bytes()
+    icon = (root / "usr/share/icons/hicolor/1024x1024/apps/fileterm.png").read_bytes()
     if (root / "fileterm.png").read_bytes() != icon or (root / ".DirIcon").read_bytes() != icon:
-        raise ValueError("AppDir launcher and thumbnail must use the bundled 256px icon")
+        raise ValueError("AppDir launcher and thumbnail must use the bundled 1024px icon")
 
 
 if __name__ == "__main__":

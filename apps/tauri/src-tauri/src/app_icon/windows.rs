@@ -47,8 +47,8 @@ fn load_icons() -> Result<[[Owned<HICON>; 2]; 3], String> {
     }
     fn load_variant(variant: &str) -> Result<[Owned<HICON>; 2], String> {
         Ok([
-            load(super::platform_icon_bytes(variant, 256), 256)?,
-            load(super::platform_icon_bytes(variant, 256), 256)?,
+            load(super::icon_bytes(variant), 1024)?,
+            load(super::icon_bytes(variant), 1024)?,
         ])
     }
     Ok([
@@ -69,7 +69,7 @@ fn apply_window_icon(hwnd: HWND, variant: &str) -> Result<(), String> {
         let [small_icon, big_icon] = &icons[index];
         // The taskbar may use the window-class icon when its button was
         // created from a pinned shortcut. Set both class handles using the
-        // desktop icon's 256px artwork and let Windows scale each surface.
+        // full-bleed 1024px artwork and let Windows scale each surface.
         unsafe {
             SetClassLongPtrW(hwnd, GCLP_HICON, big_icon.0 as isize);
             SetClassLongPtrW(hwnd, GCLP_HICONSM, small_icon.0 as isize);
@@ -364,11 +364,33 @@ mod tests {
     use super::*;
     use windows::{
         core::w,
-        Win32::UI::WindowsAndMessaging::{
-            CreateWindowExW, DestroyWindow, GetClassLongPtrW, SetClassLongPtrW, WINDOW_EX_STYLE,
-            WM_GETICON, WS_OVERLAPPED,
+        Win32::{
+            Graphics::Gdi::{DeleteObject, GetObjectW, BITMAP, HGDIOBJ},
+            UI::WindowsAndMessaging::{
+                CreateWindowExW, DestroyWindow, GetClassLongPtrW, GetIconInfo, SetClassLongPtrW,
+                ICONINFO, WINDOW_EX_STYLE, WM_GETICON, WS_OVERLAPPED,
+            },
         },
     };
+
+    fn native_icon_size(handle: isize) -> (i32, i32) {
+        let mut info = ICONINFO::default();
+        unsafe { GetIconInfo(HICON(handle as *mut _), &mut info) }.unwrap();
+        let mut bitmap = BITMAP::default();
+        let copied = unsafe {
+            GetObjectW(
+                HGDIOBJ(info.hbmColor.0),
+                std::mem::size_of::<BITMAP>() as i32,
+                Some((&mut bitmap as *mut BITMAP).cast()),
+            )
+        };
+        unsafe {
+            let _ = DeleteObject(HGDIOBJ(info.hbmColor.0));
+            let _ = DeleteObject(HGDIOBJ(info.hbmMask.0));
+        }
+        assert_eq!(copied, std::mem::size_of::<BITMAP>() as i32);
+        (bitmap.bmWidth, bitmap.bmHeight)
+    }
 
     #[test]
     fn native_window_updates_both_icon_sizes_and_can_restore_classic() {
@@ -403,6 +425,8 @@ mod tests {
             assert_ne!(big, 0);
             assert_ne!(small, 0);
             assert_ne!(small, big);
+            assert_eq!(native_icon_size(small), (1024, 1024));
+            assert_eq!(native_icon_size(big), (1024, 1024));
             assert_eq!(unsafe { GetClassLongPtrW(hwnd, GCLP_HICON) }, big as usize);
             assert_eq!(
                 unsafe { GetClassLongPtrW(hwnd, GCLP_HICONSM) },

@@ -1,16 +1,17 @@
-"""Generate Windows/Linux app icon resources from the canonical artwork.
+"""Generate Windows/Linux app icon resources from full-bleed 1024px exports.
 
 Requires Pillow (`python -m pip install Pillow`). Run from any directory with:
     python apps/tauri/scripts/generate-platform-app-icons.py
 
+Export the Icon Composer projects to icons/app/shared/{variant}-1024.png first.
 macOS Dock resources intentionally remain untouched: their transparent safety
-margin is part of the macOS icon contract. Windows and Linux need full-canvas
-artwork, so this script crops that margin before generating their resources.
+margin is part of the macOS icon contract. Windows/Linux exports fill the canvas.
 """
 
+from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageCms
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -74,16 +75,26 @@ def main() -> None:
     except OSError:
         pass
 
-    cropped: dict[str, Image.Image] = {}
+    artwork_by_variant: dict[str, Image.Image] = {}
     for variant in VARIANTS:
-        source = Image.open(SOURCE_DIR / f"dock-{variant}.png").convert("RGBA")
+        source = Image.open(SHARED_APP_ICON_DIR / f"{variant}-1024.png").convert("RGBA")
+        profile = source.info.get("icc_profile")
+        if profile:
+            source = ImageCms.profileToProfile(
+                source,
+                ImageCms.ImageCmsProfile(BytesIO(profile)),
+                ImageCms.createProfile("sRGB"),
+                outputMode="RGBA",
+            )
+        # Native RGBA decoders ignore ICC profiles; store normalized sRGB pixels.
+        source.info.pop("icc_profile", None)
         bounds = source.getchannel("A").getbbox()
-        if bounds is None:
-            raise ValueError(f"{variant} source icon is fully transparent")
-        artwork = source.crop(bounds)
-        if artwork.width != artwork.height:
-            raise ValueError(f"{variant} source artwork must be square: {artwork.size}")
-        cropped[variant] = artwork
+        if source.size != (1024, 1024) or bounds != (0, 0, 1024, 1024):
+            raise ValueError(f"{variant} source must be full-bleed 1024px: {source.size}, {bounds}")
+        artwork = source
+        artwork_by_variant[variant] = artwork
+        # Icon Composer can export 16-bit PNGs; native icon loaders need 8-bit RGBA.
+        save_png(artwork, SHARED_APP_ICON_DIR / f"{variant}-1024.png")
 
         for size in (256, 512):
             save_png(resized(artwork, size), SHARED_APP_ICON_DIR / f"{variant}-{size}.png")
@@ -100,7 +111,7 @@ def main() -> None:
             sizes=[(size, size) for size in ICO_SIZES],
         )
 
-    classic = cropped["classic"]
+    classic = artwork_by_variant["classic"]
     for size, path in (
         (32, LINUX_ICON_DIR / "32x32.png"),
         (128, LINUX_ICON_DIR / "128x128.png"),

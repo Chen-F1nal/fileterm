@@ -23,6 +23,9 @@ cp "$script_dir/verify-linux-icon-files.py" "$work_dir/verify-linux-icon-files.p
 mkdir -p "$work_dir/src-tauri/icons/app/linux"
 cp "$repo_root"/apps/tauri/src-tauri/icons/app/linux/{32x32,128x128,128x128@2x}.png \
   "$work_dir/src-tauri/icons/app/linux/"
+mkdir -p "$work_dir/src-tauri/icons/app/shared"
+cp "$repo_root/apps/tauri/src-tauri/icons/app/shared/classic-1024.png" \
+  "$work_dir/src-tauri/icons/app/shared/"
 
 for entry in "x86_64:x86_64" "arm64:aarch64"; do
   asset_arch="${entry%%:*}"
