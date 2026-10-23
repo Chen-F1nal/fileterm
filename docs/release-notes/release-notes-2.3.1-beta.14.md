@@ -21,13 +21,12 @@
 ### 2.3.1-beta.14 更新重点
 
 - **Windows WebGL 终端**：字形绘制位置对齐到设备像素，并让链接覆盖层使用整数图集单元，修复彩色细线、越界采样和图集重建后的像素变化。本机 Chromium / NVIDIA 回归中，6,440 组场景和 15,640 次边界探针未发现这些问题；19 组自动适配行列差异仍保留，原生安装版 WebView2 还需实测。
-- **Windows 图标**：任务栏和托盘使用与桌面图标相同的 256px 源图，交由 Windows 按显示尺寸缩放。
+- **Windows/Linux 图标**：Windows 任务栏使用全版 1024px 图标，通知区托盘使用 256px 图标；Linux 桌面启动器和 AppImage 使用全版 1024px 图标。macOS Dock 图标四周保留 100px 透明边距。
 - **格式检查**：Prettier 自动沿用文件现有的 LF 或 CRLF 换行，避免 Windows Git 换行转换造成的格式冲突。
 
 ### 本版本包含的主要 PR 和问题修复
 
-- 修复 Windows WebGL 字形边缘的彩色细线及覆盖层图集重建造成的像素变化。
-- 调整 Windows 任务栏和通知区图标资源分辨率。
+- [PR #355](https://github.com/St0ff3l/fileterm/pull/355)：修复 Windows WebGL 字形边缘的彩色细线及覆盖层图集重建造成的像素变化，并更新 Windows 和 Linux 桌面图标资源。
 
 完整变更记录请查看 [v2.3.1-beta.13 与 v2.3.1-beta.14 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.13...v2.3.1-beta.14)。
 
@@ -61,13 +60,12 @@ This beta fixes colored edge artifacts and glyph atlas scaling in the Windows We
 ### 2.3.1-beta.14 Highlights
 
 - **Windows WebGL terminal**: Align glyph drawing to device pixels and use integer atlas cells for the link overlay, fixing colored edge artifacts, out-of-bounds sampling, and pixel changes after atlas rebuilds. Local Chromium/NVIDIA regression covered 6,440 scenarios and 15,640 edge probes with none of these issues; 19 automatic-fit row or column differences remain, and the native installed WebView2 app still needs verification.
-- **Windows icons**: Use the same 256px source artwork as the desktop icon for taskbar and tray surfaces, letting Windows scale it to display size.
+- **Windows/Linux icons**: The Windows taskbar uses full-bleed 1024px artwork, while the tray uses 256px artwork. Linux desktop launchers and AppImages use full-bleed 1024px icons; the macOS Dock artwork retains its 100px transparent inset.
 - **Formatting checks**: Let Prettier follow each file's existing LF or CRLF line endings, avoiding conflicts with Windows Git checkout conversion.
 
 ### Main PRs and issues
 
-- Fix colored edge artifacts and atlas rebuild changes in the Windows WebGL terminal.
-- Update Windows taskbar and tray icon source resolution.
+- [PR #355](https://github.com/St0ff3l/fileterm/pull/355): Fix colored edge artifacts and overlay atlas rebuild changes in the Windows WebGL terminal, and update Windows and Linux desktop icon assets.
 
 See the [comparison between v2.3.1-beta.13 and v2.3.1-beta.14](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.13...v2.3.1-beta.14) for the complete change set.
 
