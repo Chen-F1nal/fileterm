@@ -32,7 +32,7 @@ static SHORTCUT_ICON_REFRESH_REQUEST: AtomicU64 = AtomicU64::new(0);
 static SHORTCUT_ICON_REFRESH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 thread_local! {
-    // WM_SETICON borrows HICONs. Keep both native sizes for all variants alive
+    // WM_SETICON borrows HICONs. Keep both handles for all variants alive
     // on the UI thread, including when windows close or switch variants.
     static ICONS: Result<[[Owned<HICON>; 2]; 3], String> = load_icons();
 }
@@ -47,7 +47,7 @@ fn load_icons() -> Result<[[Owned<HICON>; 2]; 3], String> {
     }
     fn load_variant(variant: &str) -> Result<[Owned<HICON>; 2], String> {
         Ok([
-            load(super::tray_icon_bytes(variant), 32)?,
+            load(super::platform_icon_bytes(variant, 256), 256)?,
             load(super::platform_icon_bytes(variant, 256), 256)?,
         ])
     }
@@ -68,8 +68,8 @@ fn apply_window_icon(hwnd: HWND, variant: &str) -> Result<(), String> {
         let icons = icons.as_ref().map_err(Clone::clone)?;
         let [small_icon, big_icon] = &icons[index];
         // The taskbar may use the window-class icon when its button was
-        // created from a pinned shortcut. Keep each native size available to
-        // Shell entry points instead of scaling one bitmap for every surface.
+        // created from a pinned shortcut. Set both class handles using the
+        // desktop icon's 256px artwork and let Windows scale each surface.
         unsafe {
             SetClassLongPtrW(hwnd, GCLP_HICON, big_icon.0 as isize);
             SetClassLongPtrW(hwnd, GCLP_HICONSM, small_icon.0 as isize);

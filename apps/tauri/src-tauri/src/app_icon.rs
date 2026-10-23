@@ -74,11 +74,7 @@ fn tray_icon_bytes(variant: &str) -> &'static [u8] {
 
 #[cfg(target_os = "windows")]
 fn tray_icon_bytes(variant: &str) -> &'static [u8] {
-    match variant {
-        "material" => include_bytes!("../icons/tray/windows/material-32.png"),
-        "clean" => include_bytes!("../icons/tray/windows/clean-32.png"),
-        _ => include_bytes!("../icons/tray/windows/classic-32.png"),
-    }
+    platform_icon_bytes(variant, 256)
 }
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -114,6 +110,17 @@ pub fn set_app_icon(app: &AppHandle, variant: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::platform_icon_bytes;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_tray_uses_desktop_resolution_artwork() {
+        for variant in ["classic", "material", "clean"] {
+            let bytes = super::tray_icon_bytes(variant);
+            assert_eq!(bytes, platform_icon_bytes(variant, 256));
+            let icon = tauri::image::Image::from_bytes(bytes).unwrap();
+            assert_eq!((icon.width(), icon.height()), (256, 256));
+        }
+    }
 
     fn assert_icon_fills_canvas(bytes: &[u8], size: u32) {
         let icon = tauri::image::Image::from_bytes(bytes).unwrap();

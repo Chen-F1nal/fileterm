@@ -25,8 +25,10 @@ try {
       contents: `
 import { createTerminalLifecycleRuntime } from './apps/tauri/src/renderer/components/terminal-lifecycle-core'
 import { setTerminalRendererPreference } from './apps/tauri/src/renderer/app/terminal-renderer-preference'
+import { probeWebglGlyphEdges } from './apps/tauri/tests/browser/helpers/webgl-glyph-edge-probe.mjs'
 import './apps/tauri/src/renderer/styles/index.css'
 import '@xterm/xterm/css/xterm.css'
+window.probeWebglGlyphEdges = probeWebglGlyphEdges
 window.createRuntime = (host, renderer) => {
   setTerminalRendererPreference(renderer)
   const runtime = createTerminalLifecycleRuntime({
@@ -50,7 +52,7 @@ window.createRuntime = (host, renderer) => {
     logLevel: 'silent'
   })
   const results = []
-  for (const dpr of [1, 1.25, 1.5, 2]) {
+  for (const dpr of [1, 1.2, 1.25, 1.5, 2]) {
     const browser = await chromium.launch({
       headless: true,
       executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
@@ -471,6 +473,28 @@ window.createRuntime = (host, renderer) => {
           delete window.baselineReference
         })
       }
+      const glyphEdges = await page.evaluate(async () => {
+        const terminal = window.runtime.terminal
+        const samples = []
+        for (const font of ['Consolas, monospace', '"JetBrains Mono", monospace'])
+          for (const size of [12, 14, 16, 24])
+            for (const weight of [400, 500]) {
+              terminal.options.theme = { background: '#ffffff', foreground: '#202020' }
+              terminal.options.fontFamily = font
+              terminal.options.fontSize = size
+              terminal.options.fontWeight = weight
+              terminal.resize(80, 5)
+              samples.push({ font, size, weight, ...(await window.probeWebglGlyphEdges(terminal)) })
+            }
+        return samples
+      })
+      for (const sample of glyphEdges) {
+        assert.equal(sample.error, 0)
+        assert.equal(sample.misalignedGlyphs, 0)
+        assert.equal(sample.fractionalAtlasGlyphs, 0)
+        assert.ok(sample.atlasCell.every(Number.isInteger))
+        assert.equal(sample.outsideGlyphPixels, 0, `glyph atlas bleeding: ${JSON.stringify({ dpr, ...sample })}`)
+      }
       await page.evaluate(async () => {
         const renderer = window.runtime.terminal._core._renderService._renderer.value
         const extension = renderer._gl.getExtension('WEBGL_lose_context')
@@ -519,6 +543,7 @@ window.createRuntime = (host, renderer) => {
         colors,
         graphicProfiles,
         baselineProfiles,
+        glyphEdges,
         restored
       })
     } finally {

@@ -170,7 +170,9 @@ try {
       for (const [width, height] of [
         [900, 600],
         [700, 450],
-        [900, 600]
+        [900, 600],
+        ...Array.from({ length: 24 }, (_, index) => [900 - index * 17, 600 - index * 9]),
+        ...Array.from({ length: 24 }, (_, index) => [509 + index * 17, 393 + index * 9])
       ]) {
         window.blockGlyphHost.style.width = width + 'px'
         window.blockGlyphHost.style.height = height + 'px'
@@ -237,7 +239,7 @@ try {
     for (const sample of blockPixels.samples) {
       assert.deepEqual(sample.quarters, expectedQuarters, 'block geometry stays aligned to cells across resizes')
       assert.deepEqual(sample.viewport, [0, 0, ...sample.backing])
-      assert.equal(sample.dpr, deviceScaleFactor)
+      assert.ok(Math.abs(sample.dpr - deviceScaleFactor) < 1e-6, 'native DPR can have float representation error')
       assert.ok(Math.abs(sample.backing[0] - sample.device.canvas.width) <= 1)
       assert.ok(Math.abs(sample.backing[1] - sample.device.canvas.height) <= 1)
     }
@@ -303,9 +305,7 @@ try {
       expectedQuarters,
       'shared atlas clearing preserves block geometry'
     )
-    // Fractional backing pixel rounding can resample atlas edges after repacking.
-    if (Number.isInteger(deviceScaleFactor))
-      assert.equal(sharedAtlasPixels.changedPixels, 0, 'clearing another terminal must not corrupt shared atlas glyphs')
+    assert.equal(sharedAtlasPixels.changedPixels, 0, 'clearing another terminal must not corrupt shared atlas glyphs')
 
     await page.evaluate(() => {
       window.blockGlyphRuntime.disposeCore()
