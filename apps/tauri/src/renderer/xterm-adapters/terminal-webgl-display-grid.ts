@@ -16,7 +16,12 @@ type Glyph = {
   updateCell(x: number, y: number, code: number | undefined, ...args: unknown[]): void
   _bindAtlasPageTexture(gl: WebGL2RenderingContext, ...args: unknown[]): void
 }
-type Layer = { resize(terminal: Terminal, dimensions: Dimensions): void }
+type Layer = {
+  _deviceCellWidth: number
+  _deviceCellHeight: number
+  _refreshCharAtlas(terminal: Terminal, ...args: unknown[]): void
+  resize(terminal: Terminal, dimensions: Dimensions): void
+}
 type Rectangle = { _dimensions: Dimensions; setDimensions(dimensions: Dimensions): void; handleResize(): void }
 type Renderer = {
   _gl: WebGL2RenderingContext
@@ -31,7 +36,11 @@ type Renderer = {
 export function createWebglDisplayGrid(terminal: Terminal, value: unknown) {
   const renderer = value as Renderer
   const measure = (terminal as unknown as { _core: { _charSizeService: { width: number } } })._core._charSizeService
-  if (typeof renderer._updateDimensions !== 'function' || !Array.isArray(renderer._renderLayers))
+  if (
+    typeof renderer._updateDimensions !== 'function' ||
+    !Array.isArray(renderer._renderLayers) ||
+    !renderer._renderLayers.every((layer) => typeof layer._refreshCharAtlas === 'function')
+  )
     throw new Error('Unsupported xterm WebGL display grid')
   const originalDimensions = renderer._updateDimensions
   const updateDimensions = function (this: Renderer) {
@@ -59,11 +68,26 @@ export function createWebglDisplayGrid(terminal: Terminal, value: unknown) {
   })
   const layers = renderer._renderLayers.map((layer) => {
     const original = layer.resize
+    const originalAtlas = layer._refreshCharAtlas
+    const refreshAtlas = function (this: Layer, terminal: Terminal, ...args: unknown[]) {
+      const width = this._deviceCellWidth
+      const height = this._deviceCellHeight
+      // xterm's shared atlas key omits cell dimensions, so a fractional overlay atlas can reach the glyph renderer.
+      this._deviceCellWidth = renderer.dimensions.device.cell.width
+      this._deviceCellHeight = renderer.dimensions.device.cell.height
+      try {
+        originalAtlas.call(this, terminal, ...args)
+      } finally {
+        this._deviceCellWidth = width
+        this._deviceCellHeight = height
+      }
+    }
     const resize = function (this: Layer, terminal: Terminal, dimensions: Dimensions) {
       original.call(this, terminal, displayDimensions(dimensions))
     }
     layer.resize = resize
-    return { layer, original, resize }
+    layer._refreshCharAtlas = refreshAtlas
+    return { layer, original, resize, originalAtlas, refreshAtlas }
   })
   let glyph: Glyph | undefined
   let update: Glyph['updateCell'] | undefined
@@ -111,26 +135,29 @@ export function createWebglDisplayGrid(terminal: Terminal, value: unknown) {
       if (typeof update !== 'function' || typeof bind !== 'function')
         throw new Error('Unsupported xterm WebGL glyph projection')
       wrappedUpdate = function (this: Glyph, x, y, code, ...args) {
-        if (!code || !isGraphicGlyph(code)) return originalUpdate.call(this, x, y, code, ...args)
         const dx = gl.canvas.width / terminal.cols
         const dy = gl.canvas.height / terminal.rows
-        cell.width = Math.round((x + 1) * dx) - Math.round(x * dx)
-        cell.height = Math.round((y + 1) * dy) - Math.round(y * dy)
-        setWebglGraphicCellSize(this._atlas, cell)
-        try {
-          originalUpdate.call(this, x, y, code, ...args)
-        } finally {
-          setWebglGraphicCellSize(this._atlas)
-        }
         const index = (y * terminal.cols + x) * 11
-        const char = renderer.dimensions.device.char
-        this._vertices.attributes[index] +=
-          Math.round(x * dx) - x * dx + Math.floor((cell.width - char.width) / 2) - char.left
-        this._vertices.attributes[index + 1] +=
-          Math.round(y * dy) -
-          y * dy +
-          (terminal.options.lineHeight === 1 ? 0 : Math.round((cell.height - char.height) / 2)) -
-          char.top
+        if (!code || !isGraphicGlyph(code)) {
+          originalUpdate.call(this, x, y, code, ...args)
+        } else {
+          cell.width = Math.round((x + 1) * dx) - Math.round(x * dx)
+          cell.height = Math.round((y + 1) * dy) - Math.round(y * dy)
+          setWebglGraphicCellSize(this._atlas, cell)
+          try {
+            originalUpdate.call(this, x, y, code, ...args)
+          } finally {
+            setWebglGraphicCellSize(this._atlas)
+          }
+          const char = renderer.dimensions.device.char
+          this._vertices.attributes[index] += Math.floor((cell.width - char.width) / 2) - char.left
+          this._vertices.attributes[index + 1] +=
+            (terminal.options.lineHeight === 1 ? 0 : Math.round((cell.height - char.height) / 2)) - char.top
+        }
+        // Fractional quad edges can sample a neighboring atlas glyph under nearest filtering.
+        const attributes = this._vertices.attributes
+        attributes[index] = Math.round(x * dx + attributes[index]) - x * dx
+        attributes[index + 1] = Math.round(y * dy + attributes[index + 1]) - y * dy
       }
       wrappedBind = function (this: Glyph, gl, ...args) {
         originalBind.call(this, gl, ...args)
@@ -143,7 +170,10 @@ export function createWebglDisplayGrid(terminal: Terminal, value: unknown) {
     dispose() {
       restoreGlyph()
       if (renderer._updateDimensions === updateDimensions) renderer._updateDimensions = originalDimensions
-      for (const { layer, original, resize } of layers) if (layer.resize === resize) layer.resize = original
+      for (const { layer, original, resize, originalAtlas, refreshAtlas } of layers) {
+        if (layer.resize === resize) layer.resize = original
+        if (layer._refreshCharAtlas === refreshAtlas) layer._refreshCharAtlas = originalAtlas
+      }
       renderer._rectangleRenderer.value.setDimensions(renderer.dimensions)
     }
   }

@@ -24,11 +24,12 @@ test('Linux package verification checks installed launchers and portable AppImag
   }
   try {
     for (const [destination, source] of [
-      ['usr/share/pixmaps/fileterm.png', 'app/linux/128x128.png'],
-      ['usr/share/pixmaps/com.fileterm.desktop.png', 'app/linux/128x128.png'],
+      ['usr/share/pixmaps/fileterm.png', 'app/shared/classic-1024.png'],
+      ['usr/share/pixmaps/com.fileterm.desktop.png', 'app/shared/classic-1024.png'],
       ['usr/share/icons/hicolor/32x32/apps/fileterm.png', 'app/linux/32x32.png'],
       ['usr/share/icons/hicolor/128x128/apps/fileterm.png', 'app/linux/128x128.png'],
-      ['usr/share/icons/hicolor/256x256@2/apps/fileterm.png', 'app/linux/128x128@2x.png']
+      ['usr/share/icons/hicolor/256x256@2/apps/fileterm.png', 'app/linux/128x128@2x.png'],
+      ['usr/share/icons/hicolor/1024x1024/apps/fileterm.png', 'app/shared/classic-1024.png']
     ]) {
       put(destination, readFileSync(join(root, 'src-tauri/icons', source)))
     }
@@ -61,7 +62,7 @@ test('Linux package verification checks installed launchers and portable AppImag
     }
     const appimageDesktop = readFileSync(join(fixture, 'usr/share/applications/FileTerm.desktop'))
     put('FileTerm.desktop', appimageDesktop)
-    const rootIcon = readFileSync(join(root, 'src-tauri/icons/app/linux/128x128@2x.png'))
+    const rootIcon = readFileSync(join(root, 'src-tauri/icons/app/shared/classic-1024.png'))
     put('fileterm.png', rootIcon)
     put('.DirIcon', rootIcon)
     for (const executable of ['AppRun', 'AppRun.wrapped', 'usr/bin/fileterm']) put(executable, 'fixture executable')
@@ -73,9 +74,13 @@ test('Linux package verification checks installed launchers and portable AppImag
     put('FileTerm.desktop', Buffer.concat([appimageDesktop, Buffer.from('# stale root entry\n')]))
     assert.match(run('--appimage').stderr, /root desktop entry differs/)
     put('FileTerm.desktop', appimageDesktop)
-    put('fileterm.png', expected)
-    assert.match(run('--appimage').stderr, /bundled 256px icon/)
-    put('fileterm.png', rootIcon)
+    const lowResolutionIcon = readFileSync(join(root, 'src-tauri/icons/app/linux/128x128.png'))
+    put('fileterm.png', lowResolutionIcon)
+    const appimageWithCompatibilityIcon = run('--appimage')
+    assert.equal(appimageWithCompatibilityIcon.status, 0, appimageWithCompatibilityIcon.stderr)
+    put('.DirIcon', lowResolutionIcon)
+    assert.match(run('--appimage').stderr, /AppDir icon must be 1024x1024px: \.DirIcon is 128x128/)
+    put('.DirIcon', rootIcon)
     rmSync(join(fixture, 'usr/bin/fileterm'))
     assert.match(run('--appimage').stderr, /AppDir executable is missing/)
   } finally {

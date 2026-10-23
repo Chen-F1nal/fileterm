@@ -136,14 +136,16 @@
         {
           "blend-mode-specializations": [
             {
-              "value": "plus-lighter"
+              "value": "normal"
             },
             {
               "appearance": "dark",
-              "value": "plus-lighter"
+              "value": "normal"
             }
           ],
-          "fill": "automatic",
+          "fill": {
+            "solid": "extended-srgb:0.62000,0.65000,0.67000,1.00000"
+          },
           "glass-specializations": [
             {
               "value": true
