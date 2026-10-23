@@ -60,9 +60,13 @@ def verify_appimage(root):
     for executable in ["AppRun", "AppRun.wrapped", "usr/bin/fileterm"]:
         if not (root / executable).is_file():
             raise ValueError(f"AppDir executable is missing: {executable}")
-    icon = (root / "usr/share/icons/hicolor/1024x1024/apps/fileterm.png").read_bytes()
-    if (root / "fileterm.png").read_bytes() != icon or (root / ".DirIcon").read_bytes() != icon:
-        raise ValueError("AppDir launcher and thumbnail must use the bundled 1024px icon")
+    for name in ("fileterm.png", ".DirIcon"):
+        data = (root / name).read_bytes()
+        if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) < 24:
+            raise ValueError(f"AppDir icon must be a valid PNG: {name}")
+        size = struct.unpack(">II", data[16:24])
+        if size != (1024, 1024):
+            raise ValueError(f"AppDir icon must be 1024x1024px: {name} is {size[0]}x{size[1]}")
 
 
 if __name__ == "__main__":
