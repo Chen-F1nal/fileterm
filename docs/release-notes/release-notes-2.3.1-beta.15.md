@@ -22,6 +22,7 @@
 
 - **macOS 应用内更新**：复用 Tauri updater，检查 GitHub Release 更新清单、下载更新包并校验 Ed25519 签名，再替换应用并重启。安装失败会尝试恢复原应用。
 - **首次安装与系统批准**：beta.14 没有应用内 updater，必须先手动安装 beta.15。此版本没有 Apple Developer ID 签名或公证；如果 macOS 阻止首次打开，请按系统提示在“系统设置 → 隐私与安全性”手动批准。更新包签名只验证更新来源，不代替 Apple 公证。
+- **SSH 加密依赖**：将 `crypto-bigint` 更新至修复版 0.7.6，并同步 `ctutils` 0.4.5，处理 [RustSec RUSTSEC-2026-0387](https://github.com/RustSec/advisory-db/blob/main/crates/crypto-bigint/RUSTSEC-2026-0387.md) 报告的恒定时间运算问题。
 - **实测范围**：本地 Apple Silicon 打包流程验证了更新下载、签名拒绝、应用替换、自动重启及连接/暂停传输数据保留。Intel 实机和带浏览器隔离属性的首次安装仍待验证。
 
 ### 本版本包含的主要 PR 和问题修复
@@ -61,6 +62,7 @@ This beta adds Tauri in-app updates on macOS. Beta.14 and earlier require a manu
 
 - **macOS in-app updates**: Reuse the Tauri updater to check the GitHub Release manifest, download an update, verify its Ed25519 signature, replace the app, and restart. A failed install attempts to restore the original app.
 - **First install and system approval**: Beta.14 has no in-app updater, so beta.15 must be installed manually first. This build has no Apple Developer ID signature or notarization. If macOS blocks the first launch, follow the system prompt to approve it in System Settings → Privacy & Security. The updater signature verifies the update source; it does not provide Apple notarization.
+- **SSH cryptography dependency**: Update `crypto-bigint` to fixed version 0.7.6 and `ctutils` to 0.4.5 for the constant-time issues reported in [RustSec RUSTSEC-2026-0387](https://github.com/RustSec/advisory-db/blob/main/crates/crypto-bigint/RUSTSEC-2026-0387.md).
 - **Validation scope**: The local Apple Silicon package test covered update download, rejection of a modified package, app replacement, automatic restart, and retention of connection and paused-transfer data. Intel hardware and a first install carrying browser quarantine attributes remain untested.
 
 ### Main PRs and issues
