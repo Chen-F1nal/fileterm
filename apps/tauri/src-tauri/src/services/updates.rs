@@ -2,8 +2,8 @@
 //!
 //! Windows installers use Tauri's signed updater and keep a verified package
 //! in memory until the user confirms the restart. Portable Windows builds
-//! download a separately signed EXE and replace it after exit; macOS/Linux
-//! keep the GitHub Release-page path.
+//! download a separately signed EXE and replace it after exit. macOS uses the
+//! same signed download flow with a recoverable app backup; Linux opens Releases.
 
 use semver::Version;
 use serde::Deserialize;
@@ -14,14 +14,17 @@ use crate::AppError;
 #[cfg(any(test, target_os = "windows"))]
 pub mod portable;
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 const RELEASES_API: &str = "https://api.github.com/repos/St0ff3l/fileterm/releases?per_page=100";
 const LATEST_RELEASE_PAGE: &str = "https://github.com/St0ff3l/fileterm/releases/latest";
 const ALL_RELEASES_PAGE: &str = "https://github.com/St0ff3l/fileterm/releases";
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 const RELEASE_DOWNLOAD_BASE: &str = "https://github.com/St0ff3l/fileterm/releases/download";
 const DEFAULT_UPDATE_CHANNEL: &str = "beta";
 const RELEASE_PAGE_UPDATE_MODE: &str = "release-page";
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 const IN_APP_UPDATE_MODE: &str = "in-app";
 
 #[derive(Clone, Debug, Deserialize)]
@@ -49,8 +52,8 @@ struct UpdateSelection {
     release: SelectedRelease,
 }
 
-#[cfg(target_os = "windows")]
-pub struct WindowsDownloadedUpdate {
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub struct DownloadedUpdate {
     update: tauri_plugin_updater::Update,
     bytes: Vec<u8>,
 }
@@ -97,26 +100,26 @@ const fn is_portable_build() -> bool {
     false
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 const fn primary_update_mode() -> &'static str {
     IN_APP_UPDATE_MODE
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const fn primary_update_mode() -> &'static str {
     RELEASE_PAGE_UPDATE_MODE
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn initial_update_message(update_mode: &str) -> &'static str {
     if update_mode == RELEASE_PAGE_UPDATE_MODE {
         "Windows 便携版将打开 GitHub Release 下载页面。"
     } else {
-        "Windows 将下载并验证签名，重启后安装更新。"
+        "下载并验证签名，确认重启后安装更新。"
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const fn initial_update_message(_: &str) -> &'static str {
     "检查 GitHub Release；安装将通过发布页完成。"
 }
@@ -170,7 +173,7 @@ fn is_newer(candidate: &str, current: &str) -> bool {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn fallback_release_page(channel: &str) -> &'static str {
     if channel == "beta" {
         ALL_RELEASES_PAGE
@@ -282,7 +285,7 @@ async fn check_release_page_update(app: &AppHandle) -> serde_json::Value {
     })
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn updater_manifest_url(tag: &str) -> Result<url::Url, String> {
     let mut endpoint =
         url::Url::parse(RELEASE_DOWNLOAD_BASE).map_err(|error| format!("更新地址无效: {error}"))?;
@@ -295,7 +298,7 @@ fn updater_manifest_url(tag: &str) -> Result<url::Url, String> {
     Ok(endpoint)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn updater_for_release(
     app: &AppHandle,
     tag: &str,
@@ -304,6 +307,7 @@ fn updater_for_release(
 
     let endpoint = updater_manifest_url(tag)?;
     let builder = app.updater_builder();
+    #[cfg(target_os = "windows")]
     let builder =
         match windows_update_target_for_portable(is_portable_build(), std::env::consts::ARCH) {
             Some(target) => builder.target(target),
@@ -317,8 +321,8 @@ fn updater_for_release(
     Ok(updater)
 }
 
-#[cfg(target_os = "windows")]
-async fn check_windows_update(app: &AppHandle) -> serde_json::Value {
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+async fn check_signed_update(app: &AppHandle) -> serde_json::Value {
     let selection = match fetch_release_selection(app).await {
         Ok(selection) => selection,
         Err(error) => {
@@ -343,7 +347,7 @@ async fn check_windows_update(app: &AppHandle) -> serde_json::Value {
             let mut fallback = check_release_page_update(app).await;
             if fallback.get("state").and_then(serde_json::Value::as_str) == Some("available") {
                 fallback["message"] = serde_json::Value::String(
-                    "Windows 自动更新暂不可用，已切换到 GitHub 下载。".to_string(),
+                    "自动更新暂不可用，已切换到 GitHub 下载。".to_string(),
                 );
             }
             return fallback;
@@ -370,7 +374,7 @@ async fn check_windows_update(app: &AppHandle) -> serde_json::Value {
             let mut fallback = check_release_page_update(app).await;
             if fallback.get("state").and_then(serde_json::Value::as_str) == Some("available") {
                 fallback["message"] = serde_json::Value::String(
-                    "Windows 自动更新暂不可用，已切换到 GitHub 下载。".to_string(),
+                    "自动更新暂不可用，已切换到 GitHub 下载。".to_string(),
                 );
             }
             fallback
@@ -394,10 +398,16 @@ pub async fn check(app: &AppHandle) -> Result<serde_json::Value, AppError> {
         }
     };
 
-    #[cfg(target_os = "windows")]
+    let operation = app
+        .state::<crate::services::workspace::WorkspaceState>()
+        .update_operation
+        .clone();
+    let _operation_guard = operation.lock().await;
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         app.state::<crate::services::workspace::WorkspaceState>()
-            .windows_downloaded_update
+            .downloaded_update
             .lock()
             .await
             .take();
@@ -416,9 +426,9 @@ pub async fn check(app: &AppHandle) -> Result<serde_json::Value, AppError> {
     )
     .await;
 
-    #[cfg(target_os = "windows")]
-    let status = check_windows_update(app).await;
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    let status = check_signed_update(app).await;
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let status = check_release_page_update(app).await;
 
     let state = status
@@ -453,7 +463,7 @@ pub async fn open_release_page(app: &AppHandle) -> Result<(), AppError> {
     result
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn current_update_mode(status: &serde_json::Value) -> &str {
     status
         .get("updateMode")
@@ -461,8 +471,8 @@ fn current_update_mode(status: &serde_json::Value) -> &str {
         .unwrap_or("in-app")
 }
 
-#[cfg(target_os = "windows")]
-async fn download_windows_update(app: &AppHandle) -> Result<(), AppError> {
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+async fn download_signed_update(app: &AppHandle) -> Result<(), AppError> {
     let update_operation = app
         .state::<crate::services::workspace::WorkspaceState>()
         .update_operation
@@ -600,9 +610,9 @@ async fn download_windows_update(app: &AppHandle) -> Result<(), AppError> {
     };
 
     *app.state::<crate::services::workspace::WorkspaceState>()
-        .windows_downloaded_update
+        .downloaded_update
         .lock()
-        .await = Some(WindowsDownloadedUpdate { update, bytes });
+        .await = Some(DownloadedUpdate { update, bytes });
     let status = serde_json::json!({
         "state": "downloaded", "currentVersion": current_version(app), "updateMode": "in-app",
         "updateChannel": channel, "availableVersion": version, "releaseTag": release_tag,
@@ -629,7 +639,7 @@ async fn install_windows_update(app: &AppHandle) -> Result<(), AppError> {
     }
     let pending = app
         .state::<crate::services::workspace::WorkspaceState>()
-        .windows_downloaded_update
+        .downloaded_update
         .lock()
         .await
         .take();
@@ -675,22 +685,26 @@ async fn install_windows_update(app: &AppHandle) -> Result<(), AppError> {
 }
 
 pub async fn download(app: &AppHandle) -> Result<(), AppError> {
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
-        return download_windows_update(app).await;
+        return download_signed_update(app).await;
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         open_release_page(app).await
     }
 }
 
 pub async fn install(app: &AppHandle) -> Result<(), AppError> {
+    #[cfg(target_os = "macos")]
+    {
+        return macos::install(app).await;
+    }
     #[cfg(target_os = "windows")]
     {
         return install_windows_update(app).await;
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         open_release_page(app).await
     }

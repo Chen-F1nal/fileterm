@@ -1,8 +1,8 @@
 # 本地自动更新测试
 
-> 适用对象：Windows 签名 NSIS 应用内更新器（Tauri `tauri_plugin_updater`）。macOS / Linux 当前无应用内更新器，不在此流程内。
+> 适用对象：Windows NSIS/便携版与 macOS 应用内更新器（Tauri `tauri_plugin_updater`）。下方 Windows 流程使用安装器，本文件末尾说明 macOS 验证入口；Linux 不在此流程内。
 
-Tauri 的更新器端点由 `services/updates.rs` 中的 `RELEASE_DOWNLOAD_BASE`（`https://github.com/St0ff3l/fileterm/releases/download`）按 release tag 推导，运行时会拉取 `<tag>/latest.json` 并校验 `<tag>/<installer>.exe.sig`。本地测试需要一个能在相同路径布局下提供 `latest.json`、安装器与签名的本地 HTTP 服务，并把 `RELEASE_DOWNLOAD_BASE` 临时指向该服务（该常量为 Rust 代码，本地测试需临时改为指向 `http://127.0.0.1:<port>` 后重新构建，测试完毕还原）。
+Tauri 的更新器端点由 `services/updates.rs` 中的 `RELEASE_DOWNLOAD_BASE`（`https://github.com/St0ff3l/fileterm/releases/download`）按 release tag 推导，运行时会拉取 `<tag>/latest.json` 并用清单内的签名验证下载内容（发布时另提供对应 `.sig` 文件）。本地测试需要一个能在相同路径布局下提供 `latest.json`、安装器与签名的本地 HTTP 服务，并把 `RELEASE_DOWNLOAD_BASE` 临时指向该服务（该常量为 Rust 代码，本地测试需临时改为指向 `http://127.0.0.1:<port>` 后重新构建，测试完毕还原）。
 
 ## Windows 测试
 
@@ -55,3 +55,30 @@ node ./apps/tauri/scripts/create-windows-updater-manifest.mjs --merge \
 6. 在 x64 和 ARM64 Windows 上分别回归 NSIS 安装版与便携版，确认各自读取相同架构的清单条目，未误用另一架构或便携 EXE。
 
 签名指 updater 内容签名，不等同于 Windows Authenticode，也不保证消除 SmartScreen 提示。Windows 专用等待/文件占用测试由三平台 Rust CI 的 Windows job 执行；本机 macOS 测试不能替代实际 Windows 更新验收。
+
+## macOS 更新清单与回滚检查
+
+`node --test apps/tauri/tests/windows-updater-manifest.test.mjs` 同时覆盖 Windows 与 macOS：合并清单包含六个目标；macOS 缺失/空签名及重复架构必须拒绝生成。
+
+正式发布流水线继续保留 DMG，另发布 `FileTerm-<version>-macos-<arm64|x64>.app.tar.gz` 及匹配 `.sig`。macOS 配置与 Windows 使用同一更新公钥，签名私钥只从 CI secrets 注入；签名不提供 Apple 公证。
+
+在 macOS 上执行 `cargo test --manifest-path apps/tauri/src-tauri/Cargo.toml services::updates::macos` 验证安装失败后恢复旧应用、安装成功清理备份及不支持路径的拒绝行为；测试只修改临时目录中的模拟 `.app`。
+
+真实打包升级按 [应用内更新验收清单](./auto-update-release-checklist.md#macostauri-签名更新) 执行，必须使用已安装的旧版本，不用开发态代替验证。首次启用需手动安装新版；后续升级如遇系统拦截，按“隐私与安全性 → 仍要打开”放行。没有 Apple 签名/公证时不保证跨系统版本免批准。
+
+### 2026-10-24 Apple Silicon 打包实测
+
+环境：macOS 27.0.1 / arm64；使用 release 构建和 ad-hoc 应用签名，测试版本为 `2.3.1-beta.14 → 2.3.1-beta.15`。这些版本仅通过临时构建配置覆盖，没有修改仓库版本或发布 Release。
+
+隔离方式：测试应用使用独立 bundle ID `com.fileterm.desktop.updater-test-20261024`、独立数据目录和 `~/Applications` 下的独立安装目录。预置完整测试连接和暂停传输记录，写入已完成的迁移标记，防止读取用户旧版数据。使用临时 updater 密钥和只监听 `127.0.0.1` 的更新服务；仅测试构建临时替换 `RELEASES_API`、`RELEASE_DOWNLOAD_BASE` 和配置中的公钥/端点，并允许本地 HTTP。构建结束即恢复源文件，测试完成后关闭服务并移除私钥；正式配置仍为 HTTPS 和既有生产公钥。
+
+实测结果：
+
+- 两个版本均生成真实 `.app`、`.dmg`、`.app.tar.gz` 和 `.sig`，均通过 `codesign --verify --deep --strict`。
+- 从旧版 DMG 安装并启动，界面显示 `v2.3.1-beta.14`；发现 `beta.15` 后，篡改更新包被拒绝，界面显示 `The signature verification failed`，旧应用二进制 SHA-256 不变。
+- 换回正确签名更新后，完成下载并显示“重启并更新”；点击后旧进程退出，新进程自动从同一安装路径启动，界面显示 `v2.3.1-beta.15`，再次检查显示已是最新版本。验证新进程已运行后才重新绑定 UI 工具，未用手动启动代替自动重启。
+- 安装后二进制 SHA-256 与新版打包产物完全一致，应用签名仍有效；连接 ID/名称、暂停传输 ID/状态/42% 进度与可恢复标记保留；成功更新后没有遗留 `.fileterm-update-backup-*`。
+- 本次从本机构建的 DMG 安装，升级前后应用均无 quarantine 属性，更新后无需额外批准。没有清除 quarantine、关闭 Gatekeeper 或修改全局安全设置；该结果不覆盖浏览器下载带隔离属性的首次安装，也不保证其他 macOS 版本不再要求批准。
+- 测试版、测试服务已退出，原 `/Applications/FileTerm.app` 进程保持运行；测试安装和数据移至临时取证目录，未替换用户正式应用或改动其数据。
+
+未覆盖：Intel 实机升级、真实 GitHub Release/生产签名密钥下载、系统手动放行、活动远程传输中断和真实安装失败。安装失败/部分安装/安装器 panic 的旧版恢复由 Rust 测试覆盖。

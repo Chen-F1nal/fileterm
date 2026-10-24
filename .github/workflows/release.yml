@@ -44,6 +44,8 @@ jobs:
     runs-on: macos-26
     env:
       TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -67,6 +69,10 @@ jobs:
           npm run build:packages
           npm run typecheck -w @fileterm/tauri
 
+      - name: Require the updater signing key
+        shell: bash
+        run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
+
       - name: Package macOS Apple Silicon
         run: npm run release:mac -w @fileterm/tauri
 
@@ -78,6 +84,16 @@ jobs:
           source_file="$(find "$bundle_dir" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
           test -n "$source_file"
           mv "$source_file" "$bundle_dir/FileTerm-${GITHUB_REF_NAME#v}-macos-arm64.dmg"
+
+      - name: Normalize signed macOS updater archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_dir="apps/tauri/src-tauri/target/aarch64-apple-darwin/release/bundle"
+          source_file="$bundle_dir/macos/FileTerm.app.tar.gz"
+          test -s "$source_file.sig"
+          mv "$source_file" "$bundle_dir/dmg/FileTerm-${GITHUB_REF_NAME#v}-macos-arm64.app.tar.gz"
+          mv "$source_file.sig" "$bundle_dir/dmg/FileTerm-${GITHUB_REF_NAME#v}-macos-arm64.app.tar.gz.sig"
 
       - name: Verify macOS package
         shell: bash
@@ -91,7 +107,10 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: FileTerm-macOS-arm64
-          path: apps/tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          path: |
+            apps/tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            apps/tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.app.tar.gz
+            apps/tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.sig
           if-no-files-found: error
 
   build-macos-x64:
@@ -99,6 +118,8 @@ jobs:
     runs-on: macos-26-intel
     env:
       TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -122,6 +143,10 @@ jobs:
           npm run build:packages
           npm run typecheck -w @fileterm/tauri
 
+      - name: Require the updater signing key
+        shell: bash
+        run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
+
       - name: Package macOS Intel
         run: npm run release:mac:x64 -w @fileterm/tauri
 
@@ -133,6 +158,16 @@ jobs:
           source_file="$(find "$bundle_dir" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
           test -n "$source_file"
           mv "$source_file" "$bundle_dir/FileTerm-${GITHUB_REF_NAME#v}-macos-x64.dmg"
+
+      - name: Normalize signed macOS updater archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_dir="apps/tauri/src-tauri/target/x86_64-apple-darwin/release/bundle"
+          source_file="$bundle_dir/macos/FileTerm.app.tar.gz"
+          test -s "$source_file.sig"
+          mv "$source_file" "$bundle_dir/dmg/FileTerm-${GITHUB_REF_NAME#v}-macos-x64.app.tar.gz"
+          mv "$source_file.sig" "$bundle_dir/dmg/FileTerm-${GITHUB_REF_NAME#v}-macos-x64.app.tar.gz.sig"
 
       - name: Verify macOS package
         shell: bash
@@ -146,7 +181,10 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: FileTerm-macOS-x64
-          path: apps/tauri/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          path: |
+            apps/tauri/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+            apps/tauri/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.app.tar.gz
+            apps/tauri/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.sig
           if-no-files-found: error
 
   build-windows:
@@ -515,8 +553,8 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v7
 
-      - name: Create combined Windows updater manifest
-        run: node ./apps/tauri/scripts/create-windows-updater-manifest.mjs --merge ./FileTerm-Windows-x64 ./FileTerm-Windows-arm64
+      - name: Create combined Windows and macOS updater manifest
+        run: node ./apps/tauri/scripts/create-windows-updater-manifest.mjs --merge ./FileTerm-Windows-x64 ./FileTerm-Windows-arm64 ./FileTerm-macOS-arm64 ./FileTerm-macOS-x64
 
       - name: Publish GitHub Release
         shell: bash
@@ -543,7 +581,7 @@ jobs:
             release_flags+=(--prerelease)
           fi
 
-          mapfile -d '' assets < <(find . -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.pkg.tar.zst' -o -name '*.AppImage' -o -name '*.AppImage.zsync' -o -name '*.sig' -o -name '*.zip' -o -name 'latest.json' \) -print0)
+          mapfile -d '' assets < <(find . -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.pkg.tar.zst' -o -name '*.AppImage' -o -name '*.AppImage.zsync' -o -name '*.sig' -o -name '*.zip' -o -name 'latest.json' \) -print0)
           if [ "${#assets[@]}" -eq 0 ]; then
             echo 'No Tauri release assets were downloaded.'
             exit 1

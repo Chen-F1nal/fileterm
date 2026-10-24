@@ -34,6 +34,8 @@ export function UpdatesSettingsPanel() {
     updateChannel,
     setUpdateChannelPreference
   } = useSettingsModalContext<UpdatesSettingsPanelContext>()
+  const [isInstalling, setInstalling] = useState(false)
+  const [installError, setInstallError] = useState<string | null>(null)
   const [isPortableUpdateDialogOpen, setPortableUpdateDialogOpen] = useState(false)
   const { openExternalUrl, externalUrlError } = useExternalUrl(desktopApi, t.openExternalUrlFailed)
 
@@ -86,6 +88,7 @@ export function UpdatesSettingsPanel() {
             <span style={{ width: `${updateStatus.progress ?? 0}%` }} />
           </div>
         ) : null}
+        {desktopApi?.platform === 'darwin' ? <p>{t.macosUpdateHint}</p> : null}
         <div className="settings-update-actions">
           {updateStatus?.state === 'available' ? (
             <button
@@ -110,7 +113,23 @@ export function UpdatesSettingsPanel() {
             </button>
           ) : null}
           {updateStatus?.state === 'downloaded' ? (
-            <button className="primary-button compact" onClick={() => void desktopApi?.installUpdate()} type="button">
+            <button
+              className="primary-button compact"
+              aria-busy={isInstalling}
+              disabled={isInstalling}
+              onClick={async () => {
+                setInstalling(true)
+                setInstallError(null)
+                try {
+                  await desktopApi?.installUpdate()
+                } catch (error) {
+                  setInstallError(error instanceof Error ? error.message : String(error))
+                } finally {
+                  setInstalling(false)
+                }
+              }}
+              type="button"
+            >
               {t.restartToUpdate}
             </button>
           ) : null}
@@ -131,6 +150,7 @@ export function UpdatesSettingsPanel() {
             </button>
           ) : null}
         </div>
+        <FeedbackText message={installError} tone="error" />
         <FeedbackText message={externalUrlError} tone="error" />
       </section>
       {isPortableUpdateDialogOpen ? (

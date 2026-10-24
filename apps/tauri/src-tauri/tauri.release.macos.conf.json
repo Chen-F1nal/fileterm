@@ -18,6 +18,7 @@
           "y": 170
         }
       }
-    }
+    },
+    "createUpdaterArtifacts": true
   }
 }

@@ -5,7 +5,7 @@ const arguments_ = process.argv.slice(2)
 const mergeManifests = arguments_.includes('--merge')
 const bundleDirectories = arguments_.filter((argument) => argument !== '--merge')
 if (bundleDirectories.length === 0 && mergeManifests) {
-  throw new Error('At least one Windows artifact directory is required when merging updater manifests.')
+  throw new Error('At least one artifact directory is required when merging updater manifests.')
 }
 if (bundleDirectories.length === 0) {
   bundleDirectories.push('src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis')
@@ -22,6 +22,26 @@ const platforms = {}
 for (const directory of bundleDirectories) {
   const bundleDirectory = path.resolve(directory)
   const artifacts = await fs.readdir(bundleDirectory)
+  const assetUrl = (artifact) =>
+    new URL(
+      `/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(artifact)}`,
+      'https://github.com'
+    ).toString()
+
+  const archives = artifacts.filter((artifact) => artifact.endsWith('.app.tar.gz'))
+  if (archives.length > 0) {
+    if (archives.length !== 1) throw new Error(`Expected one macOS updater archive in ${bundleDirectory}.`)
+    const archive = archives[0]
+    const architecture = archive.match(/-macos-(arm64|x64)\.app\.tar\.gz$/)?.[1]
+    if (!architecture) throw new Error(`Unknown macOS updater architecture: ${archive}`)
+    const platform = architecture === 'arm64' ? 'darwin-aarch64' : 'darwin-x86_64'
+    if (platforms[platform]) throw new Error(`Duplicate updater platform: ${platform}`)
+    const signature = (await fs.readFile(path.join(bundleDirectory, `${archive}.sig`), 'utf8')).trim()
+    if (!signature) throw new Error(`Updater signature is empty: ${archive}.sig`)
+    platforms[platform] = { signature, url: assetUrl(archive) }
+    continue
+  }
+
   const installers = artifacts.filter((artifact) => artifact.endsWith('-setup.exe'))
   if (installers.length !== 1) {
     throw new Error(`Expected exactly one NSIS installer in ${bundleDirectory}, found ${installers.length}.`)
@@ -50,12 +70,6 @@ for (const directory of bundleDirectories) {
     throw new Error(`Portable updater signature is empty: ${portableSignaturePath}`)
   }
 
-  const assetUrl = (artifact) =>
-    new URL(
-      `/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(artifact)}`,
-      'https://github.com'
-    ).toString()
-
   platforms[platform] = { signature, url: assetUrl(installer) }
   platforms[`${platform}-portable`] = { signature: portableSignature, url: assetUrl(portable) }
 }
@@ -71,4 +85,4 @@ const outputPath = mergeManifests
   ? path.resolve('latest.json')
   : path.join(path.resolve(bundleDirectories[0]), 'latest.json')
 await fs.writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`)
-console.log(`[FileTerm] created signed Windows updater manifest${mergeManifests ? 's' : ''}: ${outputPath}`)
+console.log(`[FileTerm] created signed updater manifest${mergeManifests ? 's' : ''}: ${outputPath}`)

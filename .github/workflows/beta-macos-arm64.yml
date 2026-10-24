@@ -50,7 +50,7 @@ jobs:
         run: npm run build:packages
 
       - name: Package macOS Apple Silicon
-        run: npm run release:mac -w @fileterm/tauri
+        run: npm run release:mac -w @fileterm/tauri -- --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: Normalize artifact name
         shell: bash

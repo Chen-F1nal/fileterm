@@ -1,9 +1,8 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
-    // Windows packages use Tauri's signed updater. macOS deliberately keeps
-    // the Release-page flow so users choose the GitHub download themselves.
-    #[cfg(target_os = "windows")]
+    // Windows and macOS packages use Tauri's signed updater.
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder

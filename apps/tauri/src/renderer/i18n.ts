@@ -1797,6 +1797,8 @@ const zhCN = {
   updateDownloading: '正在下载更新（{progress}%）…',
   updateDownloadingShort: '下载 {progress}%',
   updateDownloaded: 'v{version} 已下载完成，重启后即可完成更新。',
+  macosUpdateHint:
+    '请将应用安装到可写的 Applications 文件夹后更新。更新后若被 macOS 拦截，请在“系统设置 → 隐私与安全性”中选择“仍要打开”，然后重新启动 FileTerm。',
   restartToUpdate: '重启并更新',
   updateNotAvailable: '当前已是最新版本。',
   updateFailed: '检查或下载更新失败',
@@ -3974,6 +3976,8 @@ const enUS: typeof zhCN = {
   updateDownloading: 'Downloading update ({progress}%)…',
   updateDownloadingShort: 'Downloading {progress}%',
   updateDownloaded: 'Version {version} is ready. Restart to finish updating.',
+  macosUpdateHint:
+    'Install the app in a writable Applications folder before updating. If macOS blocks the updated app, choose Open Anyway in System Settings → Privacy & Security, then launch FileTerm again.',
   restartToUpdate: 'Restart and update',
   updateNotAvailable: 'You are up to date.',
   updateFailed: 'Unable to check for or download the update',
