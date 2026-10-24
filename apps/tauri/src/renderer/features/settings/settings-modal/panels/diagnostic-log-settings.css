@@ -89,3 +89,20 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.diagnostic-log-basic {
+  margin-bottom: 12px;
+}
+
+.diagnostic-log-basic-copy {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.diagnostic-log-basic-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}

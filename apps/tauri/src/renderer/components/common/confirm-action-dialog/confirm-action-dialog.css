@@ -58,111 +58,22 @@
   word-break: break-word;
 }
 
-.confirm-action-dialog.external-operation-confirmation {
-  width: min(620px, calc(100vw - 32px));
-  padding: 28px 30px 24px;
-  border-radius: 18px;
-}
-
-.external-operation-confirmation__content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.external-operation-confirmation__summary {
-  color: var(--dialog-description);
-}
-
-.external-operation-confirmation__source-row {
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-}
-
-.external-operation-confirmation__source {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid var(--border-light);
-  border-radius: 999px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  line-height: 1;
-}
-
-.external-operation-confirmation__source.is-cli {
-  border-color: color-mix(in srgb, var(--accent-highlight) 42%, var(--border-light));
-  color: var(--accent-highlight);
-}
-
-.external-operation-confirmation__source.is-mcp {
-  border-color: color-mix(in srgb, var(--success) 42%, var(--border-light));
-  color: var(--success);
-}
-
-.external-operation-confirmation__field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.external-operation-confirmation__label {
-  color: var(--dialog-title);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
-}
-
-.external-operation-confirmation__value,
-.confirm-action-dialog__description pre.external-operation-confirmation__command {
-  box-sizing: border-box;
-  width: 100%;
-  height: 36px;
-  min-height: 36px;
-  margin: 0;
-  padding: 6px 14px;
-  border: 1px solid var(--input-border, var(--dialog-footer-border));
-  border-radius: 7px;
-  background: var(--input-bg);
-  color: var(--input-text, var(--dialog-title));
-  font-size: 14px;
-  line-height: 22px;
-}
-
-.external-operation-confirmation__value {
-  display: flex;
-  align-items: center;
-  overflow-wrap: anywhere;
-}
-
-.confirm-action-dialog__description pre.external-operation-confirmation__command {
-  max-height: min(260px, 32vh);
-  overflow: auto;
-  font-family: var(--font-mono, 'JetBrains Mono', Monaco, monospace);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
 .confirm-action-dialog__warning {
   color: var(--dialog-warning-text);
   margin-bottom: 12px;
   font-weight: 700;
 }
 
-.confirm-action-dialog__footer {
+.confirm-action-dialog__warning:last-child {
+  margin-bottom: 0;
+}
+
+.form-actions.confirm-action-dialog__footer {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  margin-top: 24px;
+  margin-top: 12px;
   padding-top: 18px;
   border-top: 1px solid var(--dialog-footer-border);
 }
@@ -180,7 +91,8 @@
   transition:
     background-color 0.18s ease,
     border-color 0.18s ease,
-    color 0.18s ease;
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .confirm-action-dialog__button .button-spinner {
@@ -194,11 +106,6 @@
   border: 1px solid var(--dialog-button-secondary-border);
   background: var(--dialog-button-secondary-bg);
   color: var(--dialog-button-secondary-text);
-}
-
-.confirm-action-dialog__button--secondary:hover:not(:disabled) {
-  background: var(--dialog-button-secondary-hover-bg);
-  border-color: var(--dialog-button-secondary-hover-border);
 }
 
 .confirm-action-dialog__button--primary {
@@ -224,6 +131,20 @@
   color: var(--dialog-button-danger-hover-text);
 }
 
+.confirm-action-dialog__button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-action-dialog__button {
+    transition: none;
+  }
+
+  .confirm-action-dialog__button:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
 .confirm-action-dialog__button:focus-visible {
   outline: none;
   box-shadow: var(--dialog-focus-ring);
@@ -236,8 +157,7 @@
 }
 
 @media (max-width: 640px) {
-  .confirm-action-dialog,
-  .confirm-action-dialog.external-operation-confirmation {
+  .confirm-action-dialog {
     width: min(100%, 360px);
     padding: 20px;
     border-radius: 16px;

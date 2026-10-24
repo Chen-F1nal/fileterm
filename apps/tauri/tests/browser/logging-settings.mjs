@@ -22,7 +22,7 @@ import { DiagnosticLogSettings } from ${JSON.stringify(join(root, 'apps/tauri/sr
 import { messages } from ${JSON.stringify(join(root, 'apps/tauri/src/renderer/i18n.ts'))}
 import { DIAGNOSTIC_LOG_CATEGORIES } from ${JSON.stringify(join(root, 'packages/core/src/index.ts'))}
 const listeners = new Set()
-let preferences = { diagnosticLogCategories: Object.fromEntries(DIAGNOSTIC_LOG_CATEGORIES.map(name => [name, false])) }
+let preferences = { basicLoggingEnabled: true, diagnosticLogCategories: Object.fromEntries(DIAGNOSTIC_LOG_CATEGORIES.map(name => [name, false])) }
 window.rejectNext = false
 window.requests = []
 const desktopApi = {
@@ -32,17 +32,17 @@ const desktopApi = {
     window.requests.push(input)
     await new Promise(resolve => setTimeout(resolve, 50))
     if (window.rejectNext) { window.rejectNext = false; throw new Error('storage unavailable') }
-    preferences = { diagnosticLogCategories: { ...preferences.diagnosticLogCategories, ...input.diagnosticLogCategories } }
+    preferences = { ...preferences, ...input, diagnosticLogCategories: { ...preferences.diagnosticLogCategories, ...input.diagnosticLogCategories } }
     for (const listener of listeners) listener(preferences)
     return preferences
   }
 }
 window.externalUpdate = () => {
-  preferences = { diagnosticLogCategories: { ...preferences.diagnosticLogCategories, performance: true } }
+  preferences = { ...preferences, basicLoggingEnabled: true, diagnosticLogCategories: { ...preferences.diagnosticLogCategories, performance: true } }
   for (const listener of listeners) listener(preferences)
 }
 const reactRoot = createRoot(document.getElementById('root'))
-window.resetPreferences = () => { preferences = { diagnosticLogCategories: Object.fromEntries(DIAGNOSTIC_LOG_CATEGORIES.map(name => [name, false])) } }
+window.resetPreferences = () => { preferences = { basicLoggingEnabled: true, diagnosticLogCategories: Object.fromEntries(DIAGNOSTIC_LOG_CATEGORIES.map(name => [name, false])) } }
 window.showLocale = locale => reactRoot.render(<DiagnosticLogSettings key={locale} desktopApi={desktopApi} t={messages[locale]} />)
 window.showLocale('enUS')
 `
@@ -86,7 +86,27 @@ window.showLocale('enUS')
   }
   await page.addScriptTag({ content: readFileSync(join(directory, 'dist/bundle.js'), 'utf8') })
   await page.waitForSelector('input:not(:disabled)')
-  assert.equal(await page.getByRole('checkbox').count(), 14)
+  assert.equal(await page.getByRole('checkbox').count(), 15)
+  const basic = page.getByRole('checkbox', { name: 'Basic logs', exact: true })
+  assert.equal(await basic.isChecked(), true)
+  await basic.click()
+  await page.waitForFunction(() => !document.querySelector('input').disabled)
+  assert.equal(await basic.isChecked(), false)
+  assert.deepEqual(await page.evaluate(() => window.requests), [{ basicLoggingEnabled: false }])
+  await page.evaluate(() => window.showLocale('zhCN'))
+  await page.waitForSelector('input:not(:disabled)')
+  assert.equal(await page.getByRole('checkbox', { name: '基础日志', exact: true }).isChecked(), false)
+  await page.evaluate(() => window.showLocale('enUS'))
+  await page.waitForSelector('input:not(:disabled)')
+  await page.evaluate(() => {
+    window.rejectNext = true
+  })
+  await basic.click()
+  await page.getByRole('alert').waitFor()
+  assert.equal(await basic.isChecked(), false)
+  await page.evaluate(() => {
+    window.requests = []
+  })
   assert.equal(await page.getByRole('checkbox', { name: 'Connections & protocols', exact: true }).isChecked(), false)
   assert.equal(await page.getByRole('checkbox', { name: 'Performance & stalls', exact: true }).isChecked(), false)
   await page.getByRole('checkbox', { name: 'Connections & protocols', exact: true }).click()
@@ -100,7 +120,8 @@ window.showLocale('enUS')
   await page.getByRole('alert').waitFor()
   assert.equal(await page.getByRole('checkbox', { name: 'Performance & stalls', exact: true }).isChecked(), false)
   await page.evaluate(() => window.externalUpdate())
-  await page.waitForFunction(() => [...document.querySelectorAll('input')][5].checked)
+  await page.waitForFunction(() => [...document.querySelectorAll('.diagnostic-log-grid input')][5].checked)
+  assert.equal(await basic.isChecked(), true)
   await page.evaluate(() => window.resetPreferences())
   for (const locale of ['zhCN', 'enUS']) {
     await page.evaluate((locale) => window.showLocale(locale), locale)
@@ -126,11 +147,14 @@ window.showLocale('enUS')
       )
     }
     if (process.env.FILETERM_LOG_SETTINGS_SCREENSHOT_DIR) {
-      await page.setViewportSize({ width: 960, height: 460 })
+      await page.setViewportSize({ width: 960, height: 640 })
       for (const theme of ['fileterm-dark', 'fileterm-light']) {
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme
         }, theme)
+        await page.evaluate(
+          () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
+        )
         await page.screenshot({
           path: join(process.env.FILETERM_LOG_SETTINGS_SCREENSHOT_DIR, theme + '-' + locale + '.png')
         })
@@ -139,7 +163,7 @@ window.showLocale('enUS')
   }
   assert.deepEqual(errors, [])
   console.log(
-    '14 log categories: defaults, partial save, failure rollback, external preference update, and compact 3/2/1-column layout passed.'
+    'Basic logs and 14 detail categories: defaults, saved toggle restore, independent partial saves, failure rollback, external update, and compact 3/2/1-column layout passed.'
   )
 } finally {
   await browser?.close()

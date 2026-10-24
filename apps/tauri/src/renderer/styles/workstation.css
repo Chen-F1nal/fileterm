@@ -5,7 +5,7 @@
 @import './features/session.css';
 @import './features/serial.css';
 @import './features/file-editor.css';
-@import './features/confirm-dialog.css';
+@import '../components/common/confirm-action-dialog/confirm-action-dialog.css';
 @import './features/modals.css';
 @import './features/modal-components.css';
 @import './features/commands.css';

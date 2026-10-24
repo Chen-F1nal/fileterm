@@ -423,12 +423,6 @@
     transform 0.18s !important;
 }
 
-:root:not([data-theme]) .command-dialog-actions .flat-button:hover:not(:disabled),
-:root:not([data-theme*='light']) .command-dialog-actions .flat-button:hover:not(:disabled),
-:root[data-theme='default'] .command-dialog-actions .flat-button:hover:not(:disabled) {
-  background: var(--bg-active) !important;
-}
-
 /* Save / Primary Button */
 :root:not([data-theme]) .command-dialog-actions .primary-button,
 :root:not([data-theme*='light']) .command-dialog-actions .primary-button,
@@ -620,21 +614,6 @@
   box-shadow: 0 0 0 2px var(--accent-focus-ring) !important;
   background: var(--input-bg) !important;
   outline: none !important;
-}
-
-:root:not([data-theme]) .modal-card.ssh-modal .form-actions .flat-button,
-:root:not([data-theme*='light']) .modal-card.ssh-modal .form-actions .flat-button,
-:root[data-theme='default'] .modal-card.ssh-modal .form-actions .flat-button {
-  background: var(--bg-hover) !important;
-  color: var(--text-main) !important;
-  border: 1px solid var(--border-light) !important;
-  border-radius: var(--radius-md, 6px) !important;
-}
-
-:root:not([data-theme]) .modal-card.ssh-modal .form-actions .flat-button:hover,
-:root:not([data-theme*='light']) .modal-card.ssh-modal .form-actions .flat-button:hover,
-:root[data-theme='default'] .modal-card.ssh-modal .form-actions .flat-button:hover {
-  background: var(--bg-active) !important;
 }
 
 :root:not([data-theme]) .modal-card.ssh-modal .form-actions .primary-button,

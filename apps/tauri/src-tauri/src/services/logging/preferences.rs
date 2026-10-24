@@ -19,8 +19,9 @@ const CATEGORIES: [&str; 14] = [
     "logging",
     "other",
 ];
-// Detailed diagnostics are opt-in; basic INFO and all warnings/errors bypass this mask.
-const DEFAULT_MASK: u32 = 0;
+// Detailed diagnostics are opt-in; basic INFO defaults on and warnings/errors always pass.
+const BASIC_LOG_MASK: u32 = 1 << CATEGORIES.len();
+const DEFAULT_MASK: u32 = BASIC_LOG_MASK;
 static ENABLED_CATEGORIES: AtomicU32 = AtomicU32::new(DEFAULT_MASK);
 
 pub fn default_categories() -> BTreeMap<String, bool> {
@@ -61,20 +62,23 @@ pub fn normalize_categories(input: BTreeMap<String, bool>) -> BTreeMap<String, b
         .collect()
 }
 
-pub fn set_categories(categories: BTreeMap<String, bool>) {
+pub fn set_preferences(basic_logging_enabled: bool, categories: BTreeMap<String, bool>) {
     let categories = normalize_categories(categories);
-    let mask = CATEGORIES
-        .iter()
-        .enumerate()
-        .fold(0, |mask, (index, name)| {
-            mask | if categories[*name] { 1 << index } else { 0 }
-        });
+    let mask = CATEGORIES.iter().enumerate().fold(
+        if basic_logging_enabled {
+            BASIC_LOG_MASK
+        } else {
+            0
+        },
+        |mask, (index, name)| mask | if categories[*name] { 1 << index } else { 0 },
+    );
     ENABLED_CATEGORIES.store(mask, Ordering::Relaxed);
 }
 
 fn enabled_in(mask: u32, level: LogLevel, category: LogCategory) -> bool {
     level >= LogLevel::Warn
-        || (level == LogLevel::Info
+        || (mask & BASIC_LOG_MASK != 0
+            && level == LogLevel::Info
             && matches!(
                 category,
                 LogCategory::App
@@ -161,6 +165,20 @@ mod tests {
     }
 
     #[test]
+    fn basic_logs_can_be_disabled_without_disabling_warnings_or_detail() {
+        for (index, name) in CATEGORIES.iter().enumerate() {
+            let category = LogCategory::from_name(name);
+            assert!(!enabled_in(0, LogLevel::Info, category));
+            assert!(!enabled_in(0, LogLevel::Debug, category));
+            assert!(enabled_in(0, LogLevel::Warn, category));
+            assert!(enabled_in(0, LogLevel::Error, category));
+            let detail_only = 1 << index;
+            assert!(enabled_in(detail_only, LogLevel::Info, category));
+            assert!(enabled_in(detail_only, LogLevel::Debug, category));
+        }
+    }
+
+    #[test]
     fn saved_previous_defaults_migrate_once_without_replacing_custom_choices() {
         for mask in [
             ((1 << CATEGORIES.len()) - 1) & !(1 << 2) & !(1 << 4),
@@ -177,7 +195,11 @@ mod tests {
         let custom = BTreeMap::from([("connection".into(), true)]);
         assert_eq!(migrate_categories(custom.clone()), custom);
         for name in ["app", "security", "updates", "logging"] {
-            assert!(enabled_in(0, LogLevel::Info, LogCategory::from_name(name)));
+            assert!(enabled_in(
+                DEFAULT_MASK,
+                LogLevel::Info,
+                LogCategory::from_name(name)
+            ));
         }
     }
 

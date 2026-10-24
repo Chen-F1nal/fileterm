@@ -39,6 +39,8 @@ pub struct UiPreferences {
     pub terminal_font_weight: u16,
     #[serde(default = "crate::services::logging::default_categories")]
     pub diagnostic_log_categories: BTreeMap<String, bool>,
+    #[serde(default = "default_basic_logging_enabled")]
+    pub basic_logging_enabled: bool,
     #[serde(default)]
     diagnostic_log_defaults_version: u8,
     #[serde(default = "default_theme_config")]
@@ -101,6 +103,7 @@ pub struct UiPreferencesInput {
     pub terminal_renderer: Option<String>,
     pub terminal_font_weight: Option<u16>,
     pub diagnostic_log_categories: Option<BTreeMap<String, bool>>,
+    pub basic_logging_enabled: Option<bool>,
     pub theme_config: Option<ThemeConfig>,
     pub custom_themes: Option<Vec<SavedTheme>>,
     pub auto_check_updates: Option<bool>,
@@ -163,6 +166,10 @@ fn default_terminal_renderer() -> String {
 
 fn is_light_theme_mode(theme: &str) -> bool {
     matches!(theme, "fileterm-light" | "codex-light" | "default-light")
+}
+
+fn default_basic_logging_enabled() -> bool {
+    true
 }
 
 fn default_auto_check_updates() -> bool {

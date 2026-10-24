@@ -26,7 +26,7 @@ pub fn run() {
             }
             migration_result?;
             match crate::commands::app_get_ui_preferences(app.handle().clone()) {
-                Ok(preferences) => crate::services::logging::set_categories(preferences.diagnostic_log_categories),
+                Ok(preferences) => crate::services::logging::set_preferences(preferences.basic_logging_enabled, preferences.diagnostic_log_categories),
                 Err(error) => crate::services::logging::warn(app.handle(), "logging", format!("unable to load log preferences: {error}")),
             }
 

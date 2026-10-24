@@ -15,6 +15,7 @@ pub fn app_get_ui_preferences(app: AppHandle) -> Result<UiPreferences, AppError>
             terminal_renderer: default_terminal_renderer(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
@@ -75,6 +76,9 @@ pub fn app_set_ui_preferences(
     }
     if let Some(locale) = input.locale {
         preferences.locale = locale;
+    }
+    if let Some(enabled) = input.basic_logging_enabled {
+        preferences.basic_logging_enabled = enabled;
     }
     if let Some(categories) = input.diagnostic_log_categories {
         preferences.diagnostic_log_categories.extend(categories);
@@ -215,7 +219,7 @@ pub fn app_set_ui_preferences(
     let content = serde_json::to_string_pretty(&preferences)
         .map_err(|error| AppError::Serialization(error.to_string()))?;
     std::fs::write(path, content).map_err(|error| AppError::Storage(error.to_string()))?;
-    crate::services::logging::set_categories(preferences.diagnostic_log_categories.clone());
+    crate::services::logging::set_preferences(preferences.basic_logging_enabled, preferences.diagnostic_log_categories.clone());
     if previous_app_icon != preferences.app_icon {
         if let Err(error) = crate::app_icon::set_app_icon(&app, &preferences.app_icon) {
             crate::services::logging::warn(
@@ -353,6 +357,7 @@ pub fn app_toggle_terminal_zoom_lock(app: AppHandle) -> Result<UiPreferences, Ap
             terminal_renderer: None,
             terminal_font_weight: None,
             diagnostic_log_categories: None,
+            basic_logging_enabled: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,
@@ -392,6 +397,7 @@ pub fn app_toggle_ui_zoom_lock(app: AppHandle) -> Result<UiPreferences, AppError
             terminal_renderer: None,
             terminal_font_weight: None,
             diagnostic_log_categories: None,
+            basic_logging_enabled: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,
@@ -438,6 +444,7 @@ pub fn app_adjust_ui_zoom(app: AppHandle, operation: &str) -> Result<UiPreferenc
             terminal_renderer: None,
             terminal_font_weight: None,
             diagnostic_log_categories: None,
+            basic_logging_enabled: None,
             theme_config: None,
             custom_themes: None,
             auto_check_updates: None,

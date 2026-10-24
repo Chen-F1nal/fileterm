@@ -486,11 +486,6 @@
   color: var(--text-main);
 }
 
-.ssh-key-import-dialog .confirm-action-dialog__button--secondary:hover:not(:disabled) {
-  background: var(--bg-active);
-  border-color: var(--border-dark);
-}
-
 .ssh-key-import-dialog .confirm-action-dialog__button--primary {
   background: var(--button-primary-bg);
   border-color: var(--button-primary-border);

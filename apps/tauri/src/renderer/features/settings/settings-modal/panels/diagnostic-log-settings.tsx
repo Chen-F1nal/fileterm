@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import './diagnostic-log-settings.css'
 import {
   DIAGNOSTIC_LOG_CATEGORIES,
-  type DiagnosticLogCategories,
-  type DiagnosticLogCategory,
+  type UiPreferences,
+  type UiPreferencesInput,
   type FileTermDesktopApi
 } from '@fileterm/core'
 import type { LocaleMessages } from '../../../../i18n'
@@ -16,7 +16,10 @@ export function DiagnosticLogSettings({
   desktopApi: FileTermDesktopApi | undefined
   t: LocaleMessages
 }) {
-  const [categories, setCategories] = useState<DiagnosticLogCategories | null>(null)
+  const [preferences, setPreferences] = useState<Pick<
+    UiPreferences,
+    'basicLoggingEnabled' | 'diagnosticLogCategories'
+  > | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(false)
   const savingRef = useRef(false)
@@ -24,8 +27,8 @@ export function DiagnosticLogSettings({
   useEffect(() => {
     if (!desktopApi) return
     let active = true
-    const apply = (preferences: { diagnosticLogCategories: DiagnosticLogCategories }) => {
-      if (active) setCategories(preferences.diagnosticLogCategories)
+    const apply = (next: UiPreferences) => {
+      if (active) setPreferences(next)
     }
     void desktopApi
       .getUiPreferences()
@@ -40,14 +43,14 @@ export function DiagnosticLogSettings({
     }
   }, [desktopApi])
 
-  const save = async (category: DiagnosticLogCategory, enabled: boolean) => {
+  const save = async (input: Pick<UiPreferencesInput, 'basicLoggingEnabled' | 'diagnosticLogCategories'>) => {
     if (!desktopApi || savingRef.current) return
     savingRef.current = true
     setSaving(true)
     setError(false)
     try {
-      const preferences = await desktopApi.setUiPreferences({ diagnosticLogCategories: { [category]: enabled } })
-      setCategories(preferences.diagnosticLogCategories)
+      const next = await desktopApi.setUiPreferences(input)
+      setPreferences(next)
     } catch {
       setError(true)
     } finally {
@@ -58,6 +61,21 @@ export function DiagnosticLogSettings({
 
   return (
     <div className="diagnostic-log-settings">
+      <label className="diagnostic-log-card diagnostic-log-basic">
+        <span className="diagnostic-log-basic-copy">
+          <span className="diagnostic-log-card-label">{t.basicLogging}</span>
+          <span className="diagnostic-log-basic-hint">{t.basicLoggingHint}</span>
+        </span>
+        <span className="command-toggle">
+          <SelectionControl
+            type="checkbox"
+            aria-label={t.basicLogging}
+            checked={preferences?.basicLoggingEnabled ?? true}
+            disabled={!preferences || saving}
+            onChange={(event) => void save({ basicLoggingEnabled: event.target.checked })}
+          />
+        </span>
+      </label>
       <div className="diagnostic-log-intro">
         <p>{t.diagnosticLogCategoriesHint}</p>
         <p>{t.diagnosticLogRetentionHint}</p>
@@ -69,9 +87,9 @@ export function DiagnosticLogSettings({
             <span className="command-toggle">
               <SelectionControl
                 type="checkbox"
-                checked={categories?.[category] ?? false}
-                disabled={!categories || saving}
-                onChange={(event) => void save(category, event.target.checked)}
+                checked={preferences?.diagnosticLogCategories[category] ?? false}
+                disabled={!preferences || saving}
+                onChange={(event) => void save({ diagnosticLogCategories: { [category]: event.target.checked } })}
               />
             </span>
           </label>

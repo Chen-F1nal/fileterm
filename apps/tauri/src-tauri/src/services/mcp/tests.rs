@@ -8,7 +8,7 @@ mod tests {
         mcp_cancel_request_id, mcp_error_code, mcp_error_is_retryable,
         optional_string, pagination, requested_execution_mode, should_request_mcp_approval,
         tool_definitions, tool_error_result, validate_tool_arguments, write_mcp_progress,
-        visible_command_agent_metadata,
+        visible_command_agent_metadata, synchronous_command_agent_metadata,
         ActionApprovalSource, BridgeProgress, BridgeRequest, McpAccessPolicy, McpVisibility,
         McpVisibilityScope, EXECUTION_MODE_BACKGROUND, EXECUTION_MODE_VISIBLE_TERMINAL,
         MCP_BRIDGE_TIMEOUT, MCP_CONNECTION_WAIT_TIMEOUT, MCP_JSONRPC_PROTOCOL_VERSION,
@@ -260,6 +260,8 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("never writes to the visible terminal"));
+        assert!(remote_tool["description"].as_str().unwrap().contains("separate command beginning with sudo or su"));
+        assert!(remote_tool["description"].as_str().unwrap().contains("no prompt is waiting"));
         assert_eq!(
             remote_tool["outputSchema"]["required"],
             json!(["tabId", "executionMode", "agent", "result"])
@@ -596,7 +598,8 @@ mod tests {
         let result = initialize_result(&json!({})).expect("initialize result should be valid");
         let instructions = result["instructions"].as_str().unwrap();
         assert!(instructions.contains("REMOTE_INTERACTIVE_INPUT_REQUIRED"));
-        assert!(instructions.contains("visible SSH terminal"));
+        assert!(instructions.contains("no prompt is waiting in the visible terminal"));
+        assert!(instructions.contains("separate command beginning with sudo or su"));
         assert!(instructions.contains("ask the user"));
         assert!(instructions.contains("sudo/su"));
         assert!(instructions.contains("progress/log notification"));
@@ -761,7 +764,19 @@ mod tests {
             "REMOTE_INTERACTIVE_INPUT_REQUIRED: finish the operation in the visible SSH terminal",
         );
         assert_eq!(input["outcome"], "needs-user-input");
-        assert_eq!(input["recovery"]["type"], "finish-input-in-visible-terminal");
+        assert_eq!(input["recovery"]["type"], "inspect-before-new-operation");
+        assert_eq!(input["safeToRetry"], false);
+        assert!(input["recovery"]["reason"].as_str().unwrap().contains("no prompt is waiting"));
+        let completed = synchronous_command_agent_metadata(&json!({
+            "result": { "inputRequired": true }
+        }));
+        assert_eq!(completed["next"]["type"], input["recovery"]["type"]);
+        assert_eq!(completed["next"]["reason"], input["recovery"]["reason"]);
+        assert_eq!(completed["retryPolicy"], "never-repeat-automatically");
+        let visible = visible_command_agent_metadata(&json!({
+            "result": { "inputRequired": true }
+        }));
+        assert_eq!(visible["next"]["type"], "finish-input-in-visible-terminal");
         assert_eq!(input["recovery"]["mustNotCall"][0], "fileterm_execute_remote_command");
 
         let queue = agent_error_metadata(

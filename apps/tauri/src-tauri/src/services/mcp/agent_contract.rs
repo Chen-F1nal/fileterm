@@ -182,7 +182,7 @@ fn agent_contract() -> Value {
             "readOnlyOrReadCommand": "Retry the same read with the same identifiers and offset after bounded backoff.",
             "connectionWait": "Wait again with the same connectionOperationId; do not open a second connection.",
             "sideEffectRequest": "The outcome may be unknown. Inspect state first; never replay automatically.",
-            "interactiveInput": "Finish MFA, confirmation, installer, or REPL input in the visible SSH terminal.",
+            "interactiveInput": "The isolated background call has ended; no prompt is waiting in the visible terminal. Inspect partial effects before any retry. For sudo/su, submit separate commands beginning with sudo or su so FileTerm can use saved credentials or its secure prompt. For other interactive input, ask the user to choose visible-terminal before starting a new operation there.",
             "passwordPrompt": "Wait for the FileTerm main-window prompt or ask the user for an explicit retry; do not issue a second request while the prompt is pending.",
             "queueFull": "The request was not accepted; retry after bounded backoff while preserving the original arguments."
         }
@@ -399,7 +399,7 @@ fn synchronous_command_agent_metadata(result: &Value) -> Value {
         "retryPolicy": if timed_out || input_required { "never-repeat-automatically" } else { "repeat-only-if-user-requests" },
         "doNotCall": ["fileterm_execute_remote_command"],
         "next": if input_required {
-            json!({ "type": "finish-input-in-visible-terminal" })
+            json!({ "type": "inspect-before-new-operation", "reason": "The isolated background call has ended; no prompt is waiting in the visible terminal. Inspect partial effects before any retry. For sudo/su, submit separate commands beginning with sudo or su so FileTerm can use saved credentials or its secure prompt. For other interactive input, ask the user to choose visible-terminal before starting a new operation there." })
         } else if timed_out {
             json!({ "type": "inspect-remote-state-before-any-retry" })
         } else {
@@ -522,9 +522,9 @@ fn agent_error_metadata(action: &str, params: &Value, error: &str) -> Value {
         })
     } else if interactive_input {
         json!({
-            "type": "finish-input-in-visible-terminal",
+            "type": "inspect-before-new-operation",
             "mustNotCall": [format!("fileterm_{action}")],
-            "reason": "Complete MFA, confirmation, installer, passwd, or REPL input before continuing."
+            "reason": "The isolated background call has ended; no prompt is waiting in the visible terminal. Inspect partial effects before any retry. For sudo/su, submit separate commands beginning with sudo or su so FileTerm can use saved credentials or its secure prompt. For other interactive input, ask the user to choose visible-terminal before starting a new operation there."
         })
     } else if password_retry || credential_retry {
         json!({
