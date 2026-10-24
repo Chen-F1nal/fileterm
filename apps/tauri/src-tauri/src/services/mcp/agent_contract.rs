@@ -66,13 +66,15 @@ fn agent_contract() -> Value {
         "responseShape": {
             "mcpToolCall": {
                 "successPath": "JSON-RPC result.structuredContent",
+                "interactionHistoryPath": "JSON-RPC result.structuredContent.interactionHistory",
                 "humanReadablePath": "JSON-RPC result.content[0].text",
                 "failurePath": "JSON-RPC result.structuredContent.error with result.isError=true"
             },
             "cliJsonl": {
                 "successPath": "response.result when response.ok=true",
                 "humanReadablePath": "response.error when response.ok=false",
-                "failureMetadataPath": "response.errorInfo"
+                "failureMetadataPath": "response.errorInfo",
+                "interactionHistoryPath": "response.interactionHistory"
             },
             "continuationPath": "agent.next"
         },
@@ -464,6 +466,9 @@ fn agent_error_metadata(action: &str, params: &Value, error: &str) -> Value {
             | "FILETERM_APP_UNAVAILABLE"
             | "FILETERM_BRIDGE_BUSY"
             | "FILETERM_REQUEST_TIMEOUT"
+            | "FILETERM_STORAGE_OPERATION_FAILED"
+            | "FILETERM_RESPONSE_INVALID"
+            | FILETERM_CLI_JSONL_REQUEST_CANCELLED
     ) && !read_safe;
     let tab_id = params.get("tab_id").and_then(Value::as_str);
 
@@ -530,7 +535,7 @@ fn agent_error_metadata(action: &str, params: &Value, error: &str) -> Value {
         json!({
             "type": "user-input-then-retry",
             "mustNotCall": [format!("fileterm_{action}")],
-            "reason": "Wait for the FileTerm prompt or provide the requested credential before retrying."
+            "reason": "Restore the FileTerm main window or save the matching credential locally, then wait for an explicit user retry. Never request credentials in chat."
         })
     } else if safe_to_retry {
         json!({ "type": "retry-after-cooldown", "mustPreserveArguments": true })

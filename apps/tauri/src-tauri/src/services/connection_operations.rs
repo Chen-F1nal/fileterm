@@ -12,6 +12,13 @@ use std::{
 
 use tokio::sync::{watch, RwLock};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConnectionInteraction {
+    request_id: String,
+    pub kind: &'static str,
+    pub status: &'static str,
+}
+
 pub const FILETERM_CONNECTION_FAILED: &str = "FILETERM_CONNECTION_FAILED";
 pub const FILETERM_CONNECTION_WAIT_TIMEOUT: &str = "FILETERM_CONNECTION_WAIT_TIMEOUT";
 pub const SSH_CREDENTIALS_NEEDED: &str = "SSH_CREDENTIALS_NEEDED";
@@ -46,6 +53,7 @@ pub struct ConnectionOperationInfo {
     pub profile_id: String,
     pub tab_id: Option<String>,
     pub receiver: watch::Receiver<ConnectionOperationState>,
+    pub interactions: Vec<ConnectionInteraction>,
 }
 
 struct OperationRecord {
@@ -53,6 +61,7 @@ struct OperationRecord {
     tab_id: Option<String>,
     sender: watch::Sender<ConnectionOperationState>,
     updated_at: Instant,
+    interactions: Vec<ConnectionInteraction>,
 }
 
 #[derive(Default)]
@@ -138,6 +147,7 @@ impl ConnectionOperationRegistry {
             tab_id: None,
             sender,
             updated_at: Instant::now(),
+            interactions: Vec::new(),
         };
         state.records.insert(id, record);
         handle
@@ -173,7 +183,63 @@ impl ConnectionOperationRegistry {
             profile_id: record.profile_id.clone(),
             tab_id: record.tab_id.clone(),
             receiver: record.sender.subscribe(),
+            interactions: record.interactions.clone(),
         })
+    }
+
+    /// Keep only interaction type and outcome; no prompt text or response values.
+    pub async fn request_interaction(&self, tab_id: &str, request_id: &str, kind: &str) {
+        let kind = match kind {
+            "credentials" => "credentials",
+            "host-verification" => "host-verification",
+            "key-passphrase" => "key-passphrase",
+            "keyboard-interactive" => "keyboard-interactive",
+            _ => return,
+        };
+        let mut state = self.state.write().await;
+        let Some(operation_id) = state.tab_to_operation.get(tab_id).cloned() else {
+            return;
+        };
+        let Some(record) = state.records.get_mut(&operation_id) else {
+            return;
+        };
+        if record.sender.borrow().is_terminal() {
+            return;
+        }
+        // Keep the complete normal handshake bounded below the bridge event queue.
+        if record.interactions.len() == 16 {
+            record.interactions.push(ConnectionInteraction {
+                request_id: String::new(),
+                kind: "other",
+                status: "history-truncated",
+            });
+        } else if record.interactions.len() < 16 {
+            record.interactions.push(ConnectionInteraction {
+                request_id: request_id.to_string(),
+                kind,
+                status: "requested",
+            });
+        }
+        record.sender.send_modify(|_| {});
+    }
+
+    pub async fn resolve_interaction(&self, request_id: &str, cancelled: bool) {
+        let mut state = self.state.write().await;
+        for record in state.records.values_mut() {
+            if let Some(interaction) = record
+                .interactions
+                .iter_mut()
+                .find(|item| item.request_id == request_id)
+            {
+                interaction.status = if cancelled {
+                    "cancelled"
+                } else {
+                    "input-completed"
+                };
+                record.sender.send_modify(|_| {});
+                break;
+            }
+        }
     }
 
     pub async fn publish_for_tab(&self, tab_id: &str, next: ConnectionOperationState) {
@@ -426,6 +492,66 @@ mod tests {
         assert_eq!(
             ssh_connection_error_code("connection refused"),
             FILETERM_CONNECTION_FAILED
+        );
+    }
+}
+
+#[cfg(test)]
+mod authentication_interaction_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn credential_interactions_wake_waiters_without_implying_authentication_success() {
+        let registry = ConnectionOperationRegistry::default();
+        let operation = registry.begin("profile").await;
+        registry.attach_tab(&operation.id, "tab").await.unwrap();
+        let mut info = registry.info(&operation.id).await.unwrap();
+        registry
+            .request_interaction("tab", "request", "keyboard-interactive")
+            .await;
+        info.receiver.changed().await.unwrap();
+        let info = registry.info(&operation.id).await.unwrap();
+        assert_eq!(info.interactions[0].kind, "keyboard-interactive");
+        assert_eq!(info.interactions[0].status, "requested");
+        registry.resolve_interaction("request", false).await;
+        let info = registry.info(&operation.id).await.unwrap();
+        assert_eq!(info.interactions[0].status, "input-completed");
+        assert_eq!(
+            *info.receiver.borrow(),
+            ConnectionOperationState::Connecting
+        );
+        registry
+            .publish_for_tab(
+                "tab",
+                ConnectionOperationState::Failed {
+                    code: SSH_AUTH_FAILURE.to_string(),
+                },
+            )
+            .await;
+        assert_eq!(
+            registry.info(&operation.id).await.unwrap().interactions[0].status,
+            "input-completed"
+        );
+    }
+
+    #[tokio::test]
+    async fn interaction_history_is_bounded_with_an_explicit_truncation_marker() {
+        let registry = ConnectionOperationRegistry::default();
+        let operation = registry.begin("profile").await;
+        registry.attach_tab(&operation.id, "tab").await.unwrap();
+        for index in 0..40 {
+            registry
+                .request_interaction("tab", &index.to_string(), "credentials")
+                .await;
+        }
+        registry
+            .request_interaction("tab", "ignored", "secret-kind")
+            .await;
+        let info = registry.info(&operation.id).await.unwrap();
+        assert_eq!(info.interactions.len(), 17);
+        assert_eq!(
+            info.interactions.last().unwrap().status,
+            "history-truncated"
         );
     }
 }

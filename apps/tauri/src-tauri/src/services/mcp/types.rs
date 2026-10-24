@@ -213,12 +213,14 @@ struct BridgeResponse {
     result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    interaction_history: Vec<BridgeProgress>,
 }
 
 /// A one-way status event sent before the final bridge response. It exists so
 /// CLI/MCP callers can observe that FileTerm has opened a foreground secure
 /// prompt while the original command remains pending for the user's input.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct BridgeProgress {
     kind: String,
@@ -244,20 +246,47 @@ impl BridgeProgress {
         }
     }
 
+    #[cfg(test)]
     fn privileged_password_prompt(code: &str, progress_token: Option<Value>) -> Self {
+        Self::privileged_password_state(code, "requested", progress_token)
+    }
+
+    fn privileged_password_state(code: &str, status: &str, progress_token: Option<Value>) -> Self {
         let method = if code == SUDO_PASSWORD_NEEDED {
             "sudo"
         } else {
             "su"
         };
+        let detail = if status == "requested" {
+            "FileTerm requested a secure password dialog in the main window; wait for the user to submit or cancel there."
+        } else {
+            "This records the local password dialog outcome, not the remote command outcome."
+        };
         Self {
             kind: "progress".to_string(),
             event: "privileged-password-prompt".to_string(),
-            status: "input-required".to_string(),
-            code: code.to_string(),
+            status: status.to_string(),
+            code: if status == "requested" { code.to_string() } else {
+                format!("{}_PASSWORD_{}", method.to_ascii_uppercase(), status.replace('-', "_").to_ascii_uppercase())
+            },
             message: format!(
-                "FileTerm opened a secure {method} password prompt in the main window. Enter the password there; the command is waiting and will continue after submission."
+                "FileTerm secure {method} password prompt: {status}. {detail} A submitted password does not prove successful authentication. Command success does not prove passwordless sudo/su."
             ),
+            progress_token,
+        }
+    }
+
+    fn is_interaction(&self) -> bool {
+        matches!(self.event.as_str(), "privileged-password-prompt" | "action-approval-waiting" | "action-approval-resolved" | "connection-waiting" | "ssh-interaction")
+    }
+
+    fn ssh_interaction(kind: &str, status: &str, progress_token: Option<Value>) -> Self {
+        Self {
+            kind: "progress".to_string(),
+            event: "ssh-interaction".to_string(),
+            status: status.to_string(),
+            code: format!("SSH_INTERACTION_{}", kind.replace('-', "_").to_ascii_uppercase()),
+            message: format!("FileTerm local SSH interaction ({kind}): {status}. Only interaction state is reported; no prompt content or response value is returned. Input completion does not establish successful SSH authentication."),
             progress_token,
         }
     }

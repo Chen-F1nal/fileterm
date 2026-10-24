@@ -85,8 +85,8 @@ fn one_bridge_session_routes_multiple_out_of_order_responses() {
         }
     });
 
-    let connection = connect_bridge_to_endpoint("test-client", &descriptor)
-        .expect("test client should connect");
+    let connection =
+        connect_bridge_to_endpoint("test-client", &descriptor).expect("test client should connect");
     let client = Arc::new(BridgeClient::new());
     *client
         .connection
@@ -103,7 +103,7 @@ fn one_bridge_session_routes_multiple_out_of_order_responses() {
                 .expect("first progress lock should work")
                 .push(progress.message.clone());
         };
-        first_client.call(request("first"), &mut progress, None)
+        first_client.call(request("first"), &mut progress, None, &mut Vec::new())
     });
     let second_client = Arc::clone(&client);
     let second_progress = Arc::new(Mutex::new(Vec::new()));
@@ -115,7 +115,7 @@ fn one_bridge_session_routes_multiple_out_of_order_responses() {
                 .expect("second progress lock should work")
                 .push(progress.message.clone());
         };
-        second_client.call(request("second"), &mut progress, None)
+        second_client.call(request("second"), &mut progress, None, &mut Vec::new())
     });
 
     assert_eq!(
@@ -194,8 +194,8 @@ fn cancellation_is_routed_to_the_matching_bridge_request() {
         }
     });
 
-    let connection = connect_bridge_to_endpoint("test-client", &descriptor)
-        .expect("test client should connect");
+    let connection =
+        connect_bridge_to_endpoint("test-client", &descriptor).expect("test client should connect");
     let client = Arc::new(BridgeClient::new());
     *client
         .connection
@@ -210,6 +210,7 @@ fn cancellation_is_routed_to_the_matching_bridge_request() {
             request("cancel-me"),
             &mut progress,
             Some(&call_cancellation),
+            &mut Vec::new(),
         )
     });
     request_seen_receiver
@@ -330,7 +331,7 @@ fn disconnected_in_flight_request_is_not_replayed_and_next_call_reconnects() {
     let first_client = Arc::clone(&client);
     let first = thread::spawn(move || {
         let mut progress = |_progress: &BridgeProgress| {};
-        first_client.call(request("first"), &mut progress, None)
+        first_client.call(request("first"), &mut progress, None, &mut Vec::new())
     });
     first_request_receiver
         .recv_timeout(Duration::from_secs(2))
@@ -344,7 +345,7 @@ fn disconnected_in_flight_request_is_not_replayed_and_next_call_reconnects() {
     let mut progress = |_progress: &BridgeProgress| {};
     assert_eq!(
         client
-            .call(request("second"), &mut progress, None)
+            .call(request("second"), &mut progress, None, &mut Vec::new())
             .expect("the next explicit request should recover the session"),
         json!({ "value": "second" })
     );
@@ -358,12 +359,106 @@ fn failed_recovery_enters_a_short_circuit_breaker_window() {
     *client
         .reconnect_cooldown_until
         .lock()
-        .expect("test cooldown lock should work") =
-        Some(Instant::now() + Duration::from_secs(1));
+        .expect("test cooldown lock should work") = Some(Instant::now() + Duration::from_secs(1));
 
     let error = match client.ensure_connection() {
         Ok(_) => panic!("cooling down bridge should not reconnect"),
         Err(error) => error,
     };
     assert!(error.starts_with(BRIDGE_UNAVAILABLE));
+}
+
+#[test]
+fn mcp_final_result_retains_prompt_lifecycle_when_host_ignores_notifications() {
+    use super::super::super::{
+        call_tool_with_cancellation, SUDO_PASSWORD_CANCELLED, SUDO_PASSWORD_NEEDED,
+    };
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let descriptor = RuntimeDescriptor {
+        protocol_version: MCP_PROTOCOL_VERSION,
+        address: listener.local_addr().unwrap().to_string(),
+        token: "interaction-test".to_string(),
+    };
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut writer = BufWriter::new(stream);
+        assert!(matches!(
+            read_sync_frame(&mut reader).unwrap(),
+            BridgeFrame::Hello { .. }
+        ));
+        write_sync_frame(
+            &mut writer,
+            &BridgeFrame::HelloAck {
+                protocol_version: MCP_PROTOCOL_VERSION,
+                session_id: "interaction-test".to_string(),
+                error: None,
+            },
+        )
+        .unwrap();
+        for status in ["input-completed", "cancelled", "timed-out"] {
+            let BridgeFrame::Request { request_id, .. } = read_sync_frame(&mut reader).unwrap()
+            else {
+                panic!("expected request");
+            };
+            let requested = BridgeProgress::privileged_password_prompt(SUDO_PASSWORD_NEEDED, None);
+            let resolved =
+                BridgeProgress::privileged_password_state(SUDO_PASSWORD_NEEDED, status, None);
+            // The requested notification was dropped; only the later status arrives live.
+            write_sync_frame(
+                &mut writer,
+                &BridgeFrame::Progress {
+                    request_id: request_id.clone(),
+                    progress: resolved.clone(),
+                },
+            )
+            .unwrap();
+            let mut response = if status == "input-completed" {
+                BridgeResponse::success(json!({"result": {"exitCode": 0, "output": ""}}))
+            } else {
+                BridgeResponse::error(SUDO_PASSWORD_CANCELLED)
+            };
+            response.interaction_history = vec![requested, resolved];
+            write_sync_frame(
+                &mut writer,
+                &BridgeFrame::Response {
+                    request_id,
+                    response,
+                },
+            )
+            .unwrap();
+        }
+        while let Ok(frame) = read_sync_frame(&mut reader) {
+            match frame {
+                BridgeFrame::Close => break,
+                BridgeFrame::Ping { nonce } => {
+                    write_sync_frame(&mut writer, &BridgeFrame::Pong { nonce }).unwrap();
+                }
+                _ => panic!("unexpected frame"),
+            }
+        }
+    });
+    let client = BridgeClient::new_for_descriptor(descriptor);
+    for status in ["input-completed", "cancelled", "timed-out"] {
+        let mut ignore_notifications = |_progress: &BridgeProgress| {};
+        let result = call_tool_with_cancellation(
+            &json!({"name": "fileterm_execute_remote_command", "arguments": {"tab_id": "tab-test", "command": "sudo true"}}),
+            &mut ignore_notifications, None, &client,
+        ).unwrap();
+        let content = &result["structuredContent"];
+        assert_eq!(content["interactionHistory"][0]["status"], "requested");
+        assert_eq!(content["interactionHistory"][1]["status"], status);
+        assert_eq!(content["interactionHistory"].as_array().unwrap().len(), 2);
+        assert_eq!(result["isError"], status != "input-completed");
+        if status == "input-completed" {
+            assert_eq!(content["result"]["exitCode"], 0);
+        } else {
+            assert_eq!(content["error"]["code"], SUDO_PASSWORD_CANCELLED);
+        }
+        let text: Value =
+            serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(&text, content);
+    }
+    client.close();
+    server.join().unwrap();
 }

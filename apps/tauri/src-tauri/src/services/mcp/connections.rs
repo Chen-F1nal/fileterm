@@ -134,13 +134,25 @@ async fn wait_for_connection_operation(
         .info(operation_id)
         .await
         .map_err(|error| format!("{MCP_CONNECTION_OPERATION_NOT_FOUND}: {error}"))?;
-    if let Some(sender) = progress_sender {
-        let _ = sender.try_send(BridgeProgress::connection_waiting(progress_token));
+    if let Some(sender) = progress_sender.as_ref() {
+        let _ = sender.try_send(BridgeProgress::connection_waiting(progress_token.clone()));
     }
 
     let mut tab_id = info.tab_id;
     let mut receiver = info.receiver;
+    let mut observed_interactions = Vec::new();
     loop {
+        let interactions = app.state::<crate::services::workspace::WorkspaceState>()
+            .connection_operations.info(operation_id).await
+            .map_err(|_| MCP_CONNECTION_OPERATION_NOT_FOUND.to_string())?.interactions;
+        if let Some(sender) = progress_sender.as_ref() {
+            for (index, interaction) in interactions.iter().enumerate() {
+                if observed_interactions.get(index) != Some(interaction) {
+                    let _ = sender.try_send(BridgeProgress::ssh_interaction(interaction.kind, interaction.status, progress_token.clone()));
+                }
+            }
+        }
+        observed_interactions = interactions;
         let state = {
             let borrowed_state = receiver.borrow();
             borrowed_state.clone()
@@ -323,9 +335,10 @@ async fn execute_remote_command(
     let save_su_password = optional_bool(params, "save_su_password")?.unwrap_or(false);
     let privileged_prompt_notice = progress_sender.map(|sender| {
         let progress_token = progress_token.clone();
-        Arc::new(move |needed_code: &str| {
-            let _ = sender.try_send(BridgeProgress::privileged_password_prompt(
+        Arc::new(move |needed_code: &str, status: &str| {
+            let _ = sender.try_send(BridgeProgress::privileged_password_state(
                 needed_code,
+                status,
                 progress_token.clone(),
             ));
         }) as crate::services::action_review::PrivilegedPromptNotice
@@ -380,9 +393,10 @@ async fn start_remote_command(
     let su_password = optional_secret_string(params, "su_password", 4 * 1024)?;
     let privileged_prompt_notice = progress_sender.map(|sender| {
         let progress_token = progress_token.clone();
-        Arc::new(move |needed_code: &str| {
-            let _ = sender.try_send(BridgeProgress::privileged_password_prompt(
+        Arc::new(move |needed_code: &str, status: &str| {
+            let _ = sender.try_send(BridgeProgress::privileged_password_state(
                 needed_code,
+                status,
                 progress_token.clone(),
             ));
         }) as crate::services::action_review::PrivilegedPromptNotice

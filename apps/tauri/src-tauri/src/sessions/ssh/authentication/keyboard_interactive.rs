@@ -90,6 +90,7 @@ async fn try_keyboard_interactive(
                 interaction.interaction_window_label.as_deref(),
                 &payload,
             )
+            .await
             .is_err()
             {
                 let (_, pending_after) =

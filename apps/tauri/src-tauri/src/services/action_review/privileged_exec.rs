@@ -19,7 +19,13 @@ async fn request_sudo_password_prompt(
         PrivilegedCommandKind::Sudo => SUDO_PASSWORD_NEEDED,
         PrivilegedCommandKind::Su => SU_PASSWORD_NEEDED,
     };
+    let notify = |status: &str| {
+        if let Some(notice) = privileged_prompt_notice.as_ref() {
+            notice(needed_code, status);
+        }
+    };
     if !state.has_sudo_password_renderer().await || !main_window_exists(app) {
+        notify("unavailable");
         return Err(AppError::Command(needed_code.to_string()));
     }
     crate::show_main_window(app);
@@ -40,6 +46,7 @@ async fn request_sudo_password_prompt(
         .insert_pending_sudo_password(request_id.clone(), pending)
         .await
     {
+        notify("unavailable");
         return Err(AppError::Command(needed_code.to_string()));
     }
     let payload = serde_json::json!({
@@ -55,6 +62,7 @@ async fn request_sudo_password_prompt(
         "command": command,
     });
     if let Err(error) = app.emit("sudo:password-request", payload) {
+        notify("unavailable");
         state
             .pending_sudo_passwords
             .write()
@@ -67,9 +75,7 @@ async fn request_sudo_password_prompt(
         );
         return Err(AppError::Command(needed_code.to_string()));
     }
-    if let Some(notice) = privileged_prompt_notice {
-        notice(needed_code);
-    }
+    notify("requested");
 
     let response = match cancellation {
         Some(cancellation) => tokio::select! {
@@ -80,6 +86,7 @@ async fn request_sudo_password_prompt(
                     .await
                     .remove(&request_id);
                 emit_sudo_password_prompt_cancelled(app, &request_id);
+                notify("aborted");
                 return Err(remote_exec_cancelled_error());
             }
             response = timeout(PRIVILEGED_PASSWORD_PROMPT_TIMEOUT, receiver) => response,
@@ -88,7 +95,8 @@ async fn request_sudo_password_prompt(
     };
     let response = match response {
         Ok(Ok(response)) => response,
-        Ok(Err(_)) | Err(_) => {
+        failure => {
+            notify(if failure.is_err() { "timed-out" } else { "cancelled" });
             state
                 .pending_sudo_passwords
                 .write()
@@ -104,8 +112,12 @@ async fn request_sudo_password_prompt(
             ));
         }
     };
-    check_cancellation(cancellation)?;
+    if let Err(error) = check_cancellation(cancellation) {
+        notify("aborted");
+        return Err(error);
+    }
     if response.cancelled {
+        notify("cancelled");
         return Err(AppError::Command(
             match kind {
                 PrivilegedCommandKind::Sudo => SUDO_PASSWORD_CANCELLED,
@@ -115,6 +127,7 @@ async fn request_sudo_password_prompt(
         ));
     }
     let password = response.value.ok_or_else(|| {
+        notify("unavailable");
         AppError::Command(
             match kind {
                 PrivilegedCommandKind::Sudo => SUDO_PASSWORD_NEEDED,
@@ -124,6 +137,7 @@ async fn request_sudo_password_prompt(
         )
     })?;
     validate_privileged_password(&password)?;
+    notify("input-completed");
     Ok((password, response.save))
 }
 

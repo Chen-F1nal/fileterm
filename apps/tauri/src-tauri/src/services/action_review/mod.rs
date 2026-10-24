@@ -77,11 +77,8 @@ pub const AI_TERMINAL_HANDOFF_NOT_PENDING: &str = "AI_TERMINAL_HANDOFF_NOT_PENDI
 /// Stable cancellation code shared by the Copilot prompt and exec boundary.
 pub const AI_REQUEST_CANCELLED: &str = "AI_REQUEST_CANCELLED";
 
-/// Optional progress callback fired after FileTerm has restored the main
-/// window and before the local sudo/su prompt starts waiting. AI Copilot and
-/// the MCP/CLI bridge use it to tell their caller that the foreground prompt
-/// is ready for the user.
-pub type PrivilegedPromptNotice = Arc<dyn Fn(&str) + Send + Sync>;
+/// Local-only prompt lifecycle (credential kind code, status); never includes input.
+pub type PrivilegedPromptNotice = Arc<dyn Fn(&str, &str) + Send + Sync>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]

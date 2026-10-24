@@ -482,7 +482,7 @@ async fn request_key_passphrase(
         app,
         interaction.interaction_window_label.as_deref(),
         &payload,
-    ) {
+    ).await {
         let (_, pending_after) = remove_pending_ssh_interaction(app, &request_id).await;
         interaction.log_interaction(
             app,
