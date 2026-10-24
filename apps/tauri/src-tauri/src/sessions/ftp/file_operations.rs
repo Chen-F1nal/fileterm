@@ -130,38 +130,57 @@ async fn stat_file<T: TokioTlsStream + Send>(
 async fn upload_file<T: TokioTlsStream + Send + 'static>(
     ftp: &mut ImplAsyncFtpStream<T>,
     local_path: &str,
+    total: u64,
     remote_path: &str,
     resume_offset: u64,
     transfer_id: &str,
     cancel: tokio_util::sync::CancellationToken,
     app: Option<&AppHandle>,
     io_timeout: Duration,
-) -> Result<(), String> {
-    let total = tokio::fs::metadata(local_path)
-        .await
-        .map_err(|error| format!("无法读取本地上传文件 {local_path}: {error}"))?
-        .len();
-    if resume_offset > total {
-        return Err("FTP 上传断点大于源文件".to_string());
-    }
+) -> Result<String, String> {
     ftp_io_with_timeout(
         io_timeout,
         "upload parent directory",
         ensure_dir(ftp, &parent_remote_path(remote_path)),
     )
     .await?;
-    let mut local = tokio::fs::File::open(local_path)
-        .await
-        .map_err(|error| format!("无法打开本地上传文件 {local_path}: {error}"))?;
     let mut buffer = vec![0_u8; crate::sessions::TRANSFER_IO_BUFFER_BYTES];
     let mut attempt_offset = resume_offset;
     let mut rebuilt_from_zero = false;
 
     loop {
-        local
-            .seek(std::io::SeekFrom::Start(attempt_offset))
-            .await
-            .map_err(|error| error.to_string())?;
+        let mut local = crate::sessions::upload_source::UploadSource::open(
+            local_path,
+            total,
+            attempt_offset,
+            &cancel,
+        )
+        .await?;
+        if attempt_offset > 0 {
+            let mut checkpoint = ftp_io_with_timeout(
+                io_timeout,
+                "open upload checkpoint",
+                ftp.retr_as_stream(remote_path),
+            )
+            .await?;
+            crate::sessions::upload_source::verify_resume_prefix(
+                &mut checkpoint,
+                attempt_offset,
+                &local.hash(),
+                &cancel,
+                io_timeout,
+            )
+            .await?;
+            ftp_io_with_timeout(
+                io_timeout,
+                "finish upload checkpoint",
+                ftp.finalize_retr_stream(checkpoint),
+            )
+            .await?;
+            if attempt_offset == total {
+                return Ok(local.hash());
+            }
+        }
         let mut stream = if attempt_offset > 0 {
             match ftp_io_with_timeout(
                 io_timeout,
@@ -207,14 +226,14 @@ async fn upload_file<T: TokioTlsStream + Send + 'static>(
         }
         loop {
             let count = tokio::select! {
-                _ = cancel.cancelled() => { let _ = ftp.abort(stream).await; return Err(TRANSFER_CANCELED.to_string()); }
-                result = ftp_io_with_timeout(io_timeout, "read local upload", local.read(&mut buffer)) => result?,
+                _ = cancel.cancelled() => { let _ = timeout(io_timeout, ftp.abort(stream)).await; return Err(TRANSFER_CANCELED.to_string()); }
+                result = ftp_io_with_timeout(io_timeout, "read local upload", local.read(&mut buffer, &cancel)) => result?,
             };
             if count == 0 {
                 break;
             }
             tokio::select! {
-                _ = cancel.cancelled() => { let _ = ftp.abort(stream).await; return Err(TRANSFER_CANCELED.to_string()); }
+                _ = cancel.cancelled() => { let _ = timeout(io_timeout, ftp.abort(stream)).await; return Err(TRANSFER_CANCELED.to_string()); }
                 result = ftp_io_with_timeout(io_timeout, "write FTP upload", stream.write_all(&buffer[..count])) => result?,
             }
             transferred += count as u64;
@@ -236,7 +255,7 @@ async fn upload_file<T: TokioTlsStream + Send + 'static>(
                 .map_err(|error| format!("FTP 上传后无法校验断点大小: {error}"))?
                 as u64;
         if uploaded_size == total {
-            return Ok(());
+            return Ok(local.hash());
         }
         if attempt_offset == 0 || rebuilt_from_zero {
             return Err(format!(
@@ -303,14 +322,14 @@ async fn download_file<T: TokioTlsStream + Send + 'static>(
     crate::services::transfers::report_progress(app, transfer_id, transferred, total).await;
     loop {
         let count = tokio::select! {
-            _ = cancel.cancelled() => { let _ = ftp.abort(stream).await; return Err(TRANSFER_CANCELED.to_string()); }
+            _ = cancel.cancelled() => { let _ = timeout(io_timeout, ftp.abort(stream)).await; return Err(TRANSFER_CANCELED.to_string()); }
             result = ftp_io_with_timeout(io_timeout, "read FTP download", stream.read(&mut buffer)) => result?,
         };
         if count == 0 {
             break;
         }
         tokio::select! {
-            _ = cancel.cancelled() => { let _ = ftp.abort(stream).await; return Err(TRANSFER_CANCELED.to_string()); }
+            _ = cancel.cancelled() => { let _ = timeout(io_timeout, ftp.abort(stream)).await; return Err(TRANSFER_CANCELED.to_string()); }
             result = ftp_io_with_timeout(io_timeout, "write local download", local.write_all(&buffer[..count])) => result?,
         }
         transferred += count as u64;

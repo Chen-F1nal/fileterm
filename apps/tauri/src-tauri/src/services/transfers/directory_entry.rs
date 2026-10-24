@@ -109,7 +109,6 @@ async fn transfer_directory_entry_once(
                 RemoteUploadPlan {
                     upload_path,
                     resume_offset: 0,
-                    upload_needed: true,
                     partial_ready: false,
                 },
                 0,
@@ -140,7 +139,6 @@ async fn transfer_directory_entry_once(
             RemoteUploadPlan {
                 upload_path: String::new(),
                 resume_offset: offset,
-                upload_needed: true,
                 partial_ready: false,
             },
             offset,
@@ -177,35 +175,34 @@ async fn transfer_directory_entry_once(
     .await?;
 
     if direction == "upload" {
-        if upload_plan.upload_needed {
-            worker_data_call_with_cancel(app, tab_id, cancel, |respond_to, token| {
-                WorkerCmd::UploadLocalFile {
-                    local_path: entry.source_path.clone(),
-                    remote_path: upload_plan.upload_path.clone(),
-                    resume_offset: offset,
-                    transfer_id: transfer_id.to_string(),
-                    cancel: token,
-                    verify_checksum: false,
-                    respond_to,
-                }
-            })
-            .await?;
-        }
-        // Transport integrity does not detect a source truncated or extended
-        // while reading. Check the staged size for both SSH and FTP before commit.
-        if upload_plan.upload_needed {
-            let uploaded =
-                stat_remote_transfer_size(app, tab_id, &upload_plan.upload_path, Some(cancel))
-                    .await?
-                    .ok_or_else(|| transfer_error(format!(
-                        "传输校验失败：远端文件不存在：{}", upload_plan.upload_path
-                    )))?;
-            if uploaded != entry.source_identity.size {
-                return Err(transfer_error(format!(
-                    "传输校验失败：{} 实际 {uploaded} 字节，期望 {}",
-                    entry.relative_path, entry.source_identity.size
-                )));
+        worker_data_call_with_cancel(app, tab_id, cancel, |respond_to, token| {
+            WorkerCmd::UploadLocalFile {
+                local_path: entry.source_path.clone(),
+                source_size: entry.source_identity.size,
+                remote_path: upload_plan.upload_path.clone(),
+                resume_offset: offset,
+                transfer_id: transfer_id.to_string(),
+                cancel: token,
+                verify_checksum: false,
+                respond_to,
             }
+        })
+        .await?;
+        // Check the staged size before committing for both SSH and FTP.
+        let uploaded =
+            stat_remote_transfer_size(app, tab_id, &upload_plan.upload_path, Some(cancel))
+                .await?
+                .ok_or_else(|| {
+                    transfer_error(format!(
+                        "传输校验失败：远端文件不存在：{}",
+                        upload_plan.upload_path
+                    ))
+                })?;
+        if uploaded != entry.source_identity.size {
+            return Err(transfer_error(format!(
+                "传输校验失败：{} 实际 {uploaded} 字节，期望 {}",
+                entry.relative_path, entry.source_identity.size
+            )));
         }
     } else {
         if let Some(parent) = Path::new(&entry.partial_path).parent() {

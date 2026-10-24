@@ -642,6 +642,7 @@ SSH/SFTP 和 FTP/FTPS 会在会话建立后上报实际能力，而不是把所�
 - Rust transfer run 在目录扫描、上传/下载、校验和替换目标期间持有共享系统防睡租约。`services/transfers/power.rs` 使用 `keepawake` 的原生电源请求：Windows `SetThreadExecutionState`、macOS IOPM assertion、Linux logind idle inhibitor。创建和释放均在同一专用线程上执行；最后一个活动任务退出（包括暂停、取消、失败、panic 与应用退出收口）后释放。仅抑制空闲自动睡眠，允许屏幕关闭，尊重用户显式睡眠；申请失败记日志并继续传输。手测步骤见 [传输防睡回归](./quality/transfer-power-regression.md)。
 - 单文件和目录 manifest 任务由 Rust backend 持久化到当前存储根目录的 `transfer-journal.json`（便携版位于 exe 旁的 `config`）；renderer 不直接读写 journal。
 - 上传和下载都先写入 `.fileterm-part` 临时文件，校验大小后再替换正式目标。
+- 上传使用任务记录的固定源长度，读取数据块时累计 SHA-256，远端校验与该结果比较，不在上传后重读原文件，也不创建本地副本。SFTP/FTP 续传先核对本地和远端已有前缀的长度与 hash，再追加后缀；FTP 从零回退时重新初始化 hash。旧 root exec 回退路径恢复时必须取得远端完整 SHA-256，否则拒绝提交。原有源身份变化检查保留；固定长度不提供原地改写期间的原子快照语义。
 - SFTP 与 FTP/FTPS 分别在 controller 内实现 offset 读写和远端收尾，不把协议命令伪统一到 renderer 或 transfer UI。
 - 传输调度使用 `profileId` 作为跨重启身份，不依赖生命周期短暂的 `tabId` 恢复连接；所有中断任务都等待用户手动继续，root 任务继续前还需要恢复 root 授权。
 - 高频字节进度仍只走 `transfer:update`，UI 投影直接构造且不深拷贝 manifest。目录条目按索引同步内存状态，journal 在任务创建、状态切换、目录检查点和收尾时更新；序列化与 fsync 在 blocking pool 中持有写锁完成，恢复 offset 以实际临时文件大小为准。
@@ -652,6 +653,7 @@ SSH/SFTP 和 FTP/FTPS 会在会话建立后上报实际能力，而不是把所�
 - SFTP root 上传为每个任务同时持久化不可预测的 /var/tmp staging 路径和目标同目录 .fileterm-part：登录用户的 SFTP 通道写入 staging（始终保存源文件从 0 开始的连续前缀），完成校验后由 sudo/su 用短命令复制为目标 partial，再校验并替换正式文件。失败恢复优先检查 staging，若 staging 已提交则改查目标 partial。历史 /tmp staging 任务按原路径恢复。普通 SFTP/FTP/FTPS 直接写目标同目录断点。
 - FTP 上传优先使用 `APPE`，服务器不支持时回退 `REST + STOR`；回退结果不安全时删除断点并从零重传，避免拼接出等长但错误的文件。
 - FTP 安全模式明确区分未加密 FTP、显式 FTPS 和隐式 FTPS。
+- FTP/FTPS 登录后必须成功启用二进制模式，保证换行和断点偏移按原始字节处理；传输 ABOR/QUIT 收尾有超时上限。SFTP 上传等待 flush 与 CLOSE 确认后才返回流式 hash，收尾支持取消与超时。
 - SFTP 可恢复路径保持有序流式写入。并行绝对 offset 会让文件长度无法证明前缀连续，因此在没有持久化范围位图前不用于断点判断。
 - 传输数据通道不得占用目录浏览通道：SSH/SFTP 共享认证 transport 但使用不同 channel，FTP/FTPS 使用独立连接；session 断开时所有传输通道一并终止，由 transfer journal 保留可验证断点。
 

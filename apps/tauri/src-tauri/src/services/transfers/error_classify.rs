@@ -46,6 +46,10 @@ fn is_permanent_transfer_error(message: &str) -> bool {
         "已发生变化",
         "大于源文件",
         "不是普通文件",
+        "已被截短",
+        "传输中被截短",
+        "上传断点内容与源文件不一致",
+        "上传断点大小已变化",
     ];
     PERMANENT_MARKERS
         .iter()

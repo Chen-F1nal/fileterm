@@ -224,6 +224,7 @@ mod tests {
     async fn run_resumable_upload_server(
         listener: TcpListener,
         supports_appe: bool,
+        ignore_rest: bool,
         stored: Arc<Mutex<Vec<u8>>>,
         commands: Arc<Mutex<Vec<String>>>,
     ) {
@@ -232,6 +233,7 @@ mod tests {
         let mut reader = BufReader::new(reader);
         let mut data_listener = None;
         let mut rest_offset = 0_usize;
+        let mut binary = false;
         writer
             .write_all(b"220 FileTerm resumable upload fixture\r\n")
             .await
@@ -246,13 +248,20 @@ mod tests {
             let (verb, argument) = command.split_once(' ').unwrap_or((command, ""));
             let verb = verb.to_ascii_uppercase();
             commands.lock().await.push(verb.clone());
+            if matches!(verb.as_str(), "RETR" | "APPE" | "STOR") {
+                assert!(binary, "byte-preserving transfer requires TYPE I first");
+            }
             match verb.as_str() {
                 "USER" => writer
                     .write_all(b"331 Password required\r\n")
                     .await
                     .unwrap(),
                 "PASS" => writer.write_all(b"230 Logged in\r\n").await.unwrap(),
-                "TYPE" | "OPTS" => writer.write_all(b"200 OK\r\n").await.unwrap(),
+                "TYPE" => {
+                    binary = argument == "I";
+                    writer.write_all(b"200 OK\r\n").await.unwrap();
+                }
+                "OPTS" => writer.write_all(b"200 OK\r\n").await.unwrap(),
                 "EPSV" | "PASV" => {
                     let data = TcpListener::bind("127.0.0.1:0").await.unwrap();
                     let data_port = data.local_addr().unwrap().port();
@@ -267,6 +276,19 @@ mod tests {
                         )
                     };
                     writer.write_all(response.as_bytes()).await.unwrap();
+                }
+                "RETR" => {
+                    writer
+                        .write_all(b"150 Opening data connection\r\n")
+                        .await
+                        .unwrap();
+                    let (mut data, _) = data_listener.take().unwrap().accept().await.unwrap();
+                    data.write_all(&stored.lock().await).await.unwrap();
+                    drop(data);
+                    // A bad checkpoint must report its mismatch even if 226 never arrives.
+                    if !stored.lock().await.ends_with(b"X") {
+                        writer.write_all(b"226 Transfer complete\r\n").await.unwrap();
+                    }
                 }
                 "APPE" if supports_appe => {
                     assert_eq!(argument, "/resume.bin");
@@ -288,7 +310,11 @@ mod tests {
                     writer.write_all(b"502 APPE unsupported\r\n").await.unwrap();
                 }
                 "REST" => {
-                    rest_offset = argument.parse().unwrap();
+                    rest_offset = if ignore_rest {
+                        0
+                    } else {
+                        argument.parse().unwrap()
+                    };
                     writer
                         .write_all(b"350 Restarting at offset\r\n")
                         .await
@@ -312,6 +338,20 @@ mod tests {
                         .await
                         .unwrap();
                 }
+                "FEAT" => writer
+                    .write_all(b"211-Features\r\n HASH SHA-256\r\n211 End\r\n")
+                    .await
+                    .unwrap(),
+                "HASH" => {
+                    let hash = format!(
+                        "{:x}",
+                        <sha2::Sha256 as sha2::Digest>::digest(&*stored.lock().await)
+                    );
+                    writer
+                        .write_all(format!("213 {hash}\r\n").as_bytes())
+                        .await
+                        .unwrap();
+                }
                 "SIZE" => {
                     let size = stored.lock().await.len();
                     writer
@@ -332,14 +372,24 @@ mod tests {
         }
     }
 
-    async fn assert_resumable_upload_strategy(supports_appe: bool) {
+    async fn assert_resumable_upload_strategy(
+        supports_appe: bool,
+        ignore_rest: bool,
+        corrupted: bool,
+        offset: u64,
+    ) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        let stored = Arc::new(Mutex::new(b"abc".to_vec()));
+        let mut prefix = b"ab\r\ncd"[..offset as usize].to_vec();
+        if corrupted {
+            prefix[offset as usize - 1] = b'X';
+        }
+        let stored = Arc::new(Mutex::new(prefix.clone()));
         let commands = Arc::new(Mutex::new(Vec::new()));
         let server = tokio::spawn(run_resumable_upload_server(
             listener,
             supports_appe,
+            ignore_rest,
             stored.clone(),
             commands.clone(),
         ));
@@ -347,30 +397,75 @@ mod tests {
             std::env::temp_dir().join(format!("fileterm-ftp-resume-{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&root).await.unwrap();
         let source = root.join("resume.bin");
-        tokio::fs::write(&source, b"abcdef").await.unwrap();
+        tokio::fs::write(&source, b"ab\r\ncdextra logs")
+            .await
+            .unwrap();
         let profile = serde_json::json!({
             "type": "ftp", "username": "test", "password": "test", "securityMode": "none"
         });
         let mut client = connect_ftp(&profile, "127.0.0.1", port).await.unwrap();
-        match &mut client {
-            FtpClient::Plain(ftp) => upload_file(
-                ftp,
-                source.to_str().unwrap(),
+        let result = match &mut client {
+            FtpClient::Plain(ftp) => {
+                upload_file(
+                    ftp,
+                    source.to_str().unwrap(),
+                    6,
+                    "/resume.bin",
+                    offset,
+                    "transfer-test",
+                    tokio_util::sync::CancellationToken::new(),
+                    None,
+                    std::time::Duration::from_millis(200),
+                )
+                .await
+            }
+            FtpClient::Secure(_) => panic!("plain fixture returned a secure client"),
+        };
+        if corrupted {
+            assert!(result.unwrap_err().contains("不一致"));
+            assert_eq!(*stored.lock().await, prefix);
+            assert!(!commands
+                .lock()
+                .await
+                .iter()
+                .any(|command| matches!(command.as_str(), "APPE" | "STOR")));
+        } else {
+            let hash = result.unwrap();
+            assert_eq!(
+                hash,
+                format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(b"ab\r\ncd"))
+            );
+            tokio::fs::write(&source, b"rewritten after upload")
+                .await
+                .unwrap();
+            super::verify_ftp_transfer_checksum(
+                &mut client,
+                std::future::ready(Ok(hash)),
                 "/resume.bin",
-                3,
-                "transfer-test",
-                tokio_util::sync::CancellationToken::new(),
-                None,
                 DEFAULT_FTP_OPERATION_TIMEOUT,
             )
             .await
-            .unwrap(),
-            FtpClient::Secure(_) => panic!("plain fixture returned a secure client"),
+            .unwrap();
+            assert_eq!(*stored.lock().await, b"ab\r\ncd");
         }
         client_quit(&mut client).await.unwrap();
         server.await.unwrap();
-        assert_eq!(*stored.lock().await, b"abcdef");
-
+        if offset == 0 {
+            let commands = commands.lock().await;
+            assert!(commands.iter().any(|command| command == "STOR"));
+            assert!(!commands.iter().any(|command| command == "RETR" || command == "APPE"));
+            tokio::fs::remove_dir_all(root).await.unwrap();
+            return;
+        }
+        if corrupted || offset == 6 {
+            assert!(!commands
+                .lock()
+                .await
+                .iter()
+                .any(|command| matches!(command.as_str(), "APPE" | "STOR")));
+            tokio::fs::remove_dir_all(root).await.unwrap();
+            return;
+        }
         let commands = commands.lock().await;
         let appe = commands
             .iter()
@@ -391,17 +486,45 @@ mod tests {
             assert!(appe < rest && rest < stor);
         }
         assert!(commands.iter().any(|command| command == "SIZE"));
+        assert_eq!(
+            commands
+                .iter()
+                .filter(|command| command.as_str() == "DELE")
+                .count(),
+            usize::from(ignore_rest)
+        );
         tokio::fs::remove_dir_all(root).await.unwrap();
     }
 
     #[tokio::test]
     async fn resumable_upload_prefers_appe_and_verifies_size() {
-        assert_resumable_upload_strategy(true).await;
+        assert_resumable_upload_strategy(true, false, false, 3).await;
     }
 
     #[tokio::test]
     async fn resumable_upload_falls_back_to_rest_and_stor() {
-        assert_resumable_upload_strategy(false).await;
+        assert_resumable_upload_strategy(false, false, false, 3).await;
+    }
+
+    #[tokio::test]
+    async fn resumable_upload_rebuilds_and_resets_hash_when_rest_is_ignored() {
+        assert_resumable_upload_strategy(false, true, false, 3).await;
+    }
+
+    #[tokio::test]
+    async fn resumable_upload_rejects_same_size_corrupted_prefix_without_writing() {
+        assert_resumable_upload_strategy(true, false, true, 3).await;
+    }
+
+    #[tokio::test]
+    async fn resumable_upload_checks_complete_checkpoint_without_writing() {
+        assert_resumable_upload_strategy(true, false, false, 6).await;
+        assert_resumable_upload_strategy(true, false, true, 6).await;
+    }
+
+    #[tokio::test]
+    async fn fresh_upload_preserves_crlf_bytes_and_streamed_hash() {
+        assert_resumable_upload_strategy(true, false, false, 0).await;
     }
 
     #[cfg(unix)]

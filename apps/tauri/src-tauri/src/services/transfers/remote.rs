@@ -2,7 +2,6 @@
 struct RemoteUploadPlan {
     upload_path: String,
     resume_offset: u64,
-    upload_needed: bool,
     partial_ready: bool,
 }
 
@@ -98,9 +97,8 @@ async fn prepare_remote_upload(
             stat_remote_transfer_size(app, tab_id, partial_path, cancellation).await?;
         if partial_size == Some(source_size) {
             return Ok(RemoteUploadPlan {
-                upload_path: staging_path.to_string(),
+                upload_path: partial_path.to_string(),
                 resume_offset: source_size,
-                upload_needed: false,
                 partial_ready: true,
             });
         }
@@ -119,7 +117,6 @@ async fn prepare_remote_upload(
         return Ok(RemoteUploadPlan {
             upload_path: staging_path.to_string(),
             resume_offset,
-            upload_needed: staging_size != Some(source_size),
             partial_ready: false,
         });
     }
@@ -132,7 +129,6 @@ async fn prepare_remote_upload(
     Ok(RemoteUploadPlan {
         upload_path: partial_path.to_string(),
         resume_offset,
-        upload_needed: partial_size != Some(source_size),
         partial_ready: partial_size == Some(source_size),
     })
 }

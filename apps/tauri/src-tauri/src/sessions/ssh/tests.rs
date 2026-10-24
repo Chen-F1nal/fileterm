@@ -2722,6 +2722,76 @@ mod tests {
             sftp.read(&remote_file).await.unwrap(),
             b"tauri-openssh-sftp"
         );
+        // Exercise the upload implementation against a real SFTP server with an existing prefix.
+        let source_file = fixture.remote_dir.join("live-upload.log");
+        tokio::fs::write(&source_file, b"abcdefextra logs")
+            .await
+            .unwrap();
+        sftp.create(&remote_file).await.unwrap();
+        sftp.write(&remote_file, b"abc").await.unwrap();
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let upload_hash = super::upload_local_file(
+            &sftp,
+            source_file.to_str().unwrap(),
+            6,
+            &remote_file,
+            3,
+            "sftp-upload-test",
+            cancel.clone(),
+            None,
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(sftp.read(&remote_file).await.unwrap(), b"abcdef");
+        tokio::fs::write(&source_file, b"rewritten after upload")
+            .await
+            .unwrap();
+        assert_eq!(
+            upload_hash,
+            format!(
+                "{:x}",
+                <sha2::Sha256 as sha2::Digest>::digest(sftp.read(&remote_file).await.unwrap())
+            )
+        );
+        tokio::fs::write(&source_file, b"abcdefextra logs")
+            .await
+            .unwrap();
+        let full_hash = super::upload_local_file(
+            &sftp,
+            source_file.to_str().unwrap(),
+            6,
+            &remote_file,
+            6,
+            "sftp-upload-test",
+            cancel.clone(),
+            None,
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(full_hash, upload_hash);
+        for offset in [3, 6] {
+            sftp.create(&remote_file).await.unwrap();
+            sftp.write(&remote_file, if offset == 3 { b"abX" } else { b"abcdeX" })
+                .await
+                .unwrap();
+            let before = sftp.read(&remote_file).await.unwrap();
+            assert!(super::upload_local_file(
+                &sftp,
+                source_file.to_str().unwrap(),
+                6,
+                &remote_file,
+                offset,
+                "sftp-upload-test",
+                cancel.clone(),
+                None,
+                Duration::from_secs(5),
+            )
+            .await
+            .is_err());
+            assert_eq!(sftp.read(&remote_file).await.unwrap(), before);
+        }
         sftp.close().await.unwrap();
 
         let target_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
