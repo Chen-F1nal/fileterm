@@ -11,8 +11,11 @@ const COLS = 80
  * Drive the real adapter with xterm-like rows. DOM reads per row are counted so
  * the O(rows) text scan and per-row layout forced by the old filter regress.
  */
-function render(codesByRow, dimensions) {
+function render(codesByRow, dimensions, frames = []) {
   const reads = { textContent: 0, querySelector: 0, rowBounds: 0, containerBounds: 0, screenBounds: 0 }
+  const browserWindow = { devicePixelRatio: 1 }
+  let rowHeight = 17
+  let onRender
 
   const doc = {
     createTreeWalker: () => ({ nextNode: () => null }),
@@ -44,7 +47,7 @@ function render(codesByRow, dimensions) {
     }
     getBoundingClientRect() {
       reads.rowBounds++
-      return { top: 0, bottom: 17, width: 800, height: 17 }
+      return { top: 0, bottom: rowHeight, width: 800, height: rowHeight }
     }
     get ownerDocument() {
       return doc
@@ -113,7 +116,10 @@ function render(codesByRow, dimensions) {
       },
       ...(dimensions ? { _renderService: { dimensions: { css: dimensions } } } : {})
     },
-    onRender: () => ({ dispose() {} })
+    onRender: (callback) => {
+      onRender = callback
+      return { dispose() {} }
+    }
   }
 
   const exports = {}
@@ -124,7 +130,7 @@ function render(codesByRow, dimensions) {
     ).outputText,
     {
       exports,
-      window: { devicePixelRatio: 1 },
+      window: browserWindow,
       NodeFilter: { SHOW_TEXT: 4 },
       HTMLElement: Element,
       require: (id) => {
@@ -138,7 +144,14 @@ function render(codesByRow, dimensions) {
       }
     }
   )
-  exports.registerTerminalBlockGlyphRenderer(terminal).dispose()
+  const registration = exports.registerTerminalBlockGlyphRenderer(terminal)
+  for (const frame of frames) {
+    if (frame.height !== undefined) rowHeight = frame.height
+    if (frame.cellHeight !== undefined) dimensions.cell.height = frame.cellHeight
+    if (frame.pixelRatio !== undefined) browserWindow.devicePixelRatio = frame.pixelRatio
+    onRender({ start: 0, end: ROWS - 1 })
+  }
+  registration.dispose()
   return reads
 }
 
@@ -162,16 +175,28 @@ test('graphic rows come from the buffer and share one container measurement', ()
   assert.equal(reads.containerBounds, 1)
 })
 
-test('calibrated xterm metrics avoid every geometry read', () => {
+test('calibrated xterm metrics measure row height once and reuse it on redraw', () => {
   const graphicRow = [...asciiRow]
   graphicRow[0] = 0x2500
-  const reads = render([asciiRow, graphicRow, asciiRow, asciiRow], {
-    cell: { width: 10, height: 17 },
-    canvas: { width: 800, height: 68 }
-  })
+  const reads = render(
+    [asciiRow, graphicRow, asciiRow, asciiRow],
+    { cell: { width: 10, height: 17 }, canvas: { width: 800, height: 68 } },
+    [{}, {}]
+  )
   assert.equal(reads.screenBounds, 0, 'screen geometry comes from xterm, not layout')
   assert.equal(reads.containerBounds, 0, 'rows geometry comes from xterm, not layout')
-  assert.equal(reads.rowBounds, 0)
+  assert.equal(reads.rowBounds, 1)
+})
+
+test('row height is remeasured for grid and DPI changes without caching hidden rows', () => {
+  const graphicRow = [...asciiRow]
+  graphicRow[0] = 0x2500
+  const reads = render(
+    [asciiRow, graphicRow, asciiRow, asciiRow],
+    { cell: { width: 10, height: 17 }, canvas: { width: 800, height: 68 } },
+    [{ cellHeight: 18.4, height: 0 }, { height: 18.390625 }, {}, { pixelRatio: 1.25 }, {}]
+  )
+  assert.equal(reads.rowBounds, 4, 'initial, hidden, visible and DPI measurements only')
 })
 
 test('invalid calibrated metrics fall back to one container measurement', () => {

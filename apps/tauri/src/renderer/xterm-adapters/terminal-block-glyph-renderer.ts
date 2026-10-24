@@ -268,6 +268,7 @@ function replaceBlockGlyphs(
 export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
   const sourceBackgrounds = new WeakMap<HTMLElement, SourceBackground>()
   const reusableCell = terminal.buffer.active.getNullCell()
+  let rowGeometry: { cellHeight: number; pixelRatio: number; height: number } | undefined
   const renderRows = trackRendererWork('block-layout', (start: number, end: number) => {
     // xterm rewrites rows just before onRender, so this pass already covers them.
     // Drop those records up front: ranges without graphic rows return early
@@ -312,18 +313,18 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
     }
     if (!affected.length) return
 
-    // Prefer xterm's calibrated grid. Reading getBoundingClientRect here forces a
-    // full layout every frame, because xterm has just rewritten the row DOM and
-    // the layout is still dirty. The rows container starts at the screen origin,
-    // so each row top is simply index × cellHeight.
+    // Cache the browser's quantized row height so fractional layout rounding
+    // cannot accumulate down the screen; unchanged grids need no layout read.
     const css = (terminal as unknown as TerminalDimensions)._core?._renderService?.dimensions?.css
     const calibratedWidth = css?.cell?.width
     const calibratedHeight = css?.cell?.height
     const calibratedCanvasWidth = css?.canvas?.width
     let cellWidth: number
     let cellHeight: number
+    let rowHeight: number
     let screenWidth: number
     let rowTopBase = 0
+    const pixelRatio = window.devicePixelRatio || 1
     if (
       isPositiveFinite(calibratedWidth) &&
       isPositiveFinite(calibratedHeight) &&
@@ -332,11 +333,18 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
       cellWidth = calibratedWidth
       cellHeight = calibratedHeight
       screenWidth = calibratedCanvasWidth
+      if (rowGeometry?.cellHeight !== calibratedHeight || rowGeometry.pixelRatio !== pixelRatio) {
+        const height = rows[0].getBoundingClientRect().height
+        if (!isPositiveFinite(height)) return
+        rowGeometry = { cellHeight: calibratedHeight, pixelRatio, height }
+      }
+      rowHeight = rowGeometry.height
     } else {
       const bounds = screen.getBoundingClientRect()
       const rowsBounds = rowsElement.getBoundingClientRect()
       cellWidth = bounds.width / terminal.cols
       cellHeight = rowsBounds.height / terminal.rows
+      rowHeight = cellHeight
       screenWidth = bounds.width
       rowTopBase = rowsBounds.top - bounds.top
     }
@@ -345,11 +353,9 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
     }
     // Use one nominal thickness across rows; fractional DPI can give adjacent
     // snapped rows different bitmap heights at a rounding threshold.
-    const pixelRatio = window.devicePixelRatio || 1
     // A fractional display scale must not shrink light rules below one CSS
     // pixel. Such hairlines can disappear during WebView2 composition/capture.
     const lineThickness = Math.max(Math.ceil(pixelRatio), Math.round((cellHeight * pixelRatio) / 16))
-    const rowHeight = cellHeight
 
     const updates: Array<() => void> = []
     for (const { index, row, bufferGlyphs } of affected) {

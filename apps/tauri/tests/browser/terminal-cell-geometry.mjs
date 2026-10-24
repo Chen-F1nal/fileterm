@@ -14,14 +14,16 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
 const source = new URL('../../src/renderer/xterm-adapters/', import.meta.url)
 
-const LINE = 'abc ⚠▢ test 中文 ok ▫ xyz'
+const LINE = '│abc ⚠▢ test 中文 ok ▫ xyz'
 const TOLERANCE = 1
 
 const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH })
 try {
   for (const [scale, fontSize] of [
     [1, 14],
+    [1.25, 14],
     [1.25, 16],
+    [1.5, 14],
     [2, 24]
   ]) {
     const page = await browser.newPage({ viewport: { width: 1200, height: 600 }, deviceScaleFactor: scale })
@@ -46,9 +48,10 @@ try {
       async ({ line, fontSize }) => {
         const terminal = new window.Terminal({
           cols: 40,
-          rows: 4,
+          rows: 80,
           fontFamily: 'CellMono',
           fontSize,
+          lineHeight: 1.05,
           letterSpacing: 0,
           allowProposedApi: true,
           theme: { background: '#111', foreground: '#ddd' }
@@ -56,7 +59,7 @@ try {
         terminal.open(document.getElementById('host'))
         window.registerTerminalSymbolGlyphRenderer(terminal)
         window.registerTerminalBlockGlyphRenderer(terminal)
-        await new Promise((resolve) => terminal.write('\x1b[?25l' + line, resolve))
+        await new Promise((resolve) => terminal.write('\x1b[?25l' + Array(80).fill(line).join('\r\n'), resolve))
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 
         const rowEl = terminal.element.querySelector('.xterm-rows').firstElementChild
@@ -112,8 +115,18 @@ try {
           column += cell.width
         }
 
+        const screenTop = terminal.element.querySelector('.xterm-screen').getBoundingClientRect().top
+        const rowEdges = [...terminal.element.querySelectorAll('.xterm-block-glyph-row')].map((canvas) => {
+          const row = terminal.element.querySelector('.xterm-rows').children[Number(canvas.dataset.rowIndex)]
+          const bounds = row.getBoundingClientRect()
+          const painted = canvas.getBoundingClientRect()
+          const snap = (edge) =>
+            screenTop + Math.round((edge - screenTop) * window.devicePixelRatio) / window.devicePixelRatio
+          return { top: painted.top - snap(bounds.top), bottom: painted.bottom - snap(bounds.bottom) }
+        })
         return {
           cellWidth,
+          rowEdges,
           bufferText: cells.map((cell) => cell.text).join(''),
           rowText: rowText.trimEnd(),
           deviations,
@@ -129,6 +142,13 @@ try {
     assert.equal(report.bufferText, LINE, 'buffer cells must cover the complete fixture text')
     assert.equal(report.rowText, LINE, 'DOM text must match the complete fixture text')
     assert.equal(report.deviations.length, Array.from(LINE).length, 'the fixture must measure every cell')
+    assert.equal(report.rowEdges.length, 80, 'every row must have a graphical overlay')
+    for (const [index, edge] of report.rowEdges.entries()) {
+      assert.ok(
+        Math.abs(edge.top) < 0.05 && Math.abs(edge.bottom) < 0.05,
+        `row ${index} canvas must follow the snapped DOM edges: ${JSON.stringify(edge)} (scale ${scale}, ${fontSize}px)`
+      )
+    }
     for (const entry of report.deviations) {
       assert.ok(
         Math.abs(entry.actual - entry.expected) <= TOLERANCE,
