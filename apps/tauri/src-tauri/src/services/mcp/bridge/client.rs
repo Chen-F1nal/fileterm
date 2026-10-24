@@ -86,6 +86,7 @@ impl BridgeClient {
         request: BridgeRequest,
         on_progress: &mut F,
         cancellation: Option<&AtomicBool>,
+        interactions: &mut Vec<BridgeProgress>,
     ) -> Result<Value, String>
     where
         F: FnMut(&BridgeProgress),
@@ -126,8 +127,16 @@ impl BridgeClient {
             }
             let wait_for = remaining.min(AGENT_CANCEL_POLL_INTERVAL);
             match events_rx.recv_timeout(wait_for) {
-                Ok(BridgeEvent::Progress(progress)) => on_progress(&progress),
+                Ok(BridgeEvent::Progress(progress)) => {
+                    if progress.is_interaction() {
+                        interactions.push(progress.clone());
+                    }
+                    on_progress(&progress);
+                }
                 Ok(BridgeEvent::Response(response)) => {
+                    if !response.interaction_history.is_empty() {
+                        *interactions = response.interaction_history;
+                    }
                     let result = if response.ok {
                         response
                             .result

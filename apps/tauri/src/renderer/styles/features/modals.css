@@ -1857,14 +1857,13 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
 }
 
 .flat-button {
-  background: var(--bg-hover);
-  color: var(--text-main);
-  border-color: var(--border-light);
+  background: var(--action-secondary-bg);
+  color: var(--action-secondary-text);
+  border-color: var(--border-subtle);
 }
 
-.flat-button:hover {
-  background: var(--bg-card);
-  border-color: var(--text-muted);
+.flat-button:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .flat-button:focus-visible,
@@ -1976,5 +1975,17 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
 
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flat-button,
+  .primary-button {
+    transition: none;
+  }
+
+  .flat-button:hover:not(:disabled),
+  .primary-button:hover:not(:disabled) {
+    transform: none;
   }
 }

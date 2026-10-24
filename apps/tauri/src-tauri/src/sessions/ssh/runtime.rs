@@ -235,7 +235,7 @@ pub fn start_ssh_worker(
 // Handler implementation
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn emit_ssh_interaction(
+async fn emit_ssh_interaction(
     app: &AppHandle,
     interaction_window_label: Option<&str>,
     payload: &Value,
@@ -272,6 +272,10 @@ fn emit_ssh_interaction(
         .get("sequence")
         .and_then(Value::as_u64)
         .unwrap_or_default();
+    app.state::<crate::services::workspace::WorkspaceState>()
+        .connection_operations
+        .request_interaction(tab_id, request_id, kind)
+        .await;
     let (result, route) = match interaction_window_label
         .and_then(|label| app.get_webview_window(label))
     {
@@ -566,7 +570,7 @@ impl Handler for ClientHandler {
             &self.app,
             self.interaction_window_label.as_deref(),
             &payload,
-        );
+        ).await;
         if emit_result.is_err() {
             self.host_verification_waiting
                 .store(false, Ordering::Release);

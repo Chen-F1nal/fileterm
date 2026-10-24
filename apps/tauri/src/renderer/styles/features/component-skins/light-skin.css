@@ -293,7 +293,6 @@
 
 :root[data-theme*='light'] .file-tabs button,
 :root[data-theme*='light'] .file-tab-actions button,
-:root[data-theme*='light'] .flat-button,
 :root[data-theme*='light'] .transfer-segments button,
 :root[data-theme*='light'] .network-select,
 :root[data-theme*='light'] .ssh-grid input:not(.selection-control),

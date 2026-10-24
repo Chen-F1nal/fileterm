@@ -424,7 +424,8 @@ fn process_cli_jsonl_request(job: CliJsonlJob, stdout: &Arc<Mutex<io::BufWriter<
     if cancellation.load(Ordering::Acquire) {
         let _ = write_cli_jsonl_value(
             stdout,
-            &json!({ "id": id, "ok": false, "error": FILETERM_CLI_JSONL_REQUEST_CANCELLED }),
+            &json!({ "id": id, "ok": false, "error": FILETERM_CLI_JSONL_REQUEST_CANCELLED,
+                "errorInfo": agent_error_metadata(&request.action, &request.params, FILETERM_CLI_JSONL_REQUEST_CANCELLED) }),
         );
         controls.remove(&request_id);
         return;
@@ -436,6 +437,7 @@ fn process_cli_jsonl_request(job: CliJsonlJob, stdout: &Arc<Mutex<io::BufWriter<
         return;
     }
     let bridge_request = cli_jsonl_bridge_request(&request);
+    let mut history = Vec::new();
     let mut on_progress = |progress: &BridgeProgress| {
         if cancellation.load(Ordering::Acquire) {
             return;
@@ -459,14 +461,17 @@ fn process_cli_jsonl_request(job: CliJsonlJob, stdout: &Arc<Mutex<io::BufWriter<
         bridge_request,
         &mut on_progress,
         Some(&cancellation),
+        &mut history,
     ) {
         Ok(result) if !cancellation.load(Ordering::Acquire) => {
             json!({ "id": id, "ok": true, "result": result })
         }
         Err(_) if cancellation.load(Ordering::Acquire) => {
-            json!({ "id": id, "ok": false, "error": FILETERM_CLI_JSONL_REQUEST_CANCELLED })
+            json!({ "id": id, "ok": false, "error": FILETERM_CLI_JSONL_REQUEST_CANCELLED,
+                "errorInfo": agent_error_metadata(&request.action, &request.params, FILETERM_CLI_JSONL_REQUEST_CANCELLED) })
         }
-        Ok(_) => json!({ "id": id, "ok": false, "error": FILETERM_CLI_JSONL_REQUEST_CANCELLED }),
+        Ok(_) => json!({ "id": id, "ok": false, "error": FILETERM_CLI_JSONL_REQUEST_CANCELLED,
+                "errorInfo": agent_error_metadata(&request.action, &request.params, FILETERM_CLI_JSONL_REQUEST_CANCELLED) }),
         Err(error) => json!({
             "id": id,
             "ok": false,
@@ -474,6 +479,7 @@ fn process_cli_jsonl_request(job: CliJsonlJob, stdout: &Arc<Mutex<io::BufWriter<
             "errorInfo": agent_error_metadata(&request.action, &request.params, &error)
         }),
     };
+    let response = attach_interaction_history(response, history);
     let _ = write_cli_jsonl_value(stdout, &response);
     controls.remove(&request_id);
 }

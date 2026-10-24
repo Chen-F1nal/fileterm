@@ -1744,8 +1744,10 @@ const zhCN = {
   settingsConnectionManagerDescription: '管理所有远程服务器连接与分组，配置 SSH / SFTP 证书、跳板机及代理隧道。',
   settingsCommandManagerDescription: '管理常用命令与快捷脚本，分类存储命令，并在 SSH 终端中一键快速发送。',
   systemLogsInfo: '系统与日志',
+  basicLogging: '基础日志',
+  basicLoggingHint: '默认开启，记录启动退出、连接结果等基本运行信息；详细诊断分类独立设置。',
   diagnosticLogCategoriesHint: '所有详细诊断默认关闭，排查问题时再按类别开启。',
-  diagnosticLogRetentionHint: '启动退出、连接结果、警告和错误始终保留。修改立即生效，会话内容日志单独设置。',
+  diagnosticLogRetentionHint: '警告、错误和崩溃记录始终保留。修改立即生效，会话内容日志单独设置。',
   diagnosticLogTroubleshootingHint:
     'React 崩溃错误默认记录。继续排查时开启工作区、性能与卡顿、终端详情；仅侧栏监控相关问题再开启资源监控。',
   diagnosticLogSettingsFailed: '无法加载或保存日志设置，请重新打开设置后重试。',
@@ -3919,10 +3921,13 @@ const enUS: typeof zhCN = {
   settingsCommandManagerDescription:
     'Organize reusable commands and quick scripts, then send them to the current SSH terminal with one click.',
   systemLogsInfo: 'System & Logs',
+  basicLogging: 'Basic logs',
+  basicLoggingHint:
+    'On by default. Records startup, shutdown, connection results and other basic events. Detailed categories are configured separately.',
   diagnosticLogCategoriesHint:
     'All detailed diagnostics are off by default. Enable categories when investigating a problem.',
   diagnosticLogRetentionHint:
-    'Startup, shutdown, connection results, warnings and errors are always retained. Changes apply immediately; session transcripts are configured separately.',
+    'Warnings, errors and crash reports are always retained. Changes apply immediately; session transcripts are configured separately.',
   diagnosticLogTroubleshootingHint:
     'React crash errors are always recorded. For further investigation, enable Workspace, Performance & stalls, and Terminal details. Enable Resource monitoring only for sidebar-related issues.',
   diagnosticLogSettingsFailed: 'Could not load or save log settings. Reopen settings and try again.',

@@ -88,7 +88,7 @@ export function UpdatesSettingsPanel() {
             <span style={{ width: `${updateStatus.progress ?? 0}%` }} />
           </div>
         ) : null}
-        {desktopApi?.platform === 'darwin' ? <p>{t.macosUpdateHint}</p> : null}
+        {desktopApi?.platform === 'darwin' ? <p className="settings-tools-hint">{t.macosUpdateHint}</p> : null}
         <div className="settings-update-actions">
           {updateStatus?.state === 'available' ? (
             <button

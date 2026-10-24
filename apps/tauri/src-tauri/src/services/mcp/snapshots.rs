@@ -239,11 +239,11 @@ fn truncate_text_with_flag(value: &str, maximum: usize) -> (String, bool) {
 fn public_app_error(error: AppError) -> String {
     match error {
         AppError::Storage(_) => {
-            "FileTerm could not complete the request. Verify the requested session is still open."
+            "FILETERM_STORAGE_OPERATION_FAILED: FileTerm could not complete a storage or file operation. This does not establish that SSH disconnected; inspect session and target state before retrying."
                 .to_string()
         }
         AppError::Serialization(_) => {
-            "FileTerm returned an invalid response. Retry the request.".to_string()
+            "FILETERM_RESPONSE_INVALID: FileTerm could not validate the operation response. The operation may already have executed; inspect state before retrying.".to_string()
         }
         AppError::Command(message) => message,
         AppError::Clipboard(_) | AppError::Window(_) => {

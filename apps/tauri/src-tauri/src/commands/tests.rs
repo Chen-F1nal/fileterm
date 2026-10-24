@@ -605,7 +605,7 @@ mod ui_preferences_tests {
     use std::collections::BTreeMap;
 
     use super::{
-        default_app_icon, default_local_terminal_shells, default_overview_section_order,
+        default_app_icon, default_basic_logging_enabled, default_local_terminal_shells, default_overview_section_order,
         default_terminal_renderer, default_terminal_font_weight,
         default_compact_tab_bar, default_tab_bar_layout, default_ui_locale,
         default_resource_monitoring_metric_order, default_resource_monitoring_metrics,
@@ -777,6 +777,7 @@ mod ui_preferences_tests {
             terminal_renderer: "dom".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: vec![
@@ -840,6 +841,7 @@ mod ui_preferences_tests {
             terminal_renderer: "dom".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: custom_theme,
             custom_themes: Vec::new(),
@@ -881,6 +883,7 @@ mod ui_preferences_tests {
             terminal_renderer: "invalid".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
@@ -992,6 +995,7 @@ mod ui_preferences_tests {
             terminal_renderer: "webgl".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
@@ -1053,6 +1057,7 @@ mod ui_preferences_tests {
             terminal_renderer: "dom".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
@@ -1115,6 +1120,7 @@ mod ui_preferences_tests {
             terminal_renderer: "dom".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
@@ -1167,6 +1173,7 @@ mod ui_preferences_tests {
             terminal_renderer: "dom".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
@@ -1374,6 +1381,7 @@ mod ui_preferences_tests {
             terminal_renderer: "dom".to_string(),
             terminal_font_weight: default_terminal_font_weight(),
             diagnostic_log_categories: crate::services::logging::default_categories(),
+            basic_logging_enabled: default_basic_logging_enabled(),
             diagnostic_log_defaults_version: 2,
             theme_config: default_theme_config(),
             custom_themes: Vec::new(),
@@ -1413,6 +1421,17 @@ mod ui_preferences_tests {
         assert_eq!(preferences["terminalFontWeight"], 400);
         assert_eq!(preferences["diagnosticLogCategories"]["connection"], false);
         assert_eq!(preferences["diagnosticLogCategories"]["performance"], false);
+        assert_eq!(preferences["basicLoggingEnabled"], true);
+        let mut disabled_basic = preferences.clone();
+        disabled_basic["basicLoggingEnabled"] = serde_json::json!(false);
+        let disabled_basic: UiPreferences = serde_json::from_value(disabled_basic).unwrap();
+        let serialized = serde_json::to_value(normalize_ui_preferences(disabled_basic)).unwrap();
+        let restored: UiPreferences = serde_json::from_value(serialized).unwrap();
+        assert!(!restored.basic_logging_enabled);
+        let input: UiPreferencesInput = serde_json::from_value(serde_json::json!({ "basicLoggingEnabled": false })).unwrap();
+        assert_eq!(input.basic_logging_enabled, Some(false));
+        assert!(input.diagnostic_log_categories.is_none());
+        assert!(serde_json::from_value::<UiPreferencesInput>(serde_json::json!({ "basicLoggingEnabled": "false" })).is_err());
         let mut previous_defaults = preferences.clone();
         previous_defaults["diagnosticLogDefaultsVersion"] = serde_json::json!(1);
         previous_defaults["diagnosticLogCategories"]["performance"] = serde_json::json!(true);
@@ -1426,7 +1445,9 @@ mod ui_preferences_tests {
         let mut legacy = preferences.clone();
         legacy.as_object_mut().unwrap().remove("terminalFontWeight");
         legacy.as_object_mut().unwrap().remove("diagnosticLogCategories");
+        legacy.as_object_mut().unwrap().remove("basicLoggingEnabled");
         let mut loaded: UiPreferences = serde_json::from_value(legacy).unwrap();
+        assert!(loaded.basic_logging_enabled);
         assert_eq!(loaded.terminal_font_weight, 400);
         assert_eq!(loaded.diagnostic_log_categories, crate::services::logging::default_categories());
         loaded.terminal_font_weight = 500;

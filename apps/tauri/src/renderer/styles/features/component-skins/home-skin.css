@@ -24,19 +24,6 @@
   color: var(--text-main);
 }
 
-:root:not([data-theme]) .flat-button,
-:root:not([data-theme*='light']) .flat-button,
-:root[data-theme='default'] .flat-button {
-  color: var(--text-main);
-  border-color: var(--border-dark);
-}
-
-:root:not([data-theme]) .flat-button:hover:not(:disabled),
-:root:not([data-theme*='light']) .flat-button:hover:not(:disabled),
-:root[data-theme='default'] .flat-button:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
 :root:not([data-theme]) .quick-row,
 :root:not([data-theme*='light']) .quick-row,
 :root[data-theme='default'] .quick-row {

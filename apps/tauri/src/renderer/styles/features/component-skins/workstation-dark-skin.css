@@ -948,13 +948,6 @@
   background: var(--muted-foreground, var(--text-muted));
 }
 
-:root:not([data-theme]) .flat-button,
-:root:not([data-theme*='light']) .flat-button,
-:root[data-theme='default'] .flat-button {
-  background: var(--surface-elevated);
-  border-color: var(--border-strong);
-}
-
 :root:not([data-theme]) .primary-button,
 :root:not([data-theme*='light']) .primary-button,
 :root[data-theme='default'] .primary-button {

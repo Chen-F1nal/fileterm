@@ -98,6 +98,10 @@ pub async fn app_resolve_ssh_interaction(
             "SSH interaction request is no longer pending".to_string(),
         ));
     };
+    state.connection_operations.resolve_interaction(
+        &request_id,
+        response.get("canceled").and_then(serde_json::Value::as_bool).unwrap_or(false),
+    ).await;
     if tx.send(response).is_err() {
         crate::services::logging::warn(
             &app,

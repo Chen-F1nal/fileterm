@@ -2178,6 +2178,7 @@ export interface UiPreferences {
   locale: 'zhCN' | 'enUS'
   terminalRenderer: TerminalRenderer
   terminalFontWeight: TerminalFontWeight
+  basicLoggingEnabled: boolean
   diagnosticLogCategories: DiagnosticLogCategories
   diagnosticLogDefaultsVersion: number
   themeConfig: ThemeConfig
@@ -2211,6 +2212,7 @@ export interface UiPreferencesInput {
   locale?: UiPreferences['locale']
   terminalRenderer?: UiPreferences['terminalRenderer']
   terminalFontWeight?: TerminalFontWeight
+  basicLoggingEnabled?: boolean
   diagnosticLogCategories?: Partial<DiagnosticLogCategories>
   themeConfig?: ThemeConfig
   customThemes?: SavedTheme[]

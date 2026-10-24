@@ -14,7 +14,7 @@ async fn dispatch_bridge_request(
                 progress_token.clone(),
             ));
         }
-        request_mcp_approval(app, request.source, &request.action, &request.params).await?;
+        request_mcp_approval(app, request.source, &request.action, &request.params, progress_sender.as_ref(), progress_token.clone()).await?;
     }
 
     match request.action.as_str() {
@@ -337,12 +337,31 @@ async fn request_mcp_approval(
     source: WorkspaceSessionSource,
     action: &str,
     params: &Value,
+    progress_sender: Option<&mpsc::Sender<BridgeProgress>>,
+    progress_token: Option<Value>,
 ) -> Result<(), String> {
     let approval_source = action_approval_source(source);
     let details = approval_details(app, action, params).await?;
     let decision = request_action_approval(app, approval_source, action, details)
         .await
         .map_err(public_app_error)?;
+    if let Some(sender) = progress_sender {
+        let status = match decision {
+            ActionApprovalDecision::Approved => "approved",
+            ActionApprovalDecision::Rejected => "rejected",
+            ActionApprovalDecision::Dismissed => "dismissed",
+            ActionApprovalDecision::TimedOut => "timed-out",
+            ActionApprovalDecision::DelegatedToTerminal => "delegated-to-terminal",
+        };
+        let _ = sender.try_send(BridgeProgress {
+            kind: "progress".to_string(),
+            event: "action-approval-resolved".to_string(),
+            status: status.to_string(),
+            code: "FILETERM_ACTION_APPROVAL_RESOLVED".to_string(),
+            message: format!("FileTerm external-operation approval: {status}. Approval does not authenticate sudo/su."),
+            progress_token,
+        });
+    }
     match decision {
         ActionApprovalDecision::Approved => Ok(()),
         decision => Err(decision.rejection_message(approval_source).to_string()),

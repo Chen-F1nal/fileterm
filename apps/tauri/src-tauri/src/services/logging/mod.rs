@@ -18,7 +18,7 @@ pub use category::LogCategory;
 pub use level::LogLevel;
 pub use panic::install_panic_hook;
 pub use preferences::{
-    default_categories, migrate_categories, normalize_categories, set_categories,
+    default_categories, migrate_categories, normalize_categories, set_preferences,
 };
 
 use crate::storage::state_path;

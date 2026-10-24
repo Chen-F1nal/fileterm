@@ -336,6 +336,7 @@ async fn run_bridge_request(
         Some(cancellation.clone()),
     );
     tokio::pin!(dispatch);
+    let mut interaction_history = Vec::new();
     let result = timeout(request_timeout, async {
         let mut progress_open = true;
         loop {
@@ -348,12 +349,17 @@ async fn run_bridge_request(
                 }
                 progress = progress_receiver.recv(), if progress_open => {
                     match progress {
-                        Some(progress) => match writer_sender.try_send(BridgeFrame::Progress {
+                        Some(progress) => {
+                            if progress.is_interaction() {
+                                interaction_history.push(progress.clone());
+                            }
+                            match writer_sender.try_send(BridgeFrame::Progress {
                             request_id: request_id.clone(),
                             progress,
                         }) {
                             Ok(()) | Err(mpsc::error::TrySendError::Full(_)) => {}
                             Err(mpsc::error::TrySendError::Closed(_)) => return None,
+                        }
                         },
                         None => progress_open = false,
                     }
@@ -375,6 +381,7 @@ async fn run_bridge_request(
     });
 
     if let Some(response) = result {
+        let response = finalize_bridge_interactions(response, interaction_history, &mut progress_receiver);
         let _ = writer_sender
             .send(BridgeFrame::Response {
                 request_id: request_id.clone(),
@@ -499,6 +506,7 @@ impl BridgeResponse {
             ok: true,
             result: Some(result),
             error: None,
+            interaction_history: Vec::new(),
         }
     }
 
@@ -507,6 +515,7 @@ impl BridgeResponse {
             ok: false,
             result: None,
             error: Some(message.into()),
+            interaction_history: Vec::new(),
         }
     }
 

@@ -1,17 +1,10 @@
 import { useMemo } from 'react'
-import { ConfirmActionDialog } from '../common/confirm-action-dialog'
+import { ExternalOperationConfirmation } from '../connections/external-operation-confirmation'
 import { ConnectionImportPreviewModal } from '../connections/connection-import-preview-modal'
-import { SelectionControl } from '../common/selection-control'
 import { ModalPortalManager, type FileActionModalBinding } from './modal-portal-manager'
 import { SessionLockScreen } from '../security/session-lock-screen'
 import type { AppViewModel } from './app-view-model'
 import { setLocale, t } from '../../i18n'
-
-function actionApprovalSourceLabel(source: 'cli' | 'mcp' | 'ai-copilot') {
-  if (source === 'cli') return t.sessionSourceCli
-  if (source === 'mcp') return t.sessionSourceMcp
-  return 'Copilot'
-}
 
 export function AppModalPortals({ model }: { model: AppViewModel }) {
   const { route, shell, workspace: workspaceState, data } = model
@@ -444,57 +437,15 @@ export function AppModalPortals({ model }: { model: AppViewModel }) {
         windowCloseConfirm={windowCloseConfirmProps}
       />
       {isMainWorkspaceWindow && actionApprovalRequests[0] ? (
-        <ConfirmActionDialog
-          className="external-operation-confirmation"
-          confirmLabel={t.confirm}
-          confirmVariant={actionApprovalRequests[0].destructive ? 'danger' : 'primary'}
-          description={
-            <div className="external-operation-confirmation__content">
-              <p className="external-operation-confirmation__summary">{actionApprovalRequests[0].summary}</p>
-              <div className="external-operation-confirmation__field">
-                <span className="external-operation-confirmation__label">{t.sessionSource}</span>
-                <div className="external-operation-confirmation__source-row">
-                  <span className={`external-operation-confirmation__source is-${actionApprovalRequests[0].source}`}>
-                    {actionApprovalSourceLabel(actionApprovalRequests[0].source)}
-                  </span>
-                </div>
-              </div>
-              {actionApprovalRequests[0].target ? (
-                <div className="external-operation-confirmation__field">
-                  <span className="external-operation-confirmation__label">{t.actionApprovalTarget}</span>
-                  <div className="external-operation-confirmation__value">{actionApprovalRequests[0].target}</div>
-                </div>
-              ) : null}
-              {actionApprovalRequests[0].details ? (
-                <div className="external-operation-confirmation__field">
-                  <span className="external-operation-confirmation__label">{t.actionApprovalCommand}</span>
-                  <pre className="external-operation-confirmation__command">{actionApprovalRequests[0].details}</pre>
-                </div>
-              ) : null}
-              {actionApprovalRequests[0].requiresRiskAcknowledgement ? (
-                <label className="confirm-action-dialog__warning">
-                  <SelectionControl
-                    checked={riskAcknowledgedRequestId === actionApprovalRequests[0].requestId}
-                    disabled={resolvingActionApprovalId === actionApprovalRequests[0].requestId}
-                    onChange={(event) =>
-                      setRiskAcknowledgedRequestId(event.target.checked ? actionApprovalRequests[0].requestId : null)
-                    }
-                    type="checkbox"
-                  />
-                  <span>{t.actionApprovalRiskAcknowledgement}</span>
-                </label>
-              ) : null}
-            </div>
-          }
-          confirmDisabled={Boolean(
-            actionApprovalRequests[0].requiresRiskAcknowledgement &&
-            riskAcknowledgedRequestId !== actionApprovalRequests[0].requestId
-          )}
-          initialFocus="none"
+        <ExternalOperationConfirmation
+          key={actionApprovalRequests[0].requestId}
+          request={actionApprovalRequests[0]}
           isSubmitting={resolvingActionApprovalId === actionApprovalRequests[0].requestId}
-          onClose={() => void resolveActionApproval(false)}
-          onConfirm={() => void resolveActionApproval(true)}
-          title={actionApprovalRequests[0].title}
+          riskAcknowledged={riskAcknowledgedRequestId === actionApprovalRequests[0].requestId}
+          onRiskAcknowledged={(value) =>
+            setRiskAcknowledgedRequestId(value ? actionApprovalRequests[0].requestId : null)
+          }
+          onResolve={(approved) => void resolveActionApproval(approved)}
         />
       ) : null}
       {isMainWorkspaceWindow && sessionSecurity.isLocked ? (
