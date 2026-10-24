@@ -1,5 +1,189 @@
 # CC 延迟与长期无响应：继续排查
 
+## 2026-10-24：当前分支审查收尾
+
+范围：纯 ASCII 格保持固定宽度 slot（advance 与校准格宽不能保证一致），保留缩放字形并入 slot 与样式类优化。
+
+测试策略：浏览器夹具复用现有 TypeScript loader，不引入额外依赖；几何夹具补齐文本覆盖与逐格断言，选区夹具改为真实滚动并逐行校验包裹状态。
+
+## 2026-10-24：block 适配器改用 xterm 校准网格
+
+CDP 采样剖析（同一夹具、80 次 CC 风格整屏刷新）显示 `getBoundingClientRect` 自身占 **30.4%**，
+是所有具名项中最大的开销；xterm 的 DOM renderer 自身不调用它，因此这部分全部来自 block 适配器
+每帧两次读取（`screen` 与 `.xterm-rows`）。原因是 xterm 刚重写行 DOM，布局为脏，第一次读取会强制整屏布局。
+
+几何探测确认可以完全替代：
+
+- `.xterm-rows` 相对 `.xterm-screen` 的 top/left 偏移均为 0（应用 CSS 与 xterm CSS 都没有给该容器加 padding）。
+- `_renderService.dimensions.css.cell` 为 9.6 × 21.6，与实测的 9.6 × 21.59375 一致。
+- `dimensions.css.canvas` 为 1152 × 648，等于 `cols × cellWidth`。
+
+改动：`terminal-block-glyph-renderer.ts` 优先从 `dimensions.css` 取 `cell.width/height` 与 `canvas.width`，
+行顶位置改为 `index × cellHeight`；指标不可用（缺失、非有限或非正）时回退到原来的单次容器测量。
+`replaceBlockGlyphs` 的 `screenBounds: DOMRect` 参数相应改为 `screenWidth: number`。
+
+### 同机 A/B（Edge 内核、同一内容、各三轮）
+
+| 运行      | `block-layout` 单次 | 单次最大 | `LayoutCount` | `symbol-layout` |
+| --------- | ------------------: | -------: | ------------: | --------------: |
+| HEAD #1   |            17.57 ms |    23 ms |           240 |          874 ms |
+| HEAD #2   |            17.37 ms |    23 ms |           240 |          862 ms |
+| HEAD #3   |            17.57 ms |    24 ms |           240 |          864 ms |
+| 改动后 #1 |         **8.13 ms** |    11 ms |       **120** |          887 ms |
+| 改动后 #2 |         **8.11 ms** |    12 ms |       **120** |          874 ms |
+| 改动后 #3 |         **8.34 ms** |    14 ms |       **120** |          884 ms |
+
+`block-layout` 单次降低约 **53%**，每帧强制布局次数减半（240 → 120）；`symbol-layout` 不受影响。
+120 次刷新的总墙钟时间基本不变（约 6.1–6.4 秒），因为夹具每轮等待两个动画帧，掩盖了同步耗时差异；
+真实应用中的效果需要现场复测。
+
+### 验证
+
+- 单测：`terminal-block-glyph-renderer.test.mjs` 增至 4 项，新增「校准网格下零几何读取」与「指标无效时回退」；
+  连同 symbol 共 11 项通过。
+- 像素回归：`terminal-horizontal-rules.mjs` 在 1 / 1.25 / 1.5 / 2 倍 DPR、14/24px、`─ ━ ═` 共 24 种组合通过（退出码 0）。
+  夹具同时断言带适配器时 `uneven` 全为 0、内容文本不变。
+- 全量 renderer 207 项中 206 通过，唯一失败仍是 Windows 上无法运行的 `linux-icon-files` 包检查。
+- 改动文件 Prettier、ESLint、`typecheck` 通过。
+
+### 剩余热点
+
+同一剖析中 `replaceChildren` 占 6.3%（symbol 适配器每帧重建 span）、`replaceBlockGlyphs` 2.4%、GC 1.8%。
+行级签名缓存与「先比较再重建」是下一批候选，尚未实现。
+
+### symbol 层：成本拆解与只保留一项的改动
+
+用临时 esbuild 插件逐项替换适配器内部步骤，在 100 次流式 CC 风格刷新下测量
+（混合 ASCII 文本与符号，3.3 ms/次）：
+
+| 变体                            | symbol-layout | 说明                    |
+| ------------------------------- | ------------: | ----------------------- |
+| 当前                            |    3.38 ms/次 | 基准                    |
+| 跳过全部更新（不建 DOM）        |    1.12 ms/次 | 行扫描 + 拟合判断的底价 |
+| 跳过 DOM 插入（仍建元素）       |    3.06 ms/次 | 仅插入约 0.27 ms        |
+| 不调用 `measureText`            |    2.69 ms/次 | 测量约占 20%            |
+| 不设置 canvas `font`            |    2.69 ms/次 | 字体解析约占 20%        |
+| 用码点判断替代 Unicode 属性正则 |    3.38 ms/次 | 无可测差异              |
+| 跳过 buffer 逐格映射            |    3.31 ms/次 | 映射约 1.5%             |
+
+结论：**67% 的开销是逐格构建行内 DOM**（每格一个 slot，带 transform 的再加一层），
+其余是 `measureText` 与 canvas 字体赋值。Unicode 正则和 buffer 映射都不是瓶颈。
+
+试过并**回退**的方案：按源元素缓存拟合结果（文本 + 格宽 + 字体代次）并对纯 ASCII 源提前跳过。
+流式内容下为中性（3.48 → 3.39 ms/次），固定内容下反而略差（7.3 → 7.6 ms/次）——
+xterm 每次重绘会重建行内子节点，缓存键随之失效，跳过逻辑只剩开销。
+
+像素回归 `terminal-symbol-glyphs`、`terminal-symbol-tables`、`terminal-selection-glyphs`、
+`terminal-horizontal-rules` 均通过；`terminal-symbol-proportions` 的粗体 `▢` 比例断言（13×13 → 2×7）
+在 HEAD 版本上以完全相同的数值失败，属既有问题，不是本次回归。
+
+#### 逐格元素结构改造（2026-10-24 后续）
+
+- **每格仍保留固定宽度 slot**：ASCII 的 advance 与校准格宽不能保证一致，把连续 ASCII 格合并成
+  文本节点会引入累积位移，因此不采用；只把缩放字形从内层 span 移到 slot 本身，带校正的格由两个元素降为一个。
+- **不变量样式移入 CSS 类**：`font-weight: inherit` 与 `position/z-index` 改由适配器按文档注入的一份
+  样式表提供。注意 xterm 运行时会注入 `.xterm-dom-renderer-owner-N span:not(.xterm-bold){font-weight:normal}`，
+  选择器必须写成 `.xterm .xterm-rows span.xterm-fitted-symbol-slot` 才能压过它；只用单个类会被覆盖，
+  表现为粗体符号变回常规字重。
+
+实测（100 次流式 CC 风格刷新）：`symbol-layout` 3.38 → 3.31 ms/次（约 2%），收益主要来自每格少一个元素
+以及更少的行内样式写入。
+
+新增 `tests/browser/terminal-cell-geometry.mjs` 作为选中几何回归：对混合 ASCII、符号与 CJK 的行，
+逐字符用 `Range.getBoundingClientRect()` 取浏览器实际选中矩形，与 `列 × 格宽` 比较。三档 DPR
+（1 / 1.25 / 2）最大偏差 0.81–0.90px，阈值 1px。这一层能直接发现逐格结构变化引入的累积位移。
+
+回归结果：`terminal-cell-geometry`、`terminal-symbol-glyphs`、`terminal-symbol-tables`、
+`terminal-selection-glyphs`、`terminal-horizontal-rules` 通过；`terminal-symbol-proportions` 仍是
+HEAD 上相同的既有失败。渲染器 207 项测试 206 通过（仅 Linux 包检查在 Windows 上失败），
+typecheck、ESLint、Prettier 通过。
+
+#### 点击后框线变粗（2026-10-24 现场反馈）
+
+现场现象：随机字节输出后按左键，`╏├☆╚┬┘┋╹╠├` 这类字符变粗；滚动一次恢复。
+
+复现（`╏├☆╚┬┘┋╹╠├` 填充 6 行，单击终端）：墨迹像素 15,436 → 19,366（+25%），滚动后回到
+15,436。同时 `.xterm-block-glyph-placeholder` 从 5 个变成 0 个。
+
+根因：xterm 在选区或光标状态变化时会重写行的直接子节点，canvas 仍留在 `.xterm-screen` 里继续
+绘制；block 适配器只订阅 `onRender`，没有对行 DOM 变化做响应，于是新写入的明文重新可见，与 canvas
+叠在一起，视觉上就是笔画变粗。symbol 适配器有行级 `MutationObserver` 会重写共享的 source，
+使问题在混合行上更明显；滚动触发 `onRender` 后两个适配器按 symbol → block 的顺序重跑，才恢复正确。
+
+修复：block 适配器增加与 symbol 相同的行级 `MutationObserver`（只认 `target.parentElement` 为
+rows 容器、即 xterm 重写整行的记录）。每次处理前先 `takeRecords()` 丢弃本次 `onRender` 已覆盖的
+重写记录，处理后同样丢弃自身写入，避免循环，也避免「范围内没有图形行」提前返回时把记录留给观察器
+再扫一遍——纯文本刷新因此从 100 次刷新 200 次调用降到 100 次。注册顺序是 selection → symbol → block，
+因此同一微任务内 symbol 先重写、block 最后恢复占位符。旧实现（HEAD）在该测试上失败，修复后通过。
+
+新增 `tests/browser/terminal-block-glyph-selection.mjs`：单击后断言占位符数量不变、墨迹增量
+≤0.5%，并断言 250ms 内没有新的行级变更（无观察器循环）。
+
+## 2026-10-23：DOM 后端 block / symbol 的行级 DOM 扫描
+
+用户提供的 `app-log.md`（10-23）为最新分析；同目录其余 `app.log`、`app-log-1021`、`app-log-1022` 属 beta.10–beta.12 的较早现场，不能与最新代码状态混读。本轮先核对既有 commit，再只做仍未被覆盖的部分。
+
+### 既有修复核对
+
+以下提交均已在分支基底（`2.3.1-beta.14`，`af89b139`）中，本轮未重复修改：
+
+| 提交       | 覆盖内容                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `451a8bd7` | DropdownSelect / ContextMenu / SessionSendTargetPicker 定位 state、连接表单 `updateForm` 循环等 setState 循环 |
+| `80d5285c` | workspace updater 重放、symbol observer 重复整行扫描                                                          |
+| `de4019f2` | 共享字体测量、纯文本行跳过布局                                                                                |
+| `b3ece66f` | 终端字形布局削减与卡顿进度记录                                                                                |
+| `05f3ace1` | 终端滚动工作去重                                                                                              |
+
+复核 Renderer 侧仍在的 setState effect（监控浮层计时器、磁盘挂载点同步、网卡回退、分屏权重恢复、审批请求清理）均有值比较或一次性门控，本轮未发现新的无界更新链。因此 React #185 不再作为本轮改动对象；其真机复现条件仍见 [更新链证据](../../quality/react-update-loop-audit.md)。
+
+### 本轮改动
+
+`terminal-block-glyph-renderer.ts`：
+
+- 行筛选原先对每行执行 `textContent` + Unicode 正则 + `querySelector`。现在直接读 buffer cell 的数值 codepoint，且筛选结果（`bufferGlyphs`）直接复用于绘制，省掉对同一批行的第二次全列扫描。
+- 行几何原先为每个受影响行调用 `getBoundingClientRect()`，即每行一次强制同步布局。现在只读一次容器边界，按 `rowTopBase + index × rowHeight` 计算，画布高度改用容器高度除以行数。
+
+`terminal-symbol-glyph-renderer.ts`：
+
+- 在既有 DOM 文本判断前增加 buffer 非 ASCII 预检，ASCII-only 行（普通终端的大多数）不再读取 `textContent` 和两次 Unicode 正则。buffer 行不可用时回退到原 DOM 判断，不把「无法确认」当成「确认是 ASCII」。
+- 保留纯框线行排除、已拟合来源排除与批量测量前不写 DOM 的顺序。
+
+未改：块字形的像素几何、颜色解析、占位合并、选区层级与字体适配规则。`replaceBlockGlyphs` 内按文本节点读取的 `getComputedStyle` 保留——它取的是实时颜色，移入背景缓存判断会沿用过期主题色。
+
+### 验证
+
+新增 `tests/terminal-block-glyph-renderer.test.mjs`，用计数 mock 驱动真实适配器：纯 ASCII 行不读 DOM 文本、不做逐行选择器、不读逐行几何；含框线行只读一次容器边界。`terminal-symbol-glyph-renderer.test.mjs` 增加三个用例，覆盖 ASCII 跳过、非 ASCII 进入、buffer 不可用回退。
+
+同一组用例在 HEAD 旧实现上 3 项失败（逐行 `textContent`、逐行 `getBoundingClientRect`、symbol 无预检），修补后 9 项全部通过。
+
+### 同机 A/B 实测（2026-10-24）
+
+用 `terminal-dom-layout-load.mjs` 在同一台机器（Ryzen 7 7800X3D）、同一 Edge 内核上分别加载 HEAD 与工作区适配器，内容与刷新次数相同（30 行 CC 风格 `✻─┬█ ▢⚠`，120 次整屏刷新），各跑三轮：
+
+| 运行      | `block-layout` 单次 | `symbol-layout` 合计 | `LayoutCount` / `LayoutDuration` |  总耗时 |
+| --------- | ------------------: | -------------------: | -------------------------------: | ------: |
+| HEAD #1   |             18.1 ms |               872 ms |                    240 / 1508 ms | 6201 ms |
+| HEAD #2   |             17.7 ms |               889 ms |                    240 / 1478 ms | 6031 ms |
+| HEAD #3   |             17.6 ms |               884 ms |                    240 / 1469 ms | 6024 ms |
+| 工作区 #1 |             17.5 ms |               862 ms |                    240 / 1471 ms | 6014 ms |
+| 工作区 #2 |             18.1 ms |               932 ms |                    240 / 1517 ms | 6109 ms |
+| 工作区 #3 |             17.9 ms |               912 ms |                    240 / 1502 ms | 6107 ms |
+
+纯 ASCII 行对照（临时夹具，30 行文本、120 次刷新）：改动前后 `block-layout` 都是每次 0.03 ms 量级，无可测量差异。
+
+真实应用侧（同机、2 终端、6,092 行历史）：纯文本流时 0.13 ms/次；切到 CC 风格满屏框线后 17.1 ms/次，与夹具的 17.6–18.1 ms 一致，说明夹具能复现现场成本。
+
+**结论修正**：本轮改动把行筛选改为 buffer 码点、行几何改为算术定位，但 A/B 三轮差异都在噪声内（17.6–18.1 ms/次），**在块字符密集场景没有可测量的性能收益**。原因是每行真正的开销仍在 `replaceBlockGlyphs` 内部（text 节点遍历、`getComputedStyle`、span 重建、逐行 canvas 重绘），而旧实现的逐行 `getBoundingClientRect` 本来就在 DOM 未变更时读取，并未产生额外的强制布局。纯文本路径新旧实现本来都很便宜。
+
+不同机器、不同内容的数据不能并列比较。本机 beta.12 的原始日志已被单备份轮转覆盖，因此无法做日志级的前后对比。
+
+要真正降低 CC 场景成本，需要行级内容签名缓存、`getComputedStyle` 缓存或单画布脏矩形方案，这些尚未实现。上述几何改动随后被 2026-10-24 的校准网格方案取代；行筛选（buffer 码点）与 symbol 的非 ASCII 预检保留在最终实现中。
+
+门禁：`npm run typecheck -w @fileterm/tauri` 通过；renderer 205 项测试 204 通过，唯一失败为 Windows 上运行 `linux-icon-files` 包检查的既有环境性失败，与本轮无关；改动文件 ESLint 与 Prettier 通过。
+
+未验证：浏览器像素回归（`terminal-box-drawing.mjs`、`terminal-horizontal-rules.mjs`）在本轮未运行；随后已在同机夹具运行 `terminal-horizontal-rules.mjs` 并通过（见上方 2026-10-24 节），真实 WebView2 的像素对齐仍待确认；没有真实 Tauri/Windows 长会话性能数据，不能据此宣称每批成本已按比例下降。
+
 ## 2026-10-22：输入 Promise 链在关闭后仍占额度与重连迟到回调
 
 继续检查异步队列的资源所有权。原 renderer 输入队列以 Promise 链保序，`dispose()` 仅设置标记；一个已经发出的 IPC 长期不返回时，后续尚未发送的输入、失败回调及其全窗口额度都无法释放。改用明确的待发送列表，仍在微任务中按序发送并捕获事件发生时的 tab ID；销毁立即结算尚未发送项并清空数据/业务回调，已发送项的额度仍等实际完成或失败后归还，不提前放大共享预算。已发送项销毁后不再调用旧终端的失败处理。

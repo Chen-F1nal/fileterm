@@ -1,12 +1,44 @@
 import { trackRendererWork } from '../lib/renderer-work-log'
-import type { Terminal } from '@xterm/xterm'
+import type { IBufferCell, IBufferLine, Terminal } from '@xterm/xterm'
 import { isBoxDrawingGlyph } from './box-drawing'
 
 const SOURCE_CLASS = 'xterm-fitted-symbol-source'
+const SLOT_CLASS = 'xterm-fitted-symbol-slot'
+const SLOT_RAISED_CLASS = 'xterm-fitted-symbol-slot-raised'
+const SLOT_STYLE_ID = 'fileterm-fitted-symbol-styles'
+// xterm injects `.xterm-dom-renderer-owner-N span:not(.xterm-bold){font-weight:normal}`,
+// so these must outrank it: class + element inside `.xterm .xterm-rows`.
+const SLOT_STYLE_TEXT = `.xterm .xterm-rows span.${SLOT_CLASS}{font-weight:inherit}.xterm .xterm-rows .${SLOT_RAISED_CLASS}{position:relative;z-index:2}`
+
+/**
+ * Slot decoration never changes per cell: the wrapper must keep the source's font
+ * weight, and wide or scaled cells must paint above xterm's selection layer. One
+ * injected sheet replaces three inline style writes per element.
+ */
+function ensureSlotStyles(document: Document) {
+  if (document.getElementById(SLOT_STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = SLOT_STYLE_ID
+  style.textContent = SLOT_STYLE_TEXT
+  document.head.append(style)
+}
 type SourceStyle = { width: string; spacing: string; text: string }
 type GlyphCell = { text: string; width: number }
 type TerminalDimensions = {
   _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number } } } } }
+}
+
+function mayHaveNonAsciiCodepoint(
+  line: IBufferLine | undefined,
+  columnCount: number,
+  reusableCell: IBufferCell
+): boolean {
+  // An unavailable line cannot prove the row is ASCII; fall back to the DOM check.
+  if (!line) return true
+  for (let column = 0; column < Math.min(columnCount, line.length); column++) {
+    if ((line.getCell(column, reusableCell)?.getCode() ?? 0) > 0x7f) return true
+  }
+  return false
 }
 
 /** DOM xterm fits a fallback glyph's advance with negative letter-spacing,
@@ -19,6 +51,7 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
   const view = rows?.ownerDocument.defaultView
   const context = rows?.ownerDocument.createElement('canvas').getContext('2d')
   if (!rows || !view || !context) return { dispose() {} }
+  ensureSlotStyles(rows.ownerDocument)
   const sources = new Map<HTMLElement, SourceStyle>()
   const metrics = new Map<string, { left: number; width: number }>()
   const fonts = new Map<string, string>()
@@ -29,7 +62,8 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
     const line = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + rowIndex)
     if (!line || cellWidth <= 0) return
     let column = 0
-    for (const source of Array.from(row.children)) {
+    const children = Array.from(row.children)
+    for (const source of children) {
       if (!(source instanceof view.HTMLElement)) continue
       const text = source.textContent ?? ''
       const cells: GlyphCell[] = []
@@ -90,30 +124,24 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
         source.style.width = `${cellWidth * columns}px`
         source.style.letterSpacing = '0px'
         const fragment = row.ownerDocument.createDocumentFragment()
+        // Even ASCII advances can differ from the calibrated grid; keep every
+        // cell in a fixed-width slot regardless of the configured letter spacing.
         cells.forEach((cell, index) => {
-          const slot = row.ownerDocument.createElement('span')
-          slot.style.width = `${cellWidth * cell.width}px`
-          // xterm assigns normal weight to every non-bold span, including nested
-          // wrappers. Preserve the source's actual font weight in both wrappers.
-          slot.style.fontWeight = 'inherit'
           const ink = fits[index]
-          // A selection starting in a wide cell's continuation must not paint over its ink.
-          if (ink || cell.width > 1) {
-            slot.style.position = 'relative'
-            slot.style.zIndex = '2'
-          }
+          const slot = row.ownerDocument.createElement('span')
+          const available = cellWidth * cell.width
+          slot.className = ink || cell.width > 1 ? `${SLOT_CLASS} ${SLOT_RAISED_CLASS}` : SLOT_CLASS
+          slot.textContent = cell.text
+          slot.style.width = `${available}px`
           if (ink) {
-            const glyph = row.ownerDocument.createElement('span')
-            const available = cellWidth * cell.width
             // Fit ink, not font side bearings; preserve circles/emoji proportions.
+            // The slot is inline-block, so scaling it shrinks the glyph without a
+            // second wrapper element per cell.
             const scale = Math.min(1, available / ink.width)
             const shift = Math.max(-ink.left * scale, Math.min(0, available - (ink.left + ink.width) * scale))
-            glyph.textContent = cell.text
-            glyph.style.fontWeight = 'inherit'
-            glyph.style.transformOrigin = 'left center'
-            glyph.style.transform = `translateX(${shift}px) scale(${scale})`
-            slot.append(glyph)
-          } else slot.textContent = cell.text
+            slot.style.transformOrigin = 'left center'
+            slot.style.transform = `translateX(${shift}px) scale(${scale})`
+          }
           fragment.append(slot)
         })
         source.replaceChildren(fragment)
@@ -127,8 +155,13 @@ export function registerTerminalSymbolGlyphRenderer(terminal: Terminal) {
       fonts.clear()
     }
     for (const source of sources.keys()) if (!rows.contains(source)) sources.delete(source)
+    const activeBuffer = terminal.buffer.active
     const affected = indexes.filter((index) => {
       const row = rows.children[index]
+      // ASCII-only rows cannot hold a fallback symbol; skip the DOM text walk on
+      // the common case before paying for textContent and its regexes.
+      if (!mayHaveNonAsciiCodepoint(activeBuffer.getLine(activeBuffer.viewportY + index), terminal.cols, reusableCell))
+        return false
       // Graphical cells are handled by the block adapter, not fallback-font fitting.
       const text = (row?.textContent ?? '').replace(/[\u2500-\u259f]/gu, '')
       return (

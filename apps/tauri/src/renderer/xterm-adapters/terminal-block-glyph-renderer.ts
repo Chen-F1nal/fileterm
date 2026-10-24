@@ -1,5 +1,5 @@
 import { trackRendererWork } from '../lib/renderer-work-log'
-import type { IBufferCell, Terminal } from '@xterm/xterm'
+import type { IBufferCell, IBufferLine, Terminal } from '@xterm/xterm'
 import { drawTerminalGraphicGlyph, isGraphicGlyph } from './terminal-graphic-glyphs'
 
 const BLOCK_GLYPH_CLASS = 'xterm-block-glyph'
@@ -10,8 +10,19 @@ const BLOCK_GLYPH_TEXT_CLASS = 'xterm-block-glyph-text'
 type GlyphColor = { css: string; rgba: number }
 type GlyphPalette = { foreground: GlyphColor; background: GlyphColor; ansi: GlyphColor[] }
 type ThemeServiceView = { _core?: { _themeService?: { colors?: GlyphPalette } } }
+type TerminalDimensions = {
+  _core?: {
+    _renderService?: {
+      dimensions?: { css?: { cell?: { width?: number; height?: number }; canvas?: { width?: number } } }
+    }
+  }
+}
 type SourceBackground = { resolved: string; inline: string; priority: string }
 type BufferGlyph = { codepoint: number; column: number; color: string }
+
+function isPositiveFinite(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
 
 function getGlyphForeground(cell: IBufferCell, palette: GlyphPalette, drawBoldTextInBrightColors: boolean) {
   const inverse = Boolean(cell.isInverse())
@@ -38,6 +49,29 @@ function getGlyphForeground(cell: IBufferCell, palette: GlyphPalette, drawBoldTe
   return color.css
 }
 
+function collectGraphicGlyphs(
+  bufferLine: IBufferLine | undefined,
+  columnCount: number,
+  reusableCell: IBufferCell,
+  palette: GlyphPalette,
+  drawBoldTextInBrightColors: boolean
+): BufferGlyph[] {
+  if (!bufferLine) return []
+  const glyphs: BufferGlyph[] = []
+  for (let column = 0; column < Math.min(columnCount, bufferLine.length); column++) {
+    const cell = bufferLine.getCell(column, reusableCell)
+    const codepoint = cell?.getCode() ?? 0
+    if (isGraphicGlyph(codepoint)) {
+      glyphs.push({
+        codepoint,
+        column,
+        color: getGlyphForeground(cell!, palette, drawBoldTextInBrightColors)
+      })
+    }
+  }
+  return glyphs
+}
+
 function restoreSourceBackground(source: HTMLElement, backgrounds: WeakMap<HTMLElement, SourceBackground>) {
   const background = backgrounds.get(source)
   if (!background) return
@@ -56,8 +90,9 @@ function replaceBlockGlyphs(
   pixelRatio: number,
   bufferGlyphs: BufferGlyph[],
   sourceBackgrounds: WeakMap<HTMLElement, SourceBackground>,
-  screenBounds: DOMRect,
-  rowBounds: DOMRect,
+  screenWidth: number,
+  rowTopOffset: number,
+  rowHeight: number,
   lineThickness: number,
   existingCanvas: HTMLCanvasElement | undefined
 ) {
@@ -135,9 +170,9 @@ function replaceBlockGlyphs(
   // Snap once in the screen's local grid. Snapping the page origin and then
   // offsetting an absolutely positioned canvas can make the browser snap its
   // compositing layer a second time at fractional window/UI zoom positions.
-  const pixelTop = Math.round((rowBounds.top - screenBounds.top) * pixelRatio)
-  const pixelBottom = Math.round((rowBounds.bottom - screenBounds.top) * pixelRatio)
-  const pixelWidth = Math.round(screenBounds.width * pixelRatio)
+  const pixelTop = Math.round(rowTopOffset * pixelRatio)
+  const pixelBottom = Math.round((rowTopOffset + rowHeight) * pixelRatio)
+  const pixelWidth = Math.round(screenWidth * pixelRatio)
   const pixelHeight = pixelBottom - pixelTop
   const canvas = existingCanvas ?? document.createElement('canvas')
   canvas.className = `${BLOCK_GLYPH_CLASS} xterm-block-glyph-row`
@@ -234,13 +269,18 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
   const sourceBackgrounds = new WeakMap<HTMLElement, SourceBackground>()
   const reusableCell = terminal.buffer.active.getNullCell()
   const renderRows = trackRendererWork('block-layout', (start: number, end: number) => {
+    // xterm rewrites rows just before onRender, so this pass already covers them.
+    // Drop those records up front: ranges without graphic rows return early
+    // below, and leaving them queued would make the observer repeat the scan.
+    observer?.takeRecords()
     const element = terminal.element
     const screen = element?.querySelector<HTMLElement>('.xterm-screen')
-    const rows = element?.querySelector<HTMLElement>('.xterm-rows')?.children
+    const rowsElement = element?.querySelector<HTMLElement>('.xterm-rows')
+    const rows = rowsElement?.children
     // Guard this narrow xterm 6 internal access; a future incompatible version
     // falls back to its native DOM renderer rather than guessing palette colors.
     const palette = (terminal as unknown as ThemeServiceView)._core?._themeService?.colors
-    if (!screen || !rows?.length || !palette || terminal.cols < 1 || terminal.rows < 1) {
+    if (!screen || !rowsElement || !rows?.length || !palette || terminal.cols < 1 || terminal.rows < 1) {
       return
     }
 
@@ -252,23 +292,55 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
     })
     const first = Math.max(0, start)
     const last = Math.min(end, rows.length - 1)
-    const affected = []
+    const buffer = terminal.buffer.active
+    const drawBoldTextInBrightColors = terminal.options.drawBoldTextInBrightColors ?? true
+    const affected: Array<{ index: number; row: HTMLElement; bufferGlyphs: BufferGlyph[] }> = []
     for (let index = first; index <= last; index++) {
       const row = rows[index]
-      if (
-        row instanceof HTMLElement &&
-        (/[\u2500-\u259f]/u.test(row.textContent ?? '') ||
-          canvases.has(index) ||
-          row.querySelector(`.${BLOCK_GLYPH_SOURCE_CLASS}, .${BLOCK_GLYPH_PLACEHOLDER_CLASS}`))
+      if (!(row instanceof HTMLElement)) continue
+      const bufferGlyphs = collectGraphicGlyphs(
+        buffer.getLine(buffer.viewportY + index),
+        terminal.cols,
+        reusableCell,
+        palette,
+        drawBoldTextInBrightColors
       )
-        affected.push(index)
+      // A row that already carries a canvas must be revisited so a removed
+      // glyph run is cleaned up even when the buffer no longer lists one.
+      if (bufferGlyphs.length === 0 && !canvases.has(index)) continue
+      affected.push({ index, row, bufferGlyphs })
     }
     if (!affected.length) return
 
-    const bounds = screen.getBoundingClientRect()
-    const cellWidth = bounds.width / terminal.cols
-    const cellHeight = bounds.height / terminal.rows
-    if (cellWidth <= 0 || cellHeight <= 0) {
+    // Prefer xterm's calibrated grid. Reading getBoundingClientRect here forces a
+    // full layout every frame, because xterm has just rewritten the row DOM and
+    // the layout is still dirty. The rows container starts at the screen origin,
+    // so each row top is simply index × cellHeight.
+    const css = (terminal as unknown as TerminalDimensions)._core?._renderService?.dimensions?.css
+    const calibratedWidth = css?.cell?.width
+    const calibratedHeight = css?.cell?.height
+    const calibratedCanvasWidth = css?.canvas?.width
+    let cellWidth: number
+    let cellHeight: number
+    let screenWidth: number
+    let rowTopBase = 0
+    if (
+      isPositiveFinite(calibratedWidth) &&
+      isPositiveFinite(calibratedHeight) &&
+      isPositiveFinite(calibratedCanvasWidth)
+    ) {
+      cellWidth = calibratedWidth
+      cellHeight = calibratedHeight
+      screenWidth = calibratedCanvasWidth
+    } else {
+      const bounds = screen.getBoundingClientRect()
+      const rowsBounds = rowsElement.getBoundingClientRect()
+      cellWidth = bounds.width / terminal.cols
+      cellHeight = rowsBounds.height / terminal.rows
+      screenWidth = bounds.width
+      rowTopBase = rowsBounds.top - bounds.top
+    }
+    if (cellWidth <= 0 || cellHeight <= 0 || screenWidth <= 0) {
       return
     }
     // Use one nominal thickness across rows; fractional DPI can give adjacent
@@ -277,56 +349,62 @@ export function registerTerminalBlockGlyphRenderer(terminal: Terminal) {
     // A fractional display scale must not shrink light rules below one CSS
     // pixel. Such hairlines can disappear during WebView2 composition/capture.
     const lineThickness = Math.max(Math.ceil(pixelRatio), Math.round((cellHeight * pixelRatio) / 16))
+    const rowHeight = cellHeight
 
-    // Snapshot geometry before any row canvas/wrapper mutations force layout.
-    const rowBounds = new Map(affected.map((index) => [index, rows[index].getBoundingClientRect()]))
     const updates: Array<() => void> = []
-    for (const rowIndex of affected) {
-      const row = rows[rowIndex]
-      if (row instanceof HTMLElement) {
-        const buffer = terminal.buffer.active
-        const bufferLine = buffer.getLine(buffer.viewportY + rowIndex)
-        const bufferGlyphs: BufferGlyph[] = []
-        if (bufferLine) {
-          for (let column = 0; column < Math.min(terminal.cols, bufferLine.length); column++) {
-            const cell = bufferLine.getCell(column, reusableCell)
-            const codepoint = cell?.getCode() ?? 0
-            if (isGraphicGlyph(codepoint)) {
-              bufferGlyphs.push({
-                codepoint,
-                column,
-                color: getGlyphForeground(cell!, palette, terminal.options.drawBoldTextInBrightColors ?? true)
-              })
-            }
-          }
-        }
-        const update = replaceBlockGlyphs(
-          row,
-          screen,
-          rowIndex,
-          terminal.cols,
-          cellWidth,
-          window.devicePixelRatio || 1,
-          bufferGlyphs,
-          sourceBackgrounds,
-          bounds,
-          rowBounds.get(rowIndex)!,
-          lineThickness,
-          canvases.get(rowIndex)
-        )
-        if (update) updates.push(update)
-      }
+    for (const { index, row, bufferGlyphs } of affected) {
+      const update = replaceBlockGlyphs(
+        row,
+        screen,
+        index,
+        terminal.cols,
+        cellWidth,
+        pixelRatio,
+        bufferGlyphs,
+        sourceBackgrounds,
+        screenWidth,
+        rowTopBase + index * rowHeight,
+        rowHeight,
+        lineThickness,
+        canvases.get(index)
+      )
+      if (update) updates.push(update)
     }
     for (const update of updates) update()
+    // Our own row-level writes must not schedule another pass.
+    observer?.takeRecords()
   })
 
   const renderAllRows = () => renderRows(0, terminal.rows - 1)
+  // xterm replaces a row's direct children when the selection or cursor state
+  // changes. Without re-wrapping them the canvas keeps painting while the fresh
+  // text is visible again, which reads as a heavier glyph until the next scroll.
+  // The symbol adapter observes the same rows and registers first, so its rewrite
+  // lands before this pass and the placeholders win.
+  const rowsElement = terminal.element?.querySelector<HTMLElement>('.xterm-rows')
+  const view = rowsElement?.ownerDocument?.defaultView
+  const observer =
+    rowsElement && view && typeof view.MutationObserver === 'function'
+      ? new view.MutationObserver((records) => {
+          const changed = new Set<HTMLElement>()
+          for (const record of records) {
+            if (record.target instanceof view.HTMLElement && record.target.parentElement === rowsElement) {
+              changed.add(record.target as HTMLElement)
+            }
+          }
+          const children = Array.from(rowsElement.children)
+          const indexes = [...changed].map((row) => children.indexOf(row)).filter((index) => index >= 0)
+          if (indexes.length) renderRows(Math.min(...indexes), Math.max(...indexes))
+        })
+      : null
+  if (observer && rowsElement) observer.observe(rowsElement, { childList: true, subtree: true })
   // xterm batches scroll/resize into onRender; their immediate events still have stale DOM rows.
   const disposable = terminal.onRender(({ start, end }) => renderRows(start, end))
   renderAllRows()
   return {
     dispose() {
       disposable.dispose()
+      observer?.disconnect()
       terminal.element?.querySelectorAll(`.${BLOCK_GLYPH_CLASS}`).forEach((glyph) => glyph.remove())
       terminal.element?.querySelectorAll(`.${BLOCK_GLYPH_PLACEHOLDER_CLASS}`).forEach((glyph) => {
         glyph.replaceWith(glyph.ownerDocument.createTextNode(glyph.textContent ?? ''))
