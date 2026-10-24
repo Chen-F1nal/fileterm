@@ -237,9 +237,9 @@ pub struct WorkspaceState {
     /// identity, or shell CWD changes so a reviewed snapshot cannot silently
     /// cross a reconnect or target transition.
     pub ai_session_revisions: Arc<RwLock<HashMap<String, u64>>>,
-    /// Windows keeps the verified updater payload in memory until the user
+    /// Windows/macOS keep the verified updater payload in memory until the user
     /// confirms the restart. It is intentionally never persisted to user data.
-    #[cfg(target_os = "windows")]
-    pub windows_downloaded_update:
-        Arc<Mutex<Option<crate::services::updates::WindowsDownloadedUpdate>>>,
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    pub downloaded_update:
+        Arc<Mutex<Option<crate::services::updates::DownloadedUpdate>>>,
 }

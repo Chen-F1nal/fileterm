@@ -254,7 +254,7 @@ jobs:
           set -euo pipefail
           case "${{ matrix.platform }}" in
             macos)
-              npm run release:mac -w @fileterm/tauri -- --no-sign --ci
+              npm run release:mac -w @fileterm/tauri -- --config '{"bundle":{"createUpdaterArtifacts":false}}' --no-sign --ci
               ;;
             windows)
               npm run release:win -w @fileterm/tauri -- --config src-tauri/tauri.ci.windows.conf.json --no-sign --ci

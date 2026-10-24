@@ -164,10 +164,10 @@ npm run release:linux
 
 ### Releases and Updates
 
-- A `vX.Y.Z` tag on a `release/*` commit runs the Tauri-only Release Action and publishes macOS arm64/x64 DMGs, Windows x64/arm64 NSIS installers and portable executables, and Linux x86_64/arm64 `.deb`, `.rpm`, and `.AppImage` packages plus Arch x86_64/Arch Linux ARM aarch64 `.pkg.tar.zst` packages.
-- The Windows jobs publish signed installers and portable executables with `.sig` files. A combined `latest.json` contains separate x64 and ARM64 update entries; installed clients verify the matching package before updating.
+- A `vX.Y.Z` tag on a `release/*` commit runs the Tauri-only Release Action and publishes macOS arm64/x64 DMGs and signed updater archives, Windows x64/arm64 NSIS installers and portable executables, and Linux x86_64/arm64 `.deb`, `.rpm`, and `.AppImage` packages plus Arch x86_64/Arch Linux ARM aarch64 `.pkg.tar.zst` packages.
+- The Windows jobs publish signed installers and portable executables with `.sig` files. A combined `latest.json` contains Windows installer/portable and macOS archive entries for x64 and ARM64; installed clients verify the matching package before updating.
 - Configure the repository Actions Secret `TAURI_SIGNING_PRIVATE_KEY` with the Tauri updater private-key contents. Never commit that private key.
-- macOS release bundles use ad-hoc signing (without an Apple Developer certificate or notarization) and deliberately keep the GitHub Release download flow rather than using the in-app updater. First-run users may still need to whitelist the app in Privacy & Security.
+- macOS release bundles use ad-hoc signing without an Apple Developer certificate or notarization. The in-app updater verifies signed `.app.tar.gz` archives, backs up the old app before installation, and restarts after saving transfer checkpoints. Install the app in a writable Applications folder; first launch or a blocked update may require Open Anyway in Privacy & Security. Existing versions without the macOS updater need one manual DMG installation first.
 
 ## Repository Layout
 
