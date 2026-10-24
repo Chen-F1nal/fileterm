@@ -503,15 +503,14 @@ async fn inspect_ssh_exec_capabilities(
 #[allow(clippy::too_many_arguments)] // Root-mode verification needs the same explicit credential context as the transfer.
 async fn verify_sftp_transfer_sha256(
     handle: &Handle<ClientHandler>,
-    local_path: &str,
+    local_hash: &str,
     remote_path: &str,
     file_access_mode: &str,
     access_method: RootFileAccessMethod,
     sudo_user: &Option<String>,
     sudo_password: &Option<String>,
     operation_timeout: Duration,
-) -> Result<(), String> {
-    let local_hash = crate::sessions::file_integrity::sha256_file(local_path).await?;
+) -> Result<bool, String> {
     let command = format!(
         "if command -v sha256sum >/dev/null 2>&1; then sha256sum -- {}; elif command -v shasum >/dev/null 2>&1; then shasum -a 256 -- {}; else printf '__FILETERM_SHA256_UNAVAILABLE__\\n'; fi",
         shell_quote(remote_path),
@@ -540,7 +539,7 @@ async fn verify_sftp_transfer_sha256(
         }
     };
     if output.contains("__FILETERM_SHA256_UNAVAILABLE__") {
-        return Ok(());
+        return Ok(false);
     }
     let Some(remote_hash) = crate::sessions::file_integrity::parse_sha256_output(&output) else {
         return Err("远端未返回可识别的 SHA-256 校验和".to_string());
@@ -550,7 +549,7 @@ async fn verify_sftp_transfer_sha256(
             "SFTP 传输校验失败：本地 {local_hash}，远端 {remote_hash}"
         ));
     }
-    Ok(())
+    Ok(true)
 }
 
 async fn write_shell_data(

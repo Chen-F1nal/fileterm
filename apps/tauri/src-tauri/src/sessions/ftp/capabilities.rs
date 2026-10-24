@@ -185,7 +185,7 @@ async fn client_sha256(
 
 async fn verify_ftp_transfer_checksum(
     client: &mut FtpClient,
-    local_path: &str,
+    local_hash: impl Future<Output = Result<String, String>>,
     remote_path: &str,
     io_timeout: Duration,
 ) -> Result<(), String> {
@@ -198,7 +198,7 @@ async fn verify_ftp_transfer_checksum(
     let Some(command) = ftp_sha256_command(&features) else {
         return Ok(());
     };
-    let local_hash = crate::sessions::file_integrity::sha256_file(local_path).await?;
+    let local_hash = local_hash.await?;
     let remote_hash = ftp_io_with_timeout(
         io_timeout,
         "read FTP remote checksum",
@@ -298,14 +298,15 @@ async fn client_stat(
 async fn client_upload(
     client: &mut FtpClient,
     local_path: &str,
+    source_size: u64,
     remote_path: &str,
     resume_offset: u64,
     transfer_id: &str,
     cancel: tokio_util::sync::CancellationToken,
     app: &AppHandle,
     io_timeout: Duration,
-) -> Result<(), String> {
-    ftp_match!(client, ftp => upload_file(ftp, local_path, remote_path, resume_offset, transfer_id, cancel, Some(app), io_timeout))
+) -> Result<String, String> {
+    ftp_match!(client, ftp => upload_file(ftp, local_path, source_size, remote_path, resume_offset, transfer_id, cancel, Some(app), io_timeout))
 }
 
 #[allow(clippy::too_many_arguments)] // Transfer state and its response channel are kept explicit at the worker boundary.

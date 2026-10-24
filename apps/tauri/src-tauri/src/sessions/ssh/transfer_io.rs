@@ -28,17 +28,6 @@ async fn ensure_transfer_parent_dir(sftp: &SftpSession, path: &str) -> Result<()
     Ok(())
 }
 
-async fn read_local_transfer_chunk(
-    file: &mut tokio::fs::File,
-    buffer: &mut [u8],
-    cancel: &tokio_util::sync::CancellationToken,
-) -> Result<usize, String> {
-    tokio::select! {
-        _ = cancel.cancelled() => Err(TRANSFER_CANCELED.to_string()),
-        result = file.read(buffer) => result.map_err(|error| error.to_string()),
-    }
-}
-
 async fn read_remote_transfer_chunk(
     file: &mut russh_sftp::client::fs::File,
     buffer: &mut [u8],
@@ -74,30 +63,43 @@ async fn write_local_transfer_chunk(
 
 // Standard SFTP upload/download and atomic replacement.
 
+#[allow(clippy::too_many_arguments)] // Bounded size and per-read timeout belong to the upload contract.
 async fn upload_local_file(
     sftp: &SftpSession,
     local_path: &str,
+    total: u64,
     remote_path: &str,
     resume_offset: u64,
     transfer_id: &str,
     cancel: tokio_util::sync::CancellationToken,
-    app: &AppHandle,
-) -> Result<(), String> {
-    let metadata = tokio::fs::metadata(local_path)
-        .await
-        .map_err(|error| format!("无法读取本地上传文件 {local_path}: {error}"))?;
-    let total = metadata.len();
-    if resume_offset > total {
-        return Err("上传断点大于源文件".to_string());
-    }
+    app: Option<&AppHandle>,
+    io_timeout: Duration,
+) -> Result<String, String> {
+    let mut source = crate::sessions::upload_source::UploadSource::open(
+        local_path,
+        total,
+        resume_offset,
+        &cancel,
+    )
+    .await?;
     ensure_transfer_parent_dir(sftp, remote_path).await?;
-    let mut source = tokio::fs::File::open(local_path)
-        .await
-        .map_err(|error| format!("无法打开本地上传文件 {local_path}: {error}"))?;
-    source
-        .seek(std::io::SeekFrom::Start(resume_offset))
-        .await
-        .map_err(|error| error.to_string())?;
+    if resume_offset > 0 {
+        let mut checkpoint = sftp
+            .open(remote_path)
+            .await
+            .map_err(|error| error.to_string())?;
+        crate::sessions::upload_source::verify_resume_prefix(
+            &mut checkpoint,
+            resume_offset,
+            &source.hash(),
+            &cancel,
+            io_timeout,
+        )
+        .await?;
+        if resume_offset == total {
+            return Ok(source.hash());
+        }
+    }
     let flags = if resume_offset == 0 {
         OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE
     } else {
@@ -113,21 +115,32 @@ async fn upload_local_file(
         .map_err(|error| error.to_string())?;
     let mut transferred = resume_offset;
     let mut buffer = vec![0_u8; crate::sessions::TRANSFER_IO_BUFFER_BYTES];
-    crate::services::transfers::report_progress(app, transfer_id, transferred, total).await;
+    if let Some(app) = app {
+        crate::services::transfers::report_progress(app, transfer_id, transferred, total).await;
+    }
     loop {
-        let read = read_local_transfer_chunk(&mut source, &mut buffer, &cancel).await?;
+        let read = source.read(&mut buffer, &cancel).await?;
         if read == 0 {
             break;
         }
         write_remote_transfer_chunk(&mut destination, &buffer[..read], &cancel).await?;
         transferred += read as u64;
-        crate::services::transfers::report_progress(app, transfer_id, transferred, total).await;
+        if let Some(app) = app {
+            crate::services::transfers::report_progress(app, transfer_id, transferred, total).await;
+        }
     }
-    destination
-        .flush()
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(())
+    tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Err(TRANSFER_CANCELED.to_string()),
+        result = timeout(io_timeout, async {
+            destination.flush().await?;
+            destination.shutdown().await
+        }) => {
+            result.map_err(|_| "完成远端上传文件超时".to_string())?
+                .map_err(|error| format!("完成远端上传文件失败: {error}"))?;
+        }
+    }
+    Ok(source.hash())
 }
 
 async fn download_remote_file(

@@ -2,6 +2,7 @@
 async fn upload_root_local_file(
     handle: &Handle<ClientHandler>,
     local_path: &str,
+    total: u64,
     remote_path: &str,
     resume_offset: u64,
     transfer_id: &str,
@@ -10,11 +11,12 @@ async fn upload_root_local_file(
     access_method: RootFileAccessMethod,
     sudo_user: &Option<String>,
     sudo_password: &Option<String>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     if access_method == RootFileAccessMethod::Su {
         return upload_root_local_file_via_su_pty(
             handle,
             local_path,
+            total,
             remote_path,
             resume_offset,
             transfer_id,
@@ -25,20 +27,13 @@ async fn upload_root_local_file(
         )
         .await;
     }
-    let metadata = tokio::fs::metadata(local_path)
-        .await
-        .map_err(|error| format!("无法读取本地上传文件 {local_path}: {error}"))?;
-    let total = metadata.len();
-    if resume_offset > total {
-        return Err("上传断点大于源文件".to_string());
-    }
-    let mut source = tokio::fs::File::open(local_path)
-        .await
-        .map_err(|error| format!("无法打开本地上传文件 {local_path}: {error}"))?;
-    source
-        .seek(std::io::SeekFrom::Start(resume_offset))
-        .await
-        .map_err(|error| error.to_string())?;
+    let mut source = crate::sessions::upload_source::UploadSource::open(
+        local_path,
+        total,
+        resume_offset,
+        &cancel,
+    )
+    .await?;
 
     let shell_command = root_upload_shell_command(remote_path, resume_offset);
     let (command, password) =
@@ -62,7 +57,7 @@ async fn upload_root_local_file(
     let mut buffer = vec![0_u8; crate::sessions::TRANSFER_IO_BUFFER_BYTES];
     crate::services::transfers::report_progress(app, transfer_id, transferred, total).await;
     loop {
-        let read = read_local_transfer_chunk(&mut source, &mut buffer, &cancel).await?;
+        let read = source.read(&mut buffer, &cancel).await?;
         if read == 0 {
             break;
         }
@@ -122,13 +117,14 @@ async fn upload_root_local_file(
             RootFileAccessMethod::Su => "su authentication failed".to_string(),
         });
     }
-    Ok(())
+    Ok(source.hash())
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn upload_root_local_file_via_su_pty(
     handle: &Handle<ClientHandler>,
     local_path: &str,
+    total: u64,
     remote_path: &str,
     resume_offset: u64,
     transfer_id: &str,
@@ -136,21 +132,14 @@ async fn upload_root_local_file_via_su_pty(
     app: &AppHandle,
     sudo_user: &Option<String>,
     sudo_password: &Option<String>,
-) -> Result<(), String> {
-    let metadata = tokio::fs::metadata(local_path)
-        .await
-        .map_err(|error| format!("无法读取本地上传文件 {local_path}: {error}"))?;
-    let total = metadata.len();
-    if resume_offset > total {
-        return Err("上传断点大于源文件".to_string());
-    }
-    let mut source = tokio::fs::File::open(local_path)
-        .await
-        .map_err(|error| format!("无法打开本地上传文件 {local_path}: {error}"))?;
-    source
-        .seek(std::io::SeekFrom::Start(resume_offset))
-        .await
-        .map_err(|error| error.to_string())?;
+) -> Result<String, String> {
+    let mut source = crate::sessions::upload_source::UploadSource::open(
+        local_path,
+        total,
+        resume_offset,
+        &cancel,
+    )
+    .await?;
 
     let shell_command = root_upload_base64_shell_command(remote_path, resume_offset);
     let command = su_exec_command(&shell_command);
@@ -173,7 +162,7 @@ async fn upload_root_local_file_via_su_pty(
     let mut buffer = vec![0_u8; 3000];
     crate::services::transfers::report_progress(app, transfer_id, transferred, total).await;
     loop {
-        let read = read_local_transfer_chunk(&mut source, &mut buffer, &cancel).await?;
+        let read = source.read(&mut buffer, &cancel).await?;
         if read == 0 {
             break;
         }
@@ -192,7 +181,7 @@ async fn upload_root_local_file_via_su_pty(
         .await
         .map_err(|error| error.to_string())?;
     wait_for_root_stream_exit(&mut channel).await?;
-    Ok(())
+    Ok(source.hash())
 }
 
 fn root_upload_shell_command(remote_path: &str, resume_offset: u64) -> String {

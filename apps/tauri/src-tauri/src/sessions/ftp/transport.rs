@@ -87,7 +87,7 @@ async fn connect_ftp_with_tls_connector(
     timeout(
         connect_timeout,
         async {
-            match mode {
+            let mut client = match mode {
                 "none" => {
                     let stream = connect_ftp_tcp(profile, host, port).await?;
                     let mut client = configure_ftp_data_transport(
@@ -146,7 +146,14 @@ async fn connect_ftp_with_tls_connector(
                     Ok(FtpClient::Secure(client))
                 }
                 other => Err(format!("Unsupported FTP security mode: {other}")),
+            }?;
+            // Preserve byte offsets and log line endings for uploads and resume reads.
+            match &mut client {
+                FtpClient::Plain(ftp) => ftp.transfer_type(suppaftp::types::FileType::Binary).await,
+                FtpClient::Secure(ftp) => ftp.transfer_type(suppaftp::types::FileType::Binary).await,
             }
+            .map_err(|error| format!("无法启用 FTP 二进制传输: {error}"))?;
+            Ok(client)
         },
     )
     .await

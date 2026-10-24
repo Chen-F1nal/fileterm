@@ -325,20 +325,19 @@ async fn run(
                 let plan = upload_plan
                     .as_ref()
                     .ok_or_else(|| transfer_error("上传任务缺少 upload plan"))?;
-                if plan.upload_needed {
-                    worker_data_call_with_cancel(&app, &tab_id, &cancel, |respond_to, token| {
-                        WorkerCmd::UploadLocalFile {
-                            local_path: source_path,
-                            remote_path: plan.upload_path.clone(),
-                            resume_offset: offset,
-                            transfer_id: transfer_id.clone(),
-                            cancel: token,
-                            verify_checksum: true,
-                            respond_to,
-                        }
-                    })
-                    .await?;
-                }
+                worker_data_call_with_cancel(&app, &tab_id, &cancel, |respond_to, token| {
+                    WorkerCmd::UploadLocalFile {
+                        local_path: source_path,
+                        source_size,
+                        remote_path: plan.upload_path.clone(),
+                        resume_offset: offset,
+                        transfer_id: transfer_id.clone(),
+                        cancel: token,
+                        verify_checksum: true,
+                        respond_to,
+                    }
+                })
+                .await?;
             } else {
                 if let Some(parent) = Path::new(&partial).parent() {
                     tokio::fs::create_dir_all(parent)

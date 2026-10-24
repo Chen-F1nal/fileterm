@@ -382,6 +382,7 @@ async fn run_ftp_worker(
             }
             Some(WorkerCmd::UploadLocalFile {
                 local_path,
+                source_size,
                 remote_path,
                 resume_offset,
                 transfer_id,
@@ -411,9 +412,10 @@ async fn run_ftp_worker(
                             Duration::from_secs(3600),
                         );
                         let transfer_cancel = cancel.clone();
-                        let mut result = client_upload(
+                        let uploaded = client_upload(
                             &mut transfer_client,
                             &local_path,
+                            source_size,
                             &remote_path,
                             resume_offset,
                             &transfer_id,
@@ -422,16 +424,20 @@ async fn run_ftp_worker(
                             transfer_timeout,
                         )
                         .await;
-                        if result.is_ok() && !transfer_cancel.is_cancelled() {
-                            result = verify_ftp_transfer_checksum(
-                                &mut transfer_client,
-                                &local_path,
-                                &remote_path,
-                                transfer_timeout,
-                            )
-                            .await;
-                        }
-                        let _ = client_quit(&mut transfer_client).await;
+                        let result = match uploaded {
+                            Ok(hash) if !transfer_cancel.is_cancelled() => {
+                                verify_ftp_transfer_checksum(
+                                    &mut transfer_client,
+                                    std::future::ready(Ok(hash)),
+                                    &remote_path,
+                                    transfer_timeout,
+                                )
+                                .await
+                            }
+                            Ok(_) => Err(TRANSFER_CANCELED.to_string()),
+                            Err(error) => Err(error),
+                        };
+                        let _ = timeout(transfer_timeout, client_quit(&mut transfer_client)).await;
                         result
                     }
                     .await;
@@ -483,13 +489,13 @@ async fn run_ftp_worker(
                         if result.is_ok() && !transfer_cancel.is_cancelled() {
                             result = verify_ftp_transfer_checksum(
                                 &mut transfer_client,
-                                &local_path,
+                                crate::sessions::file_integrity::sha256_file(&local_path),
                                 &remote_path,
                                 transfer_timeout,
                             )
                             .await;
                         }
-                        let _ = client_quit(&mut transfer_client).await;
+                        let _ = timeout(transfer_timeout, client_quit(&mut transfer_client)).await;
                         result
                     }
                     .await;

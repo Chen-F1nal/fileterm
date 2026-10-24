@@ -6,6 +6,7 @@ fn upload_command(
 ) -> WorkerCmd {
     WorkerCmd::UploadLocalFile {
         local_path: "fixture-source".into(),
+        source_size: 0,
         remote_path: "fixture-target".into(),
         resume_offset: 0,
         transfer_id: "fixture-transfer".into(),

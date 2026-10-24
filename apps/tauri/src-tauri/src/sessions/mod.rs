@@ -11,6 +11,7 @@ mod telnet_direct;
 pub mod terminal;
 pub(crate) mod terminal_input;
 pub(crate) mod transfer_file_safety;
+mod upload_source;
 
 /// 传输数据块的读取/写入缓冲大小。
 ///
@@ -156,6 +157,7 @@ pub enum WorkerCmd {
     },
     UploadLocalFile {
         local_path: String,
+        source_size: u64,
         remote_path: String,
         resume_offset: u64,
         transfer_id: String,

@@ -62,6 +62,7 @@ async fn dispatch_transfer_cmd(
         }
         WorkerCmd::UploadLocalFile {
             local_path,
+            source_size,
             remote_path,
             resume_offset,
             transfer_id,
@@ -90,7 +91,7 @@ async fn dispatch_transfer_cmd(
                 // to the final privileged filesystem operation.
                 let use_login_sftp_staging =
                     fam == "root" && is_root_upload_staging_path(&remote_path);
-                let mut result = if use_login_sftp_staging || fam != "root" {
+                let result = if use_login_sftp_staging || fam != "root" {
                     let transfer_sftp = acquire_transfer_sftp(
                         &handle,
                         &sftp,
@@ -104,11 +105,13 @@ async fn dispatch_transfer_cmd(
                     let result = upload_local_file(
                         &sftp_guard,
                         &local_path,
+                        source_size,
                         &remote_path,
                         resume_offset,
                         &transfer_id,
                         cancel,
-                        &app,
+                        Some(&app),
+                        operation_timeout,
                     )
                     .await;
                     drop(sftp_guard);
@@ -122,6 +125,7 @@ async fn dispatch_transfer_cmd(
                     upload_root_local_file(
                         &handle,
                         &local_path,
+                        source_size,
                         &remote_path,
                         resume_offset,
                         &transfer_id,
@@ -133,26 +137,41 @@ async fn dispatch_transfer_cmd(
                     )
                     .await
                 };
-                if result.is_ok() && verify_checksum {
-                    result = match timeout(
-                        checksum_timeout,
-                        verify_sftp_transfer_sha256(
-                            &handle,
-                            &local_path,
-                            &remote_path,
-                            &fam,
-                            method,
-                            &su,
-                            &sp,
-                            checksum_timeout,
-                        ),
-                    )
-                    .await
+                let result = match result {
+                    Ok(hash)
+                        if verify_checksum
+                            || (fam == "root" && !use_login_sftp_staging && resume_offset > 0) =>
                     {
-                        Ok(result) => result,
-                        Err(_) => Err("SFTP 传输校验超时".to_string()),
-                    };
-                }
+                        match timeout(
+                            checksum_timeout,
+                            verify_sftp_transfer_sha256(
+                                &handle,
+                                &hash,
+                                &remote_path,
+                                &fam,
+                                method,
+                                &su,
+                                &sp,
+                                checksum_timeout,
+                            ),
+                        )
+                        .await
+                        {
+                            Ok(Ok(false))
+                                if fam == "root"
+                                    && !use_login_sftp_staging
+                                    && resume_offset > 0 =>
+                            {
+                                Err("远端不支持 SHA-256，无法安全校验 root 上传断点，请从头传输"
+                                    .to_string())
+                            }
+                            Ok(result) => result.map(|_| ()),
+                            Err(_) => Err("SFTP 传输校验超时".to_string()),
+                        }
+                    }
+                    Ok(_) => Ok(()),
+                    Err(error) => Err(error),
+                };
                 let _ = respond_to.send(result);
             });
             Ok(false)
@@ -220,19 +239,22 @@ async fn dispatch_transfer_cmd(
                     result
                 };
                 if result.is_ok() && verify_checksum {
-                    result = match timeout(
-                        checksum_timeout,
+                    result = match timeout(checksum_timeout, async {
+                        let hash =
+                            crate::sessions::file_integrity::sha256_file(&local_path).await?;
                         verify_sftp_transfer_sha256(
                             &handle,
-                            &local_path,
+                            &hash,
                             &remote_path,
                             &fam,
                             method,
                             &su,
                             &sp,
                             checksum_timeout,
-                        ),
-                    )
+                        )
+                        .await
+                        .map(|_| ())
+                    })
                     .await
                     {
                         Ok(result) => result,
