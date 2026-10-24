@@ -152,6 +152,11 @@ jobs:
         working-directory: apps/tauri/src-tauri
         run: cargo test sessions::local_terminal::tests --locked -- --test-threads=1
 
+      - name: Exercise signed updater routing and recovery
+        if: runner.os != 'Windows'
+        working-directory: apps/tauri/src-tauri
+        run: cargo test services::updates --locked -- --test-threads=1
+
       - name: Exercise local ConPTY lifecycle without desktop runtime DLLs
         if: runner.os == 'Windows'
         timeout-minutes: 5

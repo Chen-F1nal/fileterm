@@ -1,8 +1,8 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
-    // Windows and macOS packages use Tauri's signed updater.
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    // Supported desktop packages share Tauri's signed updater.
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder

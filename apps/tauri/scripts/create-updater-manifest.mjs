@@ -21,12 +21,36 @@ const version = tag.replace(/^v/, '')
 const platforms = {}
 for (const directory of bundleDirectories) {
   const bundleDirectory = path.resolve(directory)
-  const artifacts = await fs.readdir(bundleDirectory)
+  const artifacts = await fs.readdir(bundleDirectory, { recursive: true })
   const assetUrl = (artifact) =>
     new URL(
-      `/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(artifact)}`,
+      `/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(path.basename(artifact))}`,
       'https://github.com'
     ).toString()
+  const addPlatform = async (platform, artifact) => {
+    if (platforms[platform]) throw new Error(`Duplicate updater platform: ${platform}`)
+    const payload = await fs.lstat(path.join(bundleDirectory, artifact))
+    if (!payload.isFile() || payload.size === 0) throw new Error(`Invalid or empty updater payload: ${artifact}`)
+    const signature = (await fs.readFile(path.join(bundleDirectory, `${artifact}.sig`), 'utf8')).trim()
+    if (!signature) throw new Error(`Updater signature is empty: ${artifact}.sig`)
+    platforms[platform] = { signature, url: assetUrl(artifact) }
+  }
+
+  const linuxBundles = artifacts.filter((artifact) => /\.(AppImage|deb|rpm)$/.test(artifact))
+  if (linuxBundles.length > 0) {
+    if (linuxBundles.length !== 3) throw new Error(`Expected one AppImage, DEB and RPM in ${bundleDirectory}.`)
+    const architectures = new Set()
+    for (const artifact of linuxBundles) {
+      const match = path.basename(artifact).match(/^FileTerm-(.+)-linux-(x86_64|arm64)\.(AppImage|deb|rpm)$/)
+      if (!match || match[1] !== version) throw new Error(`Invalid Linux updater asset: ${artifact}`)
+      const [, , architecture, format] = match
+      architectures.add(architecture)
+      const platform = `linux-${architecture === 'arm64' ? 'aarch64' : 'x86_64'}-${format.toLowerCase()}`
+      await addPlatform(platform, artifact)
+    }
+    if (architectures.size !== 1) throw new Error(`Mixed Linux architectures in ${bundleDirectory}.`)
+    continue
+  }
 
   const archives = artifacts.filter((artifact) => artifact.endsWith('.app.tar.gz'))
   if (archives.length > 0) {
@@ -35,10 +59,7 @@ for (const directory of bundleDirectories) {
     const architecture = archive.match(/-macos-(arm64|x64)\.app\.tar\.gz$/)?.[1]
     if (!architecture) throw new Error(`Unknown macOS updater architecture: ${archive}`)
     const platform = architecture === 'arm64' ? 'darwin-aarch64' : 'darwin-x86_64'
-    if (platforms[platform]) throw new Error(`Duplicate updater platform: ${platform}`)
-    const signature = (await fs.readFile(path.join(bundleDirectory, `${archive}.sig`), 'utf8')).trim()
-    if (!signature) throw new Error(`Updater signature is empty: ${archive}.sig`)
-    platforms[platform] = { signature, url: assetUrl(archive) }
+    await addPlatform(platform, archive)
     continue
   }
 
@@ -51,12 +72,6 @@ for (const directory of bundleDirectories) {
   const architecture =
     installer.includes('windows-arm64-') || bundleDirectory.includes('aarch64-pc-windows-msvc') ? 'arm64' : 'x64'
   const platform = architecture === 'arm64' ? 'windows-aarch64' : 'windows-x86_64'
-  const signaturePath = path.join(bundleDirectory, `${installer}.sig`)
-  const signature = (await fs.readFile(signaturePath, 'utf8')).trim()
-  if (!signature) {
-    throw new Error(`Updater signature is empty: ${signaturePath}`)
-  }
-
   const portableExecutables = artifacts.filter((artifact) => artifact.endsWith('-portable.exe'))
   if (portableExecutables.length !== 1) {
     throw new Error(
@@ -64,14 +79,8 @@ for (const directory of bundleDirectories) {
     )
   }
   const portable = portableExecutables[0]
-  const portableSignaturePath = path.join(bundleDirectory, `${portable}.sig`)
-  const portableSignature = (await fs.readFile(portableSignaturePath, 'utf8')).trim()
-  if (!portableSignature) {
-    throw new Error(`Portable updater signature is empty: ${portableSignaturePath}`)
-  }
-
-  platforms[platform] = { signature, url: assetUrl(installer) }
-  platforms[`${platform}-portable`] = { signature: portableSignature, url: assetUrl(portable) }
+  await addPlatform(platform, installer)
+  await addPlatform(`${platform}-portable`, portable)
 }
 
 const manifest = {

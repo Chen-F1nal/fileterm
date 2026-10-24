@@ -1,6 +1,6 @@
 # 本地自动更新测试
 
-> 适用对象：Windows NSIS/便携版与 macOS 应用内更新器（Tauri `tauri_plugin_updater`）。下方 Windows 流程使用安装器，本文件末尾说明 macOS 验证入口；Linux 不在此流程内。
+> 适用对象：Windows NSIS/便携版、macOS 与 Linux AppImage/DEB/RPM 应用内更新器（Tauri `tauri_plugin_updater`）。下方 Windows 流程使用安装器，macOS 实测见文末；Linux 各发行版安装/授权步骤见[发布验收清单](./auto-update-release-checklist.md#linux-tauri-应用内更新)。
 
 Tauri 的更新器端点由 `services/updates.rs` 中的 `RELEASE_DOWNLOAD_BASE`（`https://github.com/St0ff3l/fileterm/releases/download`）按 release tag 推导，运行时会拉取 `<tag>/latest.json` 并用清单内的签名验证下载内容（发布时另提供对应 `.sig` 文件）。本地测试需要一个能在相同路径布局下提供 `latest.json`、安装器与签名的本地 HTTP 服务，并把 `RELEASE_DOWNLOAD_BASE` 临时指向该服务（该常量为 Rust 代码，本地测试需临时改为指向 `http://127.0.0.1:<port>` 后重新构建，测试完毕还原）。
 
@@ -20,14 +20,14 @@ npm run release:win -w @fileterm/tauri
 ```bash
 export GITHUB_REPOSITORY=St0ff3l/fileterm
 export GITHUB_REF_NAME=v1.0.1
-node ./apps/tauri/scripts/create-windows-updater-manifest.mjs \
+node ./apps/tauri/scripts/create-updater-manifest.mjs \
   apps/tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
 ```
 
 ARM64 本机构建使用 `npm run release:win:arm64 -w @fileterm/tauri`；需要 ARM64 Windows 编译工具链。合并两个架构产物时，向脚本传入 `--merge` 和各自的 bundle 目录，它会在当前目录生成包含四个平台键的清单：
 
 ```bash
-node ./apps/tauri/scripts/create-windows-updater-manifest.mjs --merge \
+node ./apps/tauri/scripts/create-updater-manifest.mjs --merge \
   FileTerm-Windows-x64 FileTerm-Windows-arm64
 ```
 
@@ -58,7 +58,7 @@ node ./apps/tauri/scripts/create-windows-updater-manifest.mjs --merge \
 
 ## macOS 更新清单与回滚检查
 
-`node --test apps/tauri/tests/windows-updater-manifest.test.mjs` 同时覆盖 Windows 与 macOS：合并清单包含六个目标；macOS 缺失/空签名及重复架构必须拒绝生成。
+`node --test apps/tauri/tests/updater-manifest.test.mjs` 覆盖 Windows、macOS 与 Linux：合并清单包含十二个目标，Linux 按架构和 AppImage/DEB/RPM 格式区分；缺失/空签名、重复目标及 Linux 格式缺失、错误版本/架构必须拒绝生成。
 
 正式发布流水线继续保留 DMG，另发布 `FileTerm-<version>-macos-<arm64|x64>.app.tar.gz` 及匹配 `.sig`。macOS 配置与 Windows 使用同一更新公钥，签名私钥只从 CI secrets 注入；签名不提供 Apple 公证。
 
@@ -82,3 +82,10 @@ node ./apps/tauri/scripts/create-windows-updater-manifest.mjs --merge \
 - 测试版、测试服务已退出，原 `/Applications/FileTerm.app` 进程保持运行；测试安装和数据移至临时取证目录，未替换用户正式应用或改动其数据。
 
 未覆盖：Intel 实机升级、真实 GitHub Release/生产签名密钥下载、系统手动放行、活动远程传输中断和真实安装失败。安装失败/部分安装/安装器 panic 的旧版恢复由 Rust 测试覆盖。
+
+## 2026-10-25 Linux 代码与容器验证
+
+- Debian 12 ARM64 容器：`cargo test --locked services::updates -- --test-threads=1` 编译 Linux 原生分支，复审加固后 20 项测试通过；`cargo clippy --locked --all-targets --all-features -- -D warnings` 通过。
+- 覆盖六种格式/架构目标选择、系统包归属解析/超时及未知二进制回退；AppImage 先暂存并校验后原子替换，保留路径、执行权限和配置。通过保持旧文件句柄验证原 inode 未被截断；通过真实终止暂存中的单元测试子进程验证原文件完整且备份保留。另覆盖格式/架构错误、部分写入、内容不一致、panic、原文件并发变化、恢复受阻和重启路径无效。
+- 清单测试覆盖十二个平台目标，拒绝缺失、空签名、空文件、非普通文件、重复及版本/架构错误的 Linux 资产。
+- 以上是代码与故障夹具验证，未运行图形桌面安装/授权，也未完成已安装旧版到新版的 AppImage/DEB/RPM 升级；按[Linux 发布验收清单](./auto-update-release-checklist.md#linux-tauri-应用内更新)单独记录实测。版本与已发布资产未修改。

@@ -1801,13 +1801,15 @@ const zhCN = {
   updateDownloaded: 'v{version} 已下载完成，重启后即可完成更新。',
   macosUpdateHint:
     '请将应用安装到可写的 Applications 文件夹后更新。更新后若被 macOS 拦截，请在“系统设置 → 隐私与安全性”中选择“仍要打开”，然后重新启动 FileTerm。',
+  linuxUpdateHint:
+    'AppImage 需放在用户可写的目录；DEB/RPM 更新可能要求管理员授权。请先保存工作，安装完成后应用会重启。',
   restartToUpdate: '重启并更新',
   updateNotAvailable: '当前已是最新版本。',
   updateFailed: '检查或下载更新失败',
   updateReadyTitle: '更新已准备完成',
   updateLater: '稍后',
   updateRetry: '重试',
-  updateUnsupported: '仅已打包的 Windows 和 macOS 版本支持应用内更新。',
+  updateUnsupported: '当前安装方式不支持应用内更新，请从发布页更新。',
   overviewWelcomeTitle: '欢迎使用 FileTerm',
   overviewWelcomeSubtitle: '强大的终端管理工具，让远程连接更简单高效',
   overviewTotalConnections: '总连接数',
@@ -3983,13 +3985,15 @@ const enUS: typeof zhCN = {
   updateDownloaded: 'Version {version} is ready. Restart to finish updating.',
   macosUpdateHint:
     'Install the app in a writable Applications folder before updating. If macOS blocks the updated app, choose Open Anyway in System Settings → Privacy & Security, then launch FileTerm again.',
+  linuxUpdateHint:
+    'Keep the AppImage in a writable directory. DEB/RPM updates may request administrator authorization. Save your work before updating; the app restarts after installation.',
   restartToUpdate: 'Restart and update',
   updateNotAvailable: 'You are up to date.',
   updateFailed: 'Unable to check for or download the update',
   updateReadyTitle: 'Update ready',
   updateLater: 'Later',
   updateRetry: 'Retry',
-  updateUnsupported: 'In-app updates are available only in packaged Windows and macOS builds.',
+  updateUnsupported: 'This installation does not support in-app updates. Update from the release page.',
   overviewWelcomeTitle: 'Welcome to FileTerm',
   overviewWelcomeSubtitle: 'A powerful terminal workspace that makes remote connections simpler and more efficient.',
   overviewTotalConnections: 'Total Connections',
