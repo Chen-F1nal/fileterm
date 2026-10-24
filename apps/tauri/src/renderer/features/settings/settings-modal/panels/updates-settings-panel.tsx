@@ -89,6 +89,9 @@ export function UpdatesSettingsPanel() {
           </div>
         ) : null}
         {desktopApi?.platform === 'darwin' ? <p className="settings-tools-hint">{t.macosUpdateHint}</p> : null}
+        {desktopApi?.platform === 'linux' && updateStatus?.updateMode === 'in-app' ? (
+          <p className="settings-tools-hint">{t.linuxUpdateHint}</p>
+        ) : null}
         <div className="settings-update-actions">
           {updateStatus?.state === 'available' ? (
             <button
