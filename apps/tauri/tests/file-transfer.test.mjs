@@ -90,3 +90,68 @@ test('file transfers open beside the current tab, matching system info insertion
     }
   }
 })
+
+test('closing the last file transfer tab requests tab closure instead of closing the window', async () => {
+  const appUtils = load('../src/renderer/app/app-utils.ts')
+  const groups = load('../src/renderer/features/layout/host-groups.ts')
+  const workspaceUtils = load('../src/renderer/hooks/workspace-tabs-utils.ts', {
+    '../i18n': { t: { untitledTab: 'New Tab' } },
+    '../features/layout/host-groups': groups
+  })
+  const { createWorkspaceTabsContextActions } = load('../src/renderer/hooks/workspace-tabs-context-actions.ts', {
+    '../app/app-utils': appUtils,
+    '../i18n': { t: {} },
+    '../features/workspace/home-transition': {},
+    './workspace-tabs-utils': workspaceUtils
+  })
+  const fileTab = { id: 'file-transfers', kind: 'transfers', title: 'Files' }
+  const state = { closeRequests: [], windowClosed: false }
+  const actions = createWorkspaceTabsContextActions({
+    desktopApi: {},
+    workspace: { tabs: [] },
+    isBusy: false,
+    onBusyChange() {},
+    onStatusMessage() {},
+    onError() {},
+    onCloseCurrentWindow() {
+      state.windowClosed = true
+    },
+    onRequestQuit() {},
+    localTabs: [fileTab],
+    setLocalTabs() {},
+    activeLocalTabId: fileTab.id,
+    setActiveLocalTabId() {},
+    setPendingActiveTabId() {},
+    tabActivationRequestRef: { current: 0 },
+    nextHomeTabNumber: 2,
+    setNextHomeTabNumber() {},
+    setTabOrder() {},
+    visibleWorkspaceTabs: [],
+    visibleActiveSessionTabId: null,
+    activeTab: null,
+    setClosingSessionTabIds() {},
+    shortcutCloseConfirm: null,
+    setShortcutCloseConfirm() {},
+    tabContextMenu: null,
+    setTabContextMenu() {},
+    draggingTabKey: null,
+    setDraggingTabKey() {},
+    localTabsRef: { current: [fileTab] },
+    orderedTabs: workspaceUtils.buildOrderedTabs([`home:${fileTab.id}`], [fileTab], []),
+    tabBarLayout: 'single-row',
+    closeHomeTabs(homeTabIds) {
+      state.closeRequests.push(homeTabIds)
+    },
+    activateSessionTab: async () => {},
+    closeSessionTabById: async () => null,
+    closePane: async () => {},
+    applySnapshot() {},
+    reconnectSessionTab: async () => {},
+    disconnectSessionTab: async () => {}
+  })
+
+  await actions.closeActiveWorkspaceItem()
+
+  assert.equal(state.windowClosed, false)
+  assert.deepEqual(Array.from(state.closeRequests[0]), [fileTab.id])
+})

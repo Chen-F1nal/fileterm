@@ -203,7 +203,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
     const totalClosableItems = localTabs.length + visibleWorkspaceTabs.length
 
     if (currentActiveLocalTab) {
-      if (totalClosableItems <= 1) {
+      if (totalClosableItems <= 1 && currentActiveLocalTab.kind !== 'transfers') {
         onCloseCurrentWindow()
         return
       }
