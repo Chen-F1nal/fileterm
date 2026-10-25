@@ -22,7 +22,8 @@
 
 - **Linux 应用内更新**：对受支持的 AppImage、DEB 和 RPM 安装使用 Tauri updater，并验证 Ed25519 更新签名；AppImage 通过备份和原子替换安装，DEB/RPM 由系统安装器处理，可能要求管理员授权。
 - **安装格式边界**：AppImage 必须位于当前用户可写的位置；DEB/RPM 仅对由系统包管理器安装的 FileTerm 启用；Arch 包和不支持的架构继续打开 GitHub Releases。
-- **测试方式与验证范围**：先手动安装 beta.1，再用应用内更新检查 beta.2。Linux 更新代码已在 Debian 12 ARM64 环境通过自动化测试；真实桌面升级、DEB/RPM 授权弹窗和 x86_64 实机仍待验证。
+- **AppImage 图形兼容性**：重新打包时移除应由宿主系统提供的显示栈库，避免覆盖新版 Mesa/Wayland。已发布的旧 beta.1 包仍可能需要临时 `LD_PRELOAD=/usr/lib/libwayland-client.so.0` 才能启动。
+- **测试方式与验证范围**：Arch x86_64 已验证旧 beta.1 在上述临时环境变量下可启动并应用内升级到 beta.2；重新发布的包用于验证无需该变量的启动及 beta.1 → beta.2 更新。DEB/RPM 授权弹窗和不同 GPU/桌面环境仍待验证。
 
 ### 本版本包含的主要 PR 和问题修复
 
@@ -61,7 +62,8 @@ This beta adds signed Tauri in-app updates for supported Linux AppImage, DEB, an
 
 - **Linux in-app updates**: Use the Tauri updater with Ed25519 signature verification for supported AppImage, DEB, and RPM installations. AppImages are installed with a verified backup and atomic replacement; DEB/RPM updates use the system installer and may require administrator authorization.
 - **Installation boundaries**: AppImages must be in a location writable by the current user. DEB/RPM updates are enabled only for FileTerm installations owned by the system package manager. Arch packages and unsupported architectures continue to open GitHub Releases.
-- **Test path and validation scope**: Install beta.1 manually, then use the in-app updater to check for beta.2. Linux updater code passed automated tests in Debian 12 ARM64; real desktop upgrades, DEB/RPM authorization dialogs, and x86_64 hardware remain untested.
+- **AppImage graphics compatibility**: The repack removes display-stack libraries that should come from the host, avoiding conflicts with newer Mesa/Wayland. Previously published beta.1 downloads may still need the temporary `LD_PRELOAD=/usr/lib/libwayland-client.so.0` workaround to launch.
+- **Test path and validation scope**: On Arch x86_64, the previously published beta.1 was verified to launch with that temporary environment variable and update in-app to beta.2. The republished packages are for verifying normal startup without it and the beta.1 → beta.2 update; DEB/RPM authorization dialogs and other GPU/desktop environments remain untested.
 
 ### Main PRs and issues
 

@@ -144,6 +144,7 @@ for package_path in "${package_paths[@]}"; do
 done
 
 appdir="$appimage_verify_root/squashfs-root"
+python3 "$script_dir/../../../scripts/appimage-host-libraries.py" "$appdir"
 python3 "$script_dir/verify-linux-icon-files.py" "$appdir" --appimage
 desktop-file-validate "$appdir/FileTerm.desktop" "$appdir/usr/share/applications/com.fileterm.desktop.desktop"
 # appdir-lint only discovers *.appdata.xml; explicitly validate our canonical *.metainfo.xml too.
