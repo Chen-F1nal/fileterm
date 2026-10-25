@@ -13,6 +13,7 @@ impl Fixture {
         update_launcher_icons(
             &self.0.join("applications"),
             &self.0.join("icons"),
+            &self.0.join("theme-icons"),
             Some(&desktop_dir),
             Path::new("/usr/bin/fileterm"),
             variant,
@@ -29,9 +30,101 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn generated_launchers_use_a_stable_themed_icon_for_live_app_grid_refresh() {
+    let fixture = Fixture::new();
+    for variant in ["classic", "clean", "material", "classic"] {
+        fixture.update(variant).unwrap();
+        for (name, _) in DESKTOP_ENTRIES {
+            assert!(fixture
+                .entry(name)
+                .contains("Icon=com.fileterm.desktop.runtime\n"));
+        }
+        assert_eq!(
+            fs::read(
+                fixture
+                    .0
+                    .join("theme-icons/com.fileterm.desktop.runtime.png")
+            )
+            .unwrap(),
+            super::super::icon_bytes(variant)
+        );
+    }
+}
+
+#[test]
+fn artwork_changes_notify_the_application_monitor_without_changing_icon_identity() {
+    let fixture = Fixture::new();
+    fixture.update("classic").unwrap();
+    let before = fixture.entry("FileTerm.desktop");
+    let path = fixture.0.join("applications/FileTerm.desktop");
+    let old_time = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(old_time)
+        .unwrap();
+    fixture.update("clean").unwrap();
+    assert_eq!(fixture.entry("FileTerm.desktop"), before);
+    assert!(fs::metadata(&path).unwrap().modified().unwrap() > old_time);
+}
+
+#[test]
+fn preserves_custom_runtime_icon_without_partially_updating_launchers() {
+    let fixture = Fixture::new();
+    fixture.update("classic").unwrap();
+    let before = fixture.entry("FileTerm.desktop");
+    let runtime_icon = fixture
+        .0
+        .join("theme-icons/com.fileterm.desktop.runtime.png");
+    fs::create_dir_all(runtime_icon.parent().unwrap()).unwrap();
+    fs::write(&runtime_icon, b"user customized icon").unwrap();
+    assert!(fixture.update("clean").is_err());
+    assert_eq!(fs::read(runtime_icon).unwrap(), b"user customized icon");
+    assert_eq!(fixture.entry("FileTerm.desktop"), before);
+}
+
+#[test]
+fn upgrades_managed_runtime_artwork_using_its_recorded_digest() {
+    let fixture = Fixture::new();
+    fixture.update("classic").unwrap();
+    let path = fixture
+        .0
+        .join("theme-icons/com.fileterm.desktop.runtime.png");
+    let previous_artwork = b"FileTerm artwork from a previous release";
+    fs::write(&path, previous_artwork).unwrap();
+    fs::write(
+        fixture.0.join("icons/themed-icon.sha256"),
+        format!("{:x}", Sha256::digest(previous_artwork)),
+    )
+    .unwrap();
+    fixture.update("clean").unwrap();
+    assert_eq!(fs::read(path).unwrap(), super::super::icon_bytes("clean"));
+}
+
+#[cfg(unix)]
+#[test]
+fn preserves_symlinked_runtime_icons_and_their_targets() {
+    let fixture = Fixture::new();
+    fs::create_dir_all(fixture.0.join("theme-icons")).unwrap();
+    let target = fixture.0.join("custom.png");
+    fs::write(&target, super::super::icon_bytes("classic")).unwrap();
+    let link = fixture
+        .0
+        .join("theme-icons/com.fileterm.desktop.runtime.png");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    assert!(fixture.update("clean").is_err());
+    assert_eq!(
+        fs::read(target).unwrap(),
+        super::super::icon_bytes("classic")
+    );
+    assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
+    assert!(!fixture.0.join("applications").exists());
+}
+
+#[test]
 fn both_desktop_ids_follow_variants_and_restore_classic() {
     let fixture = Fixture::new();
-    let mut paths = Vec::new();
     for variant in ["classic", "material", "clean", "classic"] {
         fixture.update(variant).unwrap();
         let entries = DESKTOP_ENTRIES.map(|(name, _)| fixture.entry(name));
@@ -45,7 +138,12 @@ fn both_desktop_ids_follow_variants_and_restore_classic() {
         let icon = icon_line(&entries[0]);
         assert_eq!(icon, icon_line(&entries[1]));
         assert_eq!(
-            fs::read(icon.strip_prefix("Icon=").unwrap()).unwrap(),
+            fs::read(
+                fixture
+                    .0
+                    .join("theme-icons/com.fileterm.desktop.runtime.png")
+            )
+            .unwrap(),
             super::super::icon_bytes(variant)
         );
         for entry in &entries {
@@ -55,11 +153,7 @@ fn both_desktop_ids_follow_variants_and_restore_classic() {
         }
         assert!(!entries[0].contains("NoDisplay=true"));
         assert!(entries[1].contains("NoDisplay=true"));
-        paths.push(icon);
     }
-    assert_ne!(paths[0], paths[1]);
-    assert_ne!(paths[1], paths[2]);
-    assert_eq!(paths[0], paths[3]);
 }
 
 #[cfg(unix)]
@@ -144,6 +238,99 @@ fn leaves_unrelated_or_customized_desktop_shortcuts_untouched() {
 }
 
 #[test]
+fn refreshes_path_lookup_shortcuts_for_the_installed_launcher() {
+    let fixture = Fixture::new();
+    let desktop_dir = fixture.0.join("desktop");
+    fs::create_dir_all(&desktop_dir).unwrap();
+    let shortcut = desktop_dir.join("My FileTerm.desktop");
+    for command in ["fileterm", "\"fileterm\""] {
+        for suffix in ["", " %U", " %u", " %F", " %f"] {
+            let original = format!(
+                "[Desktop Entry]\r\nName=My FileTerm\r\nExec={command}{suffix}\r\nIcon=fileterm\r\n\
+                 [Desktop Action Other]\r\nExec=other\r\nIcon=custom-action\r\n"
+            );
+            fs::write(&shortcut, &original).unwrap();
+            for variant in ["clean", "material", "classic"] {
+                fixture.update(variant).unwrap();
+                let updated = fs::read_to_string(&shortcut).unwrap();
+                let icon = updated
+                    .lines()
+                    .find(|line| line.starts_with("Icon="))
+                    .unwrap();
+                assert_eq!(
+                    fs::read(icon.strip_prefix("Icon=").unwrap()).unwrap(),
+                    super::super::icon_bytes(variant)
+                );
+                assert_eq!(
+                    updated,
+                    original.replacen("Icon=fileterm", icon, 1),
+                    "command {command}{suffix}, variant {variant}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn refreshes_shortcuts_using_the_packaged_1024px_icon() {
+    let fixture = Fixture::new();
+    let desktop_dir = fixture.0.join("desktop");
+    fs::create_dir_all(&desktop_dir).unwrap();
+    let shortcut = desktop_dir.join("FileTerm.desktop");
+    fs::write(
+        &shortcut,
+        "[Desktop Entry]\nExec=/usr/bin/fileterm %U\nIcon=/usr/share/icons/hicolor/1024x1024/apps/fileterm.png\n",
+    )
+    .unwrap();
+    fixture.update("clean").unwrap();
+    let updated = fs::read_to_string(&shortcut).unwrap();
+    let icon = updated
+        .lines()
+        .find(|line| line.starts_with("Icon="))
+        .unwrap();
+    assert_eq!(
+        fs::read(icon.strip_prefix("Icon=").unwrap()).unwrap(),
+        super::super::icon_bytes("clean")
+    );
+    assert_eq!(
+        fs::read_to_string(shortcut).unwrap(),
+        format!("[Desktop Entry]\nExec=/usr/bin/fileterm %U\n{icon}\n")
+    );
+}
+
+#[test]
+fn path_lookup_matching_does_not_claim_other_installations_or_custom_commands() {
+    let icon_dir = Path::new("/home/test/icons");
+    for (executable, command, icon) in [
+        (
+            "\"/usr/bin/fileterm\"",
+            "/opt/other/fileterm %U",
+            "fileterm",
+        ),
+        ("\"/usr/bin/fileterm\"", "fileterm-helper %U", "fileterm"),
+        ("\"/usr/bin/fileterm\"", "fileterm --custom %U", "fileterm"),
+        ("\"/usr/bin/fileterm\"", "env fileterm %U", "fileterm"),
+        (
+            "\"/usr/bin/fileterm\"",
+            "fileterm %U",
+            "/home/test/custom.png",
+        ),
+        (
+            "\"/home/test/FileTerm.AppImage\"",
+            "fileterm %U",
+            "fileterm",
+        ),
+    ] {
+        let contents = format!("[Desktop Entry]\nExec={command}\nIcon={icon}\n");
+        assert_eq!(
+            update_desktop_shortcut(&contents, executable, icon_dir, "/new.png"),
+            None,
+            "must preserve {command} with {icon} for {executable}"
+        );
+    }
+}
+
+#[test]
 fn preserves_user_managed_companion_without_partially_updating_visible_entry() {
     let fixture = Fixture::new();
     fixture.update("classic").unwrap();
@@ -174,7 +361,7 @@ fn migrates_legacy_generated_entry_and_does_not_rewrite_unchanged_files() {
     assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), before);
     assert!(fixture
         .entry("FileTerm.desktop")
-        .contains("launcher-classic-"));
+        .contains("Icon=com.fileterm.desktop.runtime\n"));
 }
 
 #[test]
@@ -221,6 +408,7 @@ fn generated_entries_round_trip_through_native_gio_with_special_path_characters(
     update_launcher_icons(
         &fixture.0.join("applications"),
         &fixture.0.join("icons"),
+        &fixture.0.join("theme-icons"),
         None,
         &executable,
         "material",
@@ -244,6 +432,6 @@ fn generated_entries_round_trip_through_native_gio_with_special_path_characters(
         fs::remove_file(&marker).unwrap();
         assert!(IconExt::to_string(&entry.icon().unwrap())
             .unwrap()
-            .contains("launcher-material-"));
+            .contains("com.fileterm.desktop.runtime"));
     }
 }
