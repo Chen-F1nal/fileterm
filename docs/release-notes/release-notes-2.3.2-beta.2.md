@@ -22,12 +22,14 @@
 
 - **Linux 应用内更新**：对受支持的 AppImage、DEB 和 RPM 安装使用 Tauri updater，并验证 Ed25519 更新签名；AppImage 通过备份和原子替换安装，DEB/RPM 由系统安装器处理，可能要求管理员授权。
 - **安装格式边界**：AppImage 必须位于当前用户可写的位置；DEB/RPM 仅对由系统包管理器安装的 FileTerm 启用；Arch 包和不支持的架构继续打开 GitHub Releases。
+- **Linux 侧栏启动宽度**：窗口尺寸稳定后恢复 214px 默认宽度；窗口启动期间较窄的临时视口不会永久改变宽度，手动调整也会保留。
 - **AppImage 图形兼容性**：重新打包时移除应由宿主系统提供的显示栈库，避免覆盖新版 Mesa/Wayland。已安装旧 beta.2 的用户需重新下载此版本，因为版本号未变化，应用内更新不会识别同版本替换。
 - **beta.1 → beta.2 升级验证**：手动安装重新发布的 beta.1，确认无需 `LD_PRELOAD` 即可启动，再在应用内检查并安装 beta.2。旧 beta.1 在 Arch x86_64 上通过临时设置 `LD_PRELOAD=/usr/lib/libwayland-client.so.0` 成功升级；DEB/RPM 授权弹窗和不同 Linux 图形环境仍待实测。
 
 ### 本版本包含的主要 PR 和问题修复
 
-- 本次仅提升应用版本号，用于测试 beta.1 → beta.2 更新；Linux 应用内更新实现见 [PR #362](https://github.com/St0ff3l/fileterm/pull/362)。
+- 本版本包含 Linux 侧栏启动宽度修正；Linux 应用内更新实现见 [PR #362](https://github.com/St0ff3l/fileterm/pull/362)。
+- [PR #365](https://github.com/St0ff3l/fileterm/pull/365)：修复 Linux 窗口启动后侧栏宽度变窄的问题。
 
 完整变更记录请查看 [v2.3.2-beta.1 与 v2.3.2-beta.2 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.2-beta.1...v2.3.2-beta.2)。
 
@@ -62,12 +64,13 @@ This beta is for testing the Linux in-app update from beta.1 to beta.2. Install 
 
 - **Linux in-app updates**: Use the Tauri updater with Ed25519 signature verification for supported AppImage, DEB, and RPM installations. AppImages are installed with a verified backup and atomic replacement; DEB/RPM updates use the system installer and may require administrator authorization.
 - **Installation boundaries**: AppImages must be in a location writable by the current user. DEB/RPM updates are enabled only for FileTerm installations owned by the system package manager. Arch packages and unsupported architectures continue to open GitHub Releases.
+- **Linux sidebar startup width**: Restore the 214px default when the window reaches its final size. A temporarily narrow startup viewport no longer permanently changes the width, and manual resizing is preserved.
 - **AppImage graphics compatibility**: The repack removes display-stack libraries that should come from the host, avoiding conflicts with newer Mesa/Wayland. Users with the previously published beta.2 must download this same-version replacement manually because the updater will not detect an equal version.
 - **beta.1 → beta.2 update test**: Install the republished beta.1 and verify it launches without `LD_PRELOAD`, then check for beta.2 in the app. The old beta.1 was verified to update on Arch x86_64 when launched with `LD_PRELOAD=/usr/lib/libwayland-client.so.0`; DEB/RPM authorization dialogs and other Linux graphics environments remain untested.
 
 ### Main PRs and issues
 
-- This release only increments the app version to test the beta.1 → beta.2 update; the Linux in-app updater is implemented in [PR #362](https://github.com/St0ff3l/fileterm/pull/362).
+- This release includes the Linux sidebar startup width fix in [PR #365](https://github.com/St0ff3l/fileterm/pull/365); the Linux in-app updater is implemented in [PR #362](https://github.com/St0ff3l/fileterm/pull/362).
 
 See the [comparison between v2.3.2-beta.1 and v2.3.2-beta.2](https://github.com/St0ff3l/fileterm/compare/v2.3.2-beta.1...v2.3.2-beta.2) for the complete change set.
 

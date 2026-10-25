@@ -200,9 +200,11 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   const usesHostGroups = tabBarLayout === 'host-groups'
   const resolvedSidebarWidth = isSystemSidebarCollapsed
     ? 44
-    : usesHostGroups && !isHomeWorkspaceVisible
-      ? hostInfoWidth
-      : sidebarWidth
+    : isHomeWorkspaceVisible
+      ? resize.homeSidebarWidth
+      : usesHostGroups
+        ? hostInfoWidth
+        : sidebarWidth
   const activeJumpHosts =
     activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
   const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined

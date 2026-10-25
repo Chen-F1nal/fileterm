@@ -48,6 +48,7 @@ export function useAppResize({
   clearWindowCloseRequest
 }: AppResizeOptions) {
   const [isResizingHostRail, setIsResizingHostRail] = useState(false)
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
   const startHostRailResize = useCallback(() => {
     window.getSelection()?.removeAllRanges()
     setIsResizingHostRail(true)
@@ -100,17 +101,11 @@ export function useAppResize({
   }, [isHomeWorkspaceVisible, isResizingSidebar, isResizingHostRail])
 
   useEffect(() => {
-    if (!isHomeWorkspaceVisible) {
-      return
-    }
-    const clampSidebarWidth = () => {
-      const maxWidth = getSidebarMaxWidth(window.innerWidth, true)
-      setSidebarWidth((currentWidth) => (currentWidth > maxWidth ? maxWidth : currentWidth))
-    }
-    clampSidebarWidth()
-    window.addEventListener('resize', clampSidebarWidth)
-    return () => window.removeEventListener('resize', clampSidebarWidth)
-  }, [isHomeWorkspaceVisible])
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth)
+    updateViewportWidth()
+    window.addEventListener('resize', updateViewportWidth)
+    return () => window.removeEventListener('resize', updateViewportWidth)
+  }, [])
 
   const startAiCopilotResize = useCallback(() => {
     window.getSelection()?.removeAllRanges()
@@ -198,5 +193,7 @@ export function useAppResize({
     clearWindowCloseRequest()
   }, [windowCloseRequest, workspace.tabs, requestWindowCloseConfirmation, clearWindowCloseRequest])
 
-  return { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize }
+  // A hidden WebView's temporary viewport must not overwrite the preferred sidebar width.
+  const homeSidebarWidth = Math.min(sidebarWidth, getSidebarMaxWidth(viewportWidth, true))
+  return { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize, homeSidebarWidth }
 }
