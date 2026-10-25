@@ -1,4 +1,44 @@
+.fs-shell {
+  --workspace-left-width: var(--sidebar-width, 214px);
+  --workspace-right-width: 0px;
+}
+
+.fs-shell:has(> .terminal-right-frame.is-visible) {
+  --workspace-right-width: var(--workspace-frame-size);
+}
+
+.fs-shell.has-workspace-left-frame {
+  --workspace-left-width: var(--workspace-frame-size);
+}
+
+.workspace-left-frame {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  background: var(--terminal-right-frame-outer);
+  box-shadow:
+    inset 1px 0 var(--terminal-right-frame-accent),
+    inset -1px 0 var(--terminal-right-frame-accent);
+  visibility: hidden;
+  pointer-events: none;
+  position: relative;
+  z-index: 6;
+}
+
+.fs-shell.has-workspace-left-frame .workspace-left-frame {
+  visibility: visible;
+}
+
+.fs-shell.has-window-menubar .workspace-left-frame {
+  grid-row: 3;
+}
+
+.fs-shell.has-workspace-left-frame .fs-main.full-width {
+  grid-column: 2;
+}
+
 .terminal-right-frame {
+  position: relative;
   grid-column: 3;
   grid-row: 2;
   box-sizing: border-box;
@@ -18,8 +58,20 @@
 }
 
 .terminal-right-frame.is-visible {
-  width: 12px;
+  width: var(--workspace-frame-size);
   opacity: 1;
+}
+
+.fs-shell.is-local-terminal .terminal-right-frame::after,
+.fs-shell.is-local-terminal .workspace-left-frame::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: var(--workspace-frame-size);
+  box-sizing: border-box;
+  border-top: 1px solid var(--terminal-right-frame-accent);
+  background: var(--surface-toolbar);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -27,6 +79,13 @@
     transition:
       width 0.24s linear,
       opacity 0.24s linear;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root .fs-shell,
+  :root .home-workspace {
+    transition: none;
   }
 }
 

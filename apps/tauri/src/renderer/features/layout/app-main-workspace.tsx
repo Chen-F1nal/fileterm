@@ -42,8 +42,6 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     filePanelRememberRatio,
     sidebarWidth,
     setSidebarWidth,
-    hostInfoWidth,
-    setHostInfoWidth,
     tabBarLayout,
     compactTabBar,
     aiCopilotWidth,
@@ -102,6 +100,8 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     activeFilePanelRatio,
     activeFilePanelSnapTarget,
     activeWorkspaceFocusKey,
+    activeSidebarWidth,
+    setActiveSidebarWidth,
     isWorkspaceFocusMode,
     activeWorkspaceView,
     activeCommandPaneWidth,
@@ -202,14 +202,10 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   const resolvedSidebarWidth = isSystemSidebarCollapsed
     ? 44
     : usesHostGroups && !isHomeWorkspaceVisible
-      ? hostInfoWidth
+      ? activeSidebarWidth
       : resize.expandedSidebarWidth
-  const showTerminalRightFrame =
-    !isHomeWorkspaceVisible &&
-    !isLocalTerminalWorkspace &&
-    !usesHostGroups &&
-    !shouldShowAiCopilot &&
-    activeLocalTab?.kind !== 'transfers'
+  const showWorkspaceLeftFrame = !usesHostGroups && (isLocalTerminalWorkspace || activeLocalTab?.kind === 'transfers')
+  const showTerminalRightFrame = !isHomeWorkspaceVisible && !usesHostGroups && !shouldShowAiCopilot
   const activeJumpHosts =
     activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
   const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined
@@ -256,7 +252,6 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     isAiCopilotOpen,
     isWorkspaceFocusMode,
     onAddHomeTab: usesHostGroups ? addTabToActiveHost : addHomeTab,
-    onOpenFileTransfers: openFileTransfers,
     onActivateHome: activateHomeTab,
     onActivateSession: activateSession,
     onCloseHomeTab: closeHomeTab,
@@ -284,7 +279,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         ...currentModes,
         [activeWorkspaceFocusKey]: nextFocusMode
       }))
-      if (!nextFocusMode) (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)
+      if (!nextFocusMode) setActiveSidebarWidth(DEFAULT_SIDEBAR_WIDTH)
     },
     orderedTabs,
     hostNavigation: usesHostGroups ? hostNavigation : undefined
@@ -293,7 +288,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   return (
     <>
       <div
-        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${compactTabBar ? 'is-compact-tabbar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${showHostRail ? 'has-host-rail' : ''} ${shouldShowSystemSidebar ? 'has-system-sidebar' : ''} ${isResizingSidebar || isResizingHostRail ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
+        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${compactTabBar ? 'is-compact-tabbar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${showHostRail ? 'has-host-rail' : ''} ${showWorkspaceLeftFrame ? 'has-workspace-left-frame' : ''} ${shouldShowSystemSidebar ? 'has-system-sidebar' : ''} ${isResizingSidebar || isResizingHostRail ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
         style={
           {
             '--sidebar-width': `${resolvedSidebarWidth}px`,
@@ -354,7 +349,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
             onMonitoringSnapshot={shell.applySnapshot}
             onOpenSystemInfo={openSystemInfo}
             onResizeStart={startSidebarResize}
-            onRestoreWidth={() => (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)}
+            onRestoreWidth={() => setActiveSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
             onToggleCollapsed={setIsSystemSidebarCollapsed}
           />
         ) : null}
@@ -573,6 +568,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         </main>
 
         {/* Machine info borders the terminal in the host-groups layout, so the edge frame would be a stray strip. */}
+        <div className="workspace-left-frame" aria-hidden="true" />
         <div className={`terminal-right-frame ${showTerminalRightFrame ? 'is-visible' : ''}`} aria-hidden="true" />
 
         <TransferCenterHost

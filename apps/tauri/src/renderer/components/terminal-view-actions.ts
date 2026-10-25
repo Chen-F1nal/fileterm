@@ -1,5 +1,5 @@
 import { trimTranscript } from '../xterm-adapters/terminal-transcript-replay'
-import { recoverTerminalRenderSurface } from '../xterm-adapters/terminal-render-recovery'
+import { recoverTerminalRenderSurface, repaintTerminalRender } from '../xterm-adapters/terminal-render-recovery'
 import { getVimVisualSelection } from '../xterm-adapters/terminal-vim-selection'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { type ITheme, type Terminal } from '@xterm/xterm'
@@ -573,7 +573,7 @@ export function useTerminalViewActions({
       }
       lastSyncedSizeRef.current = nextSize
       // Pixel-only host changes also need fresh rows while drag resizing freezes columns.
-      terminal.refresh(0, Math.max(terminal.rows - 1, 0))
+      repaintTerminalRender(terminal)
       if (!remoteGridChanged) {
         return
       }

@@ -87,11 +87,8 @@ export function FileManagerToolbar({
       </span>
       {activeView === 'file' ? (
         <div className="file-tab-actions">
-          <button type="button" title={t.fileTransferWorkspace} onClick={onOpenFileTransfers}>
-            <AppIcon name="transfer" />
-            {t.fileTransferWorkspace}
-          </button>
           <button
+            className="file-tab-icon-action"
             title={t.refresh}
             type="button"
             disabled={!canUseRemoteFiles}
@@ -101,6 +98,15 @@ export function FileManagerToolbar({
             }}
           >
             <AppIcon name="refresh" />
+          </button>
+          <button
+            className="file-transfer-launch"
+            type="button"
+            title={t.fileTransferWorkspace}
+            onClick={onOpenFileTransfers}
+          >
+            <AppIcon name="transfer" />
+            {t.fileTransferWorkspace}
           </button>
           <DropdownSelect
             className="file-pane-mode-select"
@@ -134,6 +140,7 @@ export function FileManagerToolbar({
             </button>
           ) : null}
           <button
+            className="file-tab-icon-action"
             title={t.downloadTo}
             type="button"
             disabled={!canUseRemoteFiles || !selectedRemoteDownloadItems.length}
@@ -141,7 +148,13 @@ export function FileManagerToolbar({
           >
             <AppIcon name="download" />
           </button>
-          <button title={t.upload} type="button" disabled={!canUseRemoteFiles} onClick={onChooseUploadFiles}>
+          <button
+            className="file-tab-icon-action"
+            title={t.upload}
+            type="button"
+            disabled={!canUseRemoteFiles}
+            onClick={onChooseUploadFiles}
+          >
             <AppIcon name="upload" />
           </button>
         </div>

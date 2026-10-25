@@ -8,7 +8,7 @@
   min-height: 0;
   --control-height-md: 28px;
   --control-padding-x-sm: 8px;
-  --file-transfer-frame-width: 12px;
+  --file-transfer-frame-width: var(--workspace-frame-size);
   padding: 12px calc(var(--file-transfer-frame-width) + 12px);
   gap: 8px;
   font-family: var(--font-ui);
@@ -37,6 +37,22 @@
 
 .file-transfer-workspace::after {
   inset-inline-end: 0;
+}
+
+.fs-shell.has-workspace-left-frame .file-transfer-workspace {
+  padding-inline-start: 12px;
+}
+
+.fs-shell.has-workspace-left-frame .file-transfer-workspace::before {
+  display: none;
+}
+
+.fs-shell:not(.has-host-rail, .has-ai-copilot) .file-transfer-workspace {
+  padding-inline-end: 12px;
+}
+
+.fs-shell:not(.has-host-rail, .has-ai-copilot) .file-transfer-workspace::after {
+  display: none;
 }
 
 .file-transfer-workspace :is(.dropdown-select-trigger, .ft-select-shell) {
@@ -91,7 +107,7 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-lg, 10px);
   background: var(--surface-panel);
 }
 

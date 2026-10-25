@@ -41,3 +41,52 @@ test('file transfer tab survives saved UI state while invalid endpoint fields ar
   const invalid = parseStoredMainTabUiState(JSON.stringify({ localTabs: [{ ...tab, initialTabId: {} }] }))
   assert.equal(invalid.localTabs.length, 0)
 })
+
+test('file transfers open beside the current tab, matching system info insertion and reusing an existing tab', () => {
+  const appUtils = load('../src/renderer/app/app-utils.ts')
+  const { createWorkspaceTabsContextActions } = load('../src/renderer/hooks/workspace-tabs-context-actions.ts', {
+    '../app/app-utils': appUtils,
+    '../i18n': { t: { fileTransferWorkspace: 'Files' } },
+    './workspace-tabs-utils': { formatSystemInfoTabTitle: (title) => title }
+  })
+  for (const activeLocalTabId of [null, 'system-nas']) {
+    for (const method of activeLocalTabId ? ['openFileTransfers'] : ['openFileTransfers', 'openSystemInfo']) {
+      const state = {
+        order: ['session:ftp', 'session:nas', 'home:system-nas', 'home:tail'],
+        tabs: activeLocalTabId ? [{ id: activeLocalTabId, kind: 'system', sessionTabId: 'nas' }] : [],
+        active: null
+      }
+      const initialCount = state.tabs.length
+      const actions = () =>
+        createWorkspaceTabsContextActions({
+          activeTab: { id: 'nas', title: 'NAS' },
+          activeLocalTabId,
+          localTabs: state.tabs,
+          workspace: { sessions: { nas: { remotePath: '/srv' } } },
+          tabActivationRequestRef: { current: 0 },
+          setLocalTabs: (update) => {
+            state.tabs = update(state.tabs)
+          },
+          setTabOrder: (update) => {
+            state.order = update(state.order)
+          },
+          setActiveLocalTabId: (id) => {
+            state.active = id
+          },
+          setPendingActiveTabId() {},
+          onStatusMessage() {}
+        })
+      actions()[method]()
+      const id = method === 'openFileTransfers' ? 'file-transfers' : 'system-nas'
+      const anchor = activeLocalTabId ? 'home:system-nas' : 'session:nas'
+      if (id !== activeLocalTabId) assert.equal(state.order[state.order.indexOf(anchor) + 1], `home:${id}`)
+      assert.equal(state.active, id)
+      const order = [...state.order]
+      actions()[method]()
+      assert.deepEqual(Array.from(state.order), order, 'reopening must reuse the tab without duplicating or moving it')
+      assert.equal(state.tabs.length, initialCount + 1)
+      if (method === 'openFileTransfers')
+        assert.equal(state.tabs.find((tab) => tab.kind === 'transfers').initialPath, '/srv')
+    }
+  }
+})

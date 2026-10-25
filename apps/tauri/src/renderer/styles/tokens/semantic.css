@@ -109,6 +109,7 @@
    * Maps historical CSS variable names to the new semantic tokens
    * ========================================================================= */
   --sidebar-width: 214px;
+  --workspace-frame-size: 12px;
   --bg-main: var(--surface-canvas);
   --bg-sidebar: var(--surface-sidebar);
   --bg-card: var(--surface-card);

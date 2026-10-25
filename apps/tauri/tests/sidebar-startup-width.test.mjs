@@ -18,6 +18,47 @@ function load(path, context = {}) {
 
 const utils = load('../src/renderer/app/app-shell-utils.ts')
 
+function sidebarFixture() {
+  let widths = {}
+  const { useWorkspaceSidebarWidth } = load('../src/renderer/hooks/use-workspace-sidebar-width.ts', {
+    require(name) {
+      if (name.endsWith('/app-shell-utils')) return utils
+      assert.equal(name, 'react')
+      return {
+        useCallback: (callback) => callback,
+        useEffect: (effect) => effect(),
+        useState: () => [
+          widths,
+          (update) => {
+            widths = update(widths)
+          }
+        ]
+      }
+    }
+  })
+  return (id, sessions = [{ id: 'a' }, { id: 'b' }], locals = [{ id: 'home' }]) =>
+    useWorkspaceSidebarWidth(id, sessions, locals)
+}
+
+test('tabs and windows start at the same default and retain independent custom widths', () => {
+  const render = sidebarFixture()
+  const otherWindow = sidebarFixture()
+  for (const id of ['a', 'b', 'home']) assert.equal(render(id).activeSidebarWidth, 214)
+  render('a').setActiveSidebarWidth(320)
+  render('b').setActiveSidebarWidth(280)
+  render('home').setActiveSidebarWidth(250)
+  assert.equal(render('a').activeSidebarWidth, 320)
+  assert.equal(render('b').activeSidebarWidth, 280)
+  assert.equal(render('home').activeSidebarWidth, 250)
+  assert.equal(otherWindow('a').activeSidebarWidth, 214)
+  render(null).setActiveSidebarWidth(360)
+  assert.equal(render('a').activeSidebarWidth, 320)
+  render(null, [{ id: 'b' }], [{ id: 'home' }])
+  assert.equal(render('a').activeSidebarWidth, 214, 'closed tabs must release their width')
+  render(null, [], [])
+  assert.equal(render('home').activeSidebarWidth, 214, 'closed home tabs must release their width')
+})
+
 function fixture(initialViewportWidth, initialSidebarWidth = utils.DEFAULT_SIDEBAR_WIDTH) {
   const listeners = new Map()
   const states = []
@@ -60,14 +101,11 @@ function fixture(initialViewportWidth, initialSidebarWidth = utils.DEFAULT_SIDEB
       }
     }
   })
-  const render = () => {
+  const render = (home = true) => {
     stateIndex = effectIndex = 0
     return hook.useAppResize({
-      isHomeWorkspaceVisible: true,
-      sidebarWidth: preferredWidth,
-      setSidebarWidth: (update) => {
-        preferredWidth = typeof update === 'function' ? update(preferredWidth) : update
-      },
+      isHomeWorkspaceVisible: home,
+      activeSidebarWidth: preferredWidth,
       workspace: { tabs: [] }
     })
   }
@@ -118,6 +156,14 @@ test('narrow windows temporarily constrain a manually widened sidebar', () => {
   app.dispose()
 })
 
+test('a session keeps its manually widened sidebar even when the home content needs more space', () => {
+  const app = fixture(1150, 320)
+  assert.equal(app.render(false).expandedSidebarWidth, 320)
+  assert.equal(app.render(true).expandedSidebarWidth, 220)
+  assert.equal(app.preferredWidth, 320)
+  app.dispose()
+})
+
 test('a manually narrowed sidebar stays narrow when the window grows', () => {
   const app = fixture(1120, 190)
   assert.equal(app.render().expandedSidebarWidth, 190)
@@ -126,7 +172,14 @@ test('a manually narrowed sidebar stays narrow when the window grows', () => {
   app.dispose()
 })
 
-function renderWorkspace({ home = false, hostGroups = false, local = false, copilot = false, transfers = false } = {}) {
+function renderWorkspace({
+  home = false,
+  hostGroups = false,
+  local = false,
+  copilot = false,
+  transfers = false,
+  width = 214
+} = {}) {
   const { AppMainWorkspace } = load('../src/renderer/features/layout/app-main-workspace.tsx', {
     require(name) {
       if (name.endsWith('.css')) return {}
@@ -150,7 +203,6 @@ function renderWorkspace({ home = false, hostGroups = false, local = false, copi
         workspace: { profiles: [], sessions: {} },
         sessionSecurity: {},
         sidebarWidth: 320,
-        hostInfoWidth: 300,
         tabBarLayout: hostGroups ? 'host-groups' : 'horizontal'
       },
       workspace: {
@@ -162,26 +214,27 @@ function renderWorkspace({ home = false, hostGroups = false, local = false, copi
         localTabs: [],
         activeSidebarMetricOrder: [],
         activeSidebarMetrics: [],
-        activeTerminalDockSendState: {}
+        activeTerminalDockSendState: {},
+        activeSidebarWidth: width
       },
       data: {},
-      resize: { expandedSidebarWidth: 220 }
+      resize: { expandedSidebarWidth: home ? Math.min(width, 220) : width }
     }
   }).children[0]
 }
 
-test('home and session titlebars and sidebars use the same constrained width', () => {
+test('home and session titlebars and sidebars start at the same default width', () => {
   for (const home of [false, true]) {
     const shell = renderWorkspace({ home })
-    assert.equal(shell.props.style['--sidebar-width'], '220px')
-    assert.equal(shell.props.style['--brand-width'], '220px')
+    assert.equal(shell.props.style['--sidebar-width'], '214px')
+    assert.equal(shell.props.style['--brand-width'], '214px')
   }
-  const grouped = renderWorkspace({ hostGroups: true })
+  const grouped = renderWorkspace({ hostGroups: true, width: 300 })
   assert.equal(grouped.props.style['--sidebar-width'], '300px')
   assert.equal(grouped.props.style['--host-rail-width'], '320px')
 })
 
-test('terminal edge frame stays mounted and is shown only for ordinary remote workspaces', () => {
+test('remote, transfer and local tabs reuse the same visible terminal edge frame', () => {
   for (const options of [
     {},
     { home: true },
@@ -194,7 +247,13 @@ test('terminal edge frame stays mounted and is shown only for ordinary remote wo
       child?.props?.className?.startsWith('terminal-right-frame')
     )
     assert.ok(frame)
-    assert.equal(frame.props.className.includes('is-visible'), Object.keys(options).length === 0)
+    assert.equal(frame.props.className.includes('is-visible'), !options.home && !options.hostGroups && !options.copilot)
     assert.equal(frame.props['aria-hidden'], 'true')
+    const shell = renderWorkspace(options)
+    assert.equal(
+      shell.props.className.includes('has-workspace-left-frame'),
+      !options.hostGroups && Boolean(options.local || options.transfers)
+    )
+    assert.ok(shell.children.some((child) => child?.props?.className === 'workspace-left-frame'))
   }
 })

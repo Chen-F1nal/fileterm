@@ -82,6 +82,18 @@ test('font calibration restores quoted stacks and cancels work when disposed dur
   assert.equal(terminal.options.fontFamily, `${family}, ${family}`, 'disposal cancels the second callback')
 })
 
+test('size repaint draws WebGL synchronously and leaves the atlas intact; DOM uses its refresh path', () => {
+  const { exports, terminal, refreshes } = fixture()
+  const draws = []
+  terminal._core = { _renderService: { _renderer: { value: { _gl: {}, renderRows: (...args) => draws.push(args) } } } }
+  exports.repaintTerminalRender(terminal)
+  assert.deepEqual(draws, [[0, 23]])
+  assert.deepEqual(refreshes, [])
+  delete terminal._core
+  exports.repaintTerminalRender(terminal)
+  assert.deepEqual(refreshes, [[0, 23]])
+})
+
 test('activation recovery retries zero-sized hosts and cannot focus a tab deactivated by resize', () => {
   const { exports, terminal, refreshes } = fixture()
   let active = true

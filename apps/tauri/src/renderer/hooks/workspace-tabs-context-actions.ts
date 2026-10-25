@@ -121,6 +121,11 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
   const openFileTransfers = () => {
     const id = 'file-transfers'
     if (!localTabs.some((tab) => tab.kind === 'transfers')) {
+      const activeOrderKey = activeLocalTabId
+        ? homeTabKey(activeLocalTabId)
+        : activeTab
+          ? sessionTabKey(activeTab.id)
+          : null
       setLocalTabs((current) => [
         ...current,
         {
@@ -131,7 +136,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
           initialPath: workspace.sessions[activeTab?.id ?? '']?.remotePath
         }
       ])
-      setTabOrder((current) => [...current, homeTabKey(id)])
+      setTabOrder((current) => insertTabKeyAfter(current, homeTabKey(id), activeOrderKey))
     }
     activateHomeTab(id)
   }

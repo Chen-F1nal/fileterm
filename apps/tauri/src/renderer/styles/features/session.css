@@ -796,6 +796,10 @@
   grid-column: 1 / -1;
 }
 
+.session-workspace.file-only .file-tabs {
+  border-top: 0;
+}
+
 .session-bottom-panel .file-manager {
   height: 100%;
 }

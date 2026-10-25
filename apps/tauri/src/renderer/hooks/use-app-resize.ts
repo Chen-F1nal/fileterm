@@ -13,11 +13,11 @@ export type AppResizeOptions = {
   isResizingSidebar: boolean
   setIsResizingSidebar: Dispatch<SetStateAction<boolean>>
   setSidebarWidth: Dispatch<SetStateAction<number>>
-  setHostInfoWidth: Dispatch<SetStateAction<number>>
+  setActiveSidebarWidth(width: number): void
+  activeSidebarWidth: number
   isResizingAiCopilot: boolean
   setIsResizingAiCopilot: Dispatch<SetStateAction<boolean>>
   isSystemSidebarCollapsed: boolean
-  sidebarWidth: number
   setAiCopilotWidth: Dispatch<SetStateAction<number>>
   shouldShowAiCopilot: boolean
   error: string | null
@@ -33,11 +33,11 @@ export function useAppResize({
   isResizingSidebar,
   setIsResizingSidebar,
   setSidebarWidth,
-  setHostInfoWidth,
+  setActiveSidebarWidth,
+  activeSidebarWidth,
   isResizingAiCopilot,
   setIsResizingAiCopilot,
   isSystemSidebarCollapsed,
-  sidebarWidth,
   setAiCopilotWidth,
   shouldShowAiCopilot,
   error,
@@ -69,12 +69,12 @@ export function useAppResize({
         isHomeWorkspaceVisible || isResizingHostRail
           ? null
           : document.querySelector<HTMLElement>('.fs-shell.has-host-rail > .fs-sidebar')
-      const maxWidth = getSidebarMaxWidth(window.innerWidth, !rightDockedSidebar && !isResizingHostRail)
+      const maxWidth = getSidebarMaxWidth(window.innerWidth, isHomeWorkspaceVisible && !isResizingHostRail)
       const rawWidth = rightDockedSidebar
         ? rightDockedSidebar.getBoundingClientRect().right - event.clientX
         : event.clientX
       const nextWidth = Math.min(maxWidth, Math.max(SIDEBAR_MIN_WIDTH, rawWidth))
-      const setWidth = rightDockedSidebar ? setHostInfoWidth : setSidebarWidth
+      const setWidth = isResizingHostRail ? setSidebarWidth : setActiveSidebarWidth
       setWidth(
         Math.abs(nextWidth - DEFAULT_SIDEBAR_WIDTH) <= SIDEBAR_SNAP_THRESHOLD ? DEFAULT_SIDEBAR_WIDTH : nextWidth
       )
@@ -98,7 +98,7 @@ export function useAppResize({
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-  }, [isHomeWorkspaceVisible, isResizingSidebar, isResizingHostRail])
+  }, [isHomeWorkspaceVisible, isResizingSidebar, isResizingHostRail, setActiveSidebarWidth])
 
   useEffect(() => {
     const updateViewportWidth = () => setViewportWidth(window.innerWidth)
@@ -126,7 +126,7 @@ export function useAppResize({
           (document.querySelector<HTMLElement>('.fs-shell > .fs-sidebar')?.getBoundingClientRect().width ?? 0)
         : isSystemSidebarCollapsed
           ? 44
-          : sidebarWidth
+          : activeSidebarWidth
       const minMainWorkspaceWidth = 460
       const maxAllowedWidth = Math.max(340, Math.min(600, windowWidth - currentLeftWidth - minMainWorkspaceWidth))
       const nextWidth = Math.min(maxAllowedWidth, Math.max(340, rawWidth))
@@ -151,7 +151,7 @@ export function useAppResize({
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-  }, [isResizingAiCopilot, isSystemSidebarCollapsed, sidebarWidth])
+  }, [isResizingAiCopilot, isSystemSidebarCollapsed, activeSidebarWidth])
 
   useEffect(() => {
     if (!shouldShowAiCopilot) return
@@ -163,14 +163,14 @@ export function useAppResize({
           (document.querySelector<HTMLElement>('.fs-shell > .fs-sidebar')?.getBoundingClientRect().width ?? 0)
         : isSystemSidebarCollapsed
           ? 44
-          : sidebarWidth
+          : activeSidebarWidth
       const minMainWorkspaceWidth = 460
       const maxAllowed = Math.max(340, Math.min(600, windowWidth - currentLeftWidth - minMainWorkspaceWidth))
       setAiCopilotWidth((prev) => (prev > maxAllowed ? maxAllowed : prev))
     }
     window.addEventListener('resize', handleWindowResize)
     return () => window.removeEventListener('resize', handleWindowResize)
-  }, [shouldShowAiCopilot, isSystemSidebarCollapsed, sidebarWidth])
+  }, [shouldShowAiCopilot, isSystemSidebarCollapsed, activeSidebarWidth])
 
   useEffect(() => {
     if (!error) {
@@ -194,6 +194,6 @@ export function useAppResize({
   }, [windowCloseRequest, workspace.tabs, requestWindowCloseConfirmation, clearWindowCloseRequest])
 
   // A hidden WebView's temporary viewport must not overwrite the preferred sidebar width.
-  const expandedSidebarWidth = Math.min(sidebarWidth, getSidebarMaxWidth(viewportWidth, true))
+  const expandedSidebarWidth = Math.min(activeSidebarWidth, getSidebarMaxWidth(viewportWidth, isHomeWorkspaceVisible))
   return { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize, expandedSidebarWidth }
 }

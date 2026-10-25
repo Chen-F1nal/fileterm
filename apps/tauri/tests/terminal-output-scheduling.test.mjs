@@ -30,6 +30,8 @@ vm.runInNewContext(
       if (name === 'react') return { useCallback: (callback) => callback }
       if (name === '../xterm-adapters/terminal-log-colorizer') return { getTerminalLogColorPalette: (theme) => theme }
       if (name === '../xterm-adapters/terminal-transcript-replay') return { trimTranscript: (value) => value }
+      if (name === '../xterm-adapters/terminal-render-recovery')
+        return { repaintTerminalRender: (terminal) => terminal.refresh(0, Math.max(0, terminal.rows - 1)) }
       if (name === './terminal-view-utils')
         return {
           TERMINAL_WRITE_CHUNK_SIZE: chunkSize,

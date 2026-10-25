@@ -10,7 +10,8 @@
 
 .home-workspace {
   display: grid;
-  grid-template-columns: var(--sidebar-width, 214px) minmax(0, 1fr);
+  grid-template-columns: var(--workspace-left-width, var(--sidebar-width, 214px)) minmax(0, 1fr);
+  transition: grid-template-columns 0.24s linear;
   grid-template-rows: var(--window-tabbar-height) minmax(0, 1fr);
   width: 100%;
   height: 100%;

@@ -1,5 +1,5 @@
 .local-terminal-frame {
-  --local-terminal-frame-size: 15px;
+  --local-terminal-frame-size: var(--workspace-frame-size);
 
   box-sizing: border-box;
   display: grid;
@@ -27,7 +27,21 @@
 
 .local-terminal-frame-left {
   grid-area: left;
-  border-right: 1px solid var(--terminal-right-frame-accent);
+  border-inline: 1px solid var(--terminal-right-frame-accent);
+}
+
+/* The ordinary workspace shell supplies the persistent edges. */
+.fs-shell.has-workspace-left-frame .local-terminal-frame {
+  grid-template-columns: 0 minmax(0, 1fr) var(--local-terminal-frame-size);
+}
+
+.fs-shell:not(.has-host-rail, .has-ai-copilot) .local-terminal-frame {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+
+.fs-shell.has-workspace-left-frame .local-terminal-frame-left,
+.fs-shell:not(.has-host-rail, .has-ai-copilot) .local-terminal-frame-right {
+  display: none;
 }
 
 .local-terminal-frame-right {

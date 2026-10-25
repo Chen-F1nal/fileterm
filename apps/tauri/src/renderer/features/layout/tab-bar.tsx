@@ -49,7 +49,6 @@ export interface TabBarProps {
   showAiCopilotToggle?: boolean
   isWorkspaceFocusMode: boolean
   onAddHomeTab(): void
-  onOpenFileTransfers?(): void
   onActivateHome(id: string): void
   onActivateSession(id: string): void
   onCloseHomeTab(event: MouseEvent<HTMLElement>, id: string): void
@@ -81,7 +80,6 @@ export function TabBar({
   showAiCopilotToggle = true,
   isWorkspaceFocusMode,
   onAddHomeTab,
-  onOpenFileTransfers,
   onActivateHome,
   onActivateSession,
   onCloseHomeTab,
@@ -255,16 +253,6 @@ export function TabBar({
           </button>
         </div>
         <div className="window-tools">
-          {onOpenFileTransfers ? (
-            <button
-              type="button"
-              title={t.fileTransferWorkspace}
-              aria-label={t.fileTransferWorkspace}
-              onClick={onOpenFileTransfers}
-            >
-              <AppIcon name="transfer" size={16} />
-            </button>
-          ) : null}
           <button
             aria-label={focusModeLabel}
             aria-pressed={isWorkspaceFocusMode}

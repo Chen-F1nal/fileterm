@@ -4,6 +4,23 @@ import { observeCanvasTextMetrics } from '../app/font-metrics'
 // WebKit can keep a newly visible surface at zero size for several compositor frames.
 export const TERMINAL_ACTIVATION_RECOVERY_ATTEMPTS = 16
 
+/** WebGL canvas resizing clears its pixels; redraw before the browser can paint that empty surface. */
+export function repaintTerminalRender(terminal: Terminal) {
+  // shortcut: xterm 6 WebGL renderer internals; recheck when upgrading xterm.
+  const renderer = (
+    terminal as Terminal & {
+      _core?: {
+        _renderService?: { _renderer?: { value?: { _gl?: unknown; renderRows(start: number, end: number): void } } }
+      }
+    }
+  )._core?._renderService?._renderer?.value
+  if (renderer?._gl) {
+    renderer.renderRows(0, Math.max(0, terminal.rows - 1))
+  } else {
+    terminal.refresh(0, Math.max(0, terminal.rows - 1))
+  }
+}
+
 export function recoverTerminalRenderSurface(
   terminal: Terminal,
   host: HTMLElement,
