@@ -201,11 +201,15 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   const usesHostGroups = tabBarLayout === 'host-groups'
   const resolvedSidebarWidth = isSystemSidebarCollapsed
     ? 44
-    : isHomeWorkspaceVisible
-      ? resize.homeSidebarWidth
-      : usesHostGroups
-        ? hostInfoWidth
-        : sidebarWidth
+    : usesHostGroups && !isHomeWorkspaceVisible
+      ? hostInfoWidth
+      : resize.expandedSidebarWidth
+  const showTerminalRightFrame =
+    !isHomeWorkspaceVisible &&
+    !isLocalTerminalWorkspace &&
+    !usesHostGroups &&
+    !shouldShowAiCopilot &&
+    activeLocalTab?.kind !== 'transfers'
   const activeJumpHosts =
     activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
   const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined
@@ -569,10 +573,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         </main>
 
         {/* Machine info borders the terminal in the host-groups layout, so the edge frame would be a stray strip. */}
-        {!isHomeWorkspaceVisible &&
-          !isLocalTerminalWorkspace &&
-          !showHostRail &&
-          activeLocalTab?.kind !== 'transfers' && <div className="terminal-right-frame" aria-hidden="true" />}
+        <div className={`terminal-right-frame ${showTerminalRightFrame ? 'is-visible' : ''}`} aria-hidden="true" />
 
         <TransferCenterHost
           showAll={activeLocalTab?.kind === 'transfers'}

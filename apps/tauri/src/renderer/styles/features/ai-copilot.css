@@ -11,10 +11,6 @@
   margin-right: var(--ai-copilot-panel-width);
 }
 
-.fs-shell.has-ai-copilot .terminal-right-frame {
-  display: none;
-}
-
 .fs-shell.has-ai-copilot::after {
   display: none;
 }

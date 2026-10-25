@@ -33,7 +33,7 @@ try {
       </div>
       <div class="fs-tabbar"></div>
       <main class="fs-main no-status"><div class="workspace-stage"></div></main>
-      <div class="terminal-right-frame"></div>
+      <div class="terminal-right-frame is-visible"></div>
       <div class="transfer-strip"></div>
     </div>
   `)
@@ -51,6 +51,7 @@ try {
               const shell = document.querySelector('.fs-shell')
               shell.classList.toggle('is-local-terminal', view === 'local')
               shell.classList.toggle('is-home-active', view === 'home')
+              document.querySelector('.terminal-right-frame').classList.toggle('is-visible', view === 'remote')
               document.querySelector('.fs-main').classList.toggle('full-width', view !== 'remote')
             },
             { platform, theme, view }
@@ -61,6 +62,12 @@ try {
             await page.evaluate((panelWidth) => {
               const shell = document.querySelector('.fs-shell')
               shell.classList.toggle('has-ai-copilot', panelWidth > 0)
+              document
+                .querySelector('.terminal-right-frame')
+                .classList.toggle(
+                  'is-visible',
+                  panelWidth === 0 && !shell.matches('.is-home-active, .is-local-terminal')
+                )
               shell.style.setProperty('--ai-copilot-panel-width', `${panelWidth}px`)
               document.querySelector('.ai-copilot-panel')?.remove()
               if (panelWidth) {

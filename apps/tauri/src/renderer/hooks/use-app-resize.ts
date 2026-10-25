@@ -64,12 +64,12 @@ export function useAppResize({
       return
     }
     const onMouseMove = (event: globalThis.MouseEvent) => {
-      const maxWidth = getSidebarMaxWidth(window.innerWidth, isHomeWorkspaceVisible)
       // Session workspaces dock the machine info sidebar on the right, so it grows leftwards.
       const rightDockedSidebar =
         isHomeWorkspaceVisible || isResizingHostRail
           ? null
           : document.querySelector<HTMLElement>('.fs-shell.has-host-rail > .fs-sidebar')
+      const maxWidth = getSidebarMaxWidth(window.innerWidth, !rightDockedSidebar && !isResizingHostRail)
       const rawWidth = rightDockedSidebar
         ? rightDockedSidebar.getBoundingClientRect().right - event.clientX
         : event.clientX
@@ -194,6 +194,6 @@ export function useAppResize({
   }, [windowCloseRequest, workspace.tabs, requestWindowCloseConfirmation, clearWindowCloseRequest])
 
   // A hidden WebView's temporary viewport must not overwrite the preferred sidebar width.
-  const homeSidebarWidth = Math.min(sidebarWidth, getSidebarMaxWidth(viewportWidth, true))
-  return { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize, homeSidebarWidth }
+  const expandedSidebarWidth = Math.min(sidebarWidth, getSidebarMaxWidth(viewportWidth, true))
+  return { startSidebarResize, startHostRailResize, isResizingHostRail, startAiCopilotResize, expandedSidebarWidth }
 }
