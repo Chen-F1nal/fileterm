@@ -1,4 +1,3 @@
-
 /// Returns `Ok(true)` when the worker should exit (Disconnect requested),
 /// `Ok(false)` otherwise.
 ///
@@ -104,7 +103,9 @@ async fn handle_worker_cmd_without_sftp(
                     respond_to,
                 );
             } else {
-                let _ = respond_to.send(Err("SSH Exec 通道已关闭，无法启动后台远程命令。".to_string()));
+                let _ = respond_to.send(Err(
+                    "SSH Exec 通道已关闭，无法启动后台远程命令。".to_string()
+                ));
             }
             Ok(false)
         }
@@ -179,6 +180,7 @@ async fn handle_worker_cmd_without_sftp(
         | WorkerCmd::RenameRemotePath { respond_to, .. }
         | WorkerCmd::DeleteRemotePath { respond_to, .. }
         | WorkerCmd::ChangeRemotePermissions { respond_to, .. }
+        | WorkerCmd::RelayFile { respond_to, .. }
         | WorkerCmd::UploadLocalFile { respond_to, .. }
         | WorkerCmd::DownloadRemoteFile { respond_to, .. }
         | WorkerCmd::ReplaceRemoteFile { respond_to, .. }

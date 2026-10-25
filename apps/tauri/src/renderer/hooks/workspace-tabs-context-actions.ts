@@ -118,6 +118,24 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
     activateHomeTab(nextId)
   }
 
+  const openFileTransfers = () => {
+    const id = 'file-transfers'
+    if (!localTabs.some((tab) => tab.kind === 'transfers')) {
+      setLocalTabs((current) => [
+        ...current,
+        {
+          id,
+          kind: 'transfers',
+          title: t.fileTransferWorkspace,
+          initialTabId: activeTab?.id,
+          initialPath: workspace.sessions[activeTab?.id ?? '']?.remotePath
+        }
+      ])
+      setTabOrder((current) => [...current, homeTabKey(id)])
+    }
+    activateHomeTab(id)
+  }
+
   const openSystemInfo = () => {
     if (!activeTab) {
       return
@@ -432,6 +450,7 @@ export function createWorkspaceTabsContextActions(context: WorkspaceTabsContextA
     dismissShortcutCloseConfirm,
     handleTabContextAction,
     openSystemInfo,
+    openFileTransfers,
     openTabContextMenu,
     closeTabContextMenu,
     startTabDrag,

@@ -20,6 +20,7 @@ export function scopeTransfersToSession(
   )
 
   return transfers.filter((transfer) => {
+    if (transfer.copySource?.tabId === activeTabId || transfer.copySource?.profileId === activeProfileId) return true
     if (transfer.tabId === activeTabId) {
       return true
     }

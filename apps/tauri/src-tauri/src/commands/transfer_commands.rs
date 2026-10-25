@@ -135,3 +135,32 @@ pub async fn app_clear_transfers(
     crate::services::transfers::clear(&app, transfer_ids).await?;
     get_workspace_snapshot(app).await
 }
+
+#[tauri::command]
+pub async fn app_browse_transfer_directory(
+    app: AppHandle,
+    tab_id: String,
+    path: String,
+) -> Result<Vec<serde_json::Value>, AppError> {
+    crate::services::transfers::browse_copy_directory(&app, &tab_id, &path).await
+}
+
+#[tauri::command]
+pub async fn app_copy_between_servers(
+    app: AppHandle,
+    source_tab_id: String,
+    target_tab_id: String,
+    source_path: String,
+    target_directory: String,
+    replace_existing: bool,
+) -> Result<String, AppError> {
+    crate::services::transfers::create_remote_copy(
+        &app,
+        source_tab_id,
+        target_tab_id,
+        source_path,
+        target_directory,
+        replace_existing,
+    )
+    .await
+}

@@ -740,7 +740,8 @@ export interface TransferManifest {
 
 export interface TransferTask {
   id: string
-  direction: 'upload' | 'download'
+  direction: 'upload' | 'download' | 'copy'
+  copySource?: { profileId: string; tabId: string; name: string; targetName: string }
   name: string
   progress: number
   status: TransferStatus
@@ -2858,6 +2859,14 @@ export interface FileTermDesktopApi {
   closePane(rootTabId: string, paneTabId: string): Promise<WorkspaceSnapshot>
   setActivePane(rootTabId: string, paneTabId: string): Promise<WorkspaceSnapshot>
   setPaneWeights(rootTabId: string, panePath: number[], weights: number[]): Promise<WorkspaceSnapshot>
+  browseTransferDirectory(tabId: string, path: string): Promise<RemoteFileItem[]>
+  copyBetweenServers(
+    sourceTabId: string,
+    targetTabId: string,
+    sourcePath: string,
+    targetDirectory: string,
+    replaceExisting: boolean
+  ): Promise<string>
   listLocalDirectory(dirPath?: string): Promise<DirectorySnapshot<LocalFileItem>>
   connectLocalNetworkShare?(
     path: string,

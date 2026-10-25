@@ -110,6 +110,9 @@ async fn run(
     if task.terminal() || task.status == "paused" {
         return Ok(());
     }
+    if task.direction == "copy" {
+        return run_remote_copy(&app, task, &cancel).await;
+    }
     crate::services::logging::info(
         &app,
         &format!("transfer:{transfer_id}"),
@@ -198,14 +201,15 @@ async fn run(
                 .ok_or_else(|| transfer_error("传输任务缺少断点路径"))?;
             let staging = task.staging_path.clone();
             let source_size = if task.direction == "upload" {
-                let metadata = tokio::fs::symlink_metadata(&source_path)
-                    .await
-                    .map_err(|error| {
-                        transfer_error(format!(
-                            "上传源文件不存在或无法读取 {}: {error}",
-                            source_path
-                        ))
-                    })?;
+                let metadata =
+                    tokio::fs::symlink_metadata(&source_path)
+                        .await
+                        .map_err(|error| {
+                            transfer_error(format!(
+                                "上传源文件不存在或无法读取 {}: {error}",
+                                source_path
+                            ))
+                        })?;
                 if metadata.file_type().is_symlink() {
                     return Err(transfer_error(
                         "上传源文件是符号链接，不能继续旧断点；请选择实际文件",

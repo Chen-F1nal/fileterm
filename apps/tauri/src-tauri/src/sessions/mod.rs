@@ -3,6 +3,7 @@ pub mod ftp;
 pub mod local_files;
 pub mod local_terminal;
 pub(crate) mod reconnect;
+pub(crate) mod relay_io;
 pub mod serial;
 pub mod ssh;
 pub mod system_metrics;
@@ -154,6 +155,12 @@ pub enum WorkerCmd {
         path: String,
         cancellation: tokio_util::sync::CancellationToken,
         respond_to: tokio::sync::oneshot::Sender<Result<Option<TransferFileStat>, String>>,
+    },
+    RelayFile {
+        request: relay_io::RelayRequest,
+        stream: tokio::io::DuplexStream,
+        cancellation: tokio_util::sync::CancellationToken,
+        respond_to: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
     UploadLocalFile {
         local_path: String,

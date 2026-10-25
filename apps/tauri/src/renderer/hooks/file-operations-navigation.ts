@@ -305,7 +305,12 @@ export function createFileOperationsNavigation(context: FileOperationsRuntime) {
     fileClipboard &&
     activeTab &&
     activeSession?.connected &&
-    (fileClipboard.pane !== 'remote' || fileClipboard.tabId === activeTab.id)
+    (fileClipboard.pane !== 'remote' ||
+      fileClipboard.tabId === activeTab.id ||
+      (fileClipboard.operation === 'copy' &&
+        workspace.sessions[fileClipboard.tabId ?? '']?.connected &&
+        workspace.sessions[fileClipboard.tabId ?? '']?.fileAccessMode !== 'root' &&
+        activeSession.fileAccessMode !== 'root'))
   )
   const localCutPaths =
     fileClipboard?.operation === 'cut' && fileClipboard.pane === 'local'
@@ -332,7 +337,10 @@ export function createFileOperationsNavigation(context: FileOperationsRuntime) {
     // Transfer commands acknowledge queueing, not successful completion.
     // Cross-pane moves need a durable backend move operation before they can
     // safely remove the source. Keep the clipboard available for same-pane use.
-    if (fileClipboard.operation === 'cut' && fileClipboard.pane !== pane) {
+    if (
+      fileClipboard.operation === 'cut' &&
+      (fileClipboard.pane !== pane || (pane === 'remote' && fileClipboard.tabId !== activeTab?.id))
+    ) {
       reportStatusError('粘贴文件', new Error(t.crossPaneCutUnsupported))
       return
     }
@@ -352,7 +360,21 @@ export function createFileOperationsNavigation(context: FileOperationsRuntime) {
           throw new Error(t.remoteSessionDisconnectedAction)
         }
         if (fileClipboard.pane === 'remote' && pane === 'remote' && fileClipboard.tabId !== activeTab?.id) {
-          throw new Error(t.crossSessionPasteUnsupported)
+          if (
+            activeSession?.fileAccessMode === 'root' ||
+            workspace.sessions[fileClipboard.tabId ?? '']?.fileAccessMode === 'root'
+          )
+            throw new Error(t.fileTransferReconnect)
+          for (const item of fileClipboard.items) {
+            await desktopApi.copyBetweenServers(
+              fileClipboard.tabId!,
+              activeTab!.id,
+              item.path,
+              destinationDirectory,
+              false
+            )
+          }
+          return
         }
 
         const existingNames =

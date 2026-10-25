@@ -31,7 +31,7 @@ vm.runInNewContext(
   }
 )
 
-function fixture(sourcePane, operation) {
+function fixture(sourcePane, operation, crossSession = false) {
   const calls = []
   const errors = []
   const context = {
@@ -45,7 +45,7 @@ function fixture(sourcePane, operation) {
       }
     ),
     workspace: { sessions: { tab: { connected: true } } },
-    activeTab: { id: 'tab' },
+    activeTab: { id: crossSession ? 'target' : 'tab' },
     activeSession: { connected: true, remotePath: '/destination', remoteFiles: [] },
     localPath: '/destination',
     localItems: [],
@@ -94,5 +94,21 @@ for (const sourcePane of ['local', 'remote']) {
     assert.equal(errors.length, 0)
     assert.ok(calls.includes(sourcePane === 'local' ? 'moveLocalPath' : 'moveRemotePath'))
     assert.ok(calls.includes('clearClipboard'))
+  })
+}
+
+for (const operation of ['copy', 'cut']) {
+  test(`cross-server ${operation} preserves the source and only queues explicit copies`, async () => {
+    const { navigation, calls, errors } = fixture('remote', operation, true)
+    navigation.handlePasteIntoPane('remote')
+    await new Promise(setImmediate)
+    if (operation === 'copy') {
+      assert.ok(calls.includes('copyBetweenServers'))
+      assert.equal(errors.length, 0)
+    } else {
+      assert.equal(calls.length, 0)
+      assert.equal(errors.length, 1)
+    }
+    assert.ok(!calls.includes('deleteRemotePath') && !calls.includes('moveRemotePath'))
   })
 }

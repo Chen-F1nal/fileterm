@@ -34,6 +34,7 @@ export type AppIconName =
   | 'plus'
   | 'edit'
   | 'trash'
+  | 'transfer'
   | 'upload'
   | 'download'
   | 'flash'
@@ -387,6 +388,7 @@ export function AppIcon({
       {name === 'chevron-right' ? <path {...commonProps} d="m6 3.5 4.5 4.5L6 12.5" /> : null}
       {name === 'arrow-up' ? <path {...commonProps} d="M8 13V3m-4 4 4-4 4 4" /> : null}
       {name === 'arrow-down' ? <path {...commonProps} d="M8 3v10m-4-4 4 4 4-4" /> : null}
+      {name === 'transfer' ? <path {...commonProps} d="M2.5 5h11m-3-3 3 3-3 3M13.5 11h-11m3-3-3 3 3 3" /> : null}
       {name === 'arrow-right' ? <path {...commonProps} d="M3 8h10m-4-4 4 4-4 4" /> : null}
       {name === 'drag-handle' ? (
         <path {...commonProps} d="M5 4.5h.01M5 8h.01M5 11.5h.01M11 4.5h.01M11 8h.01M11 11.5h.01" strokeWidth={3} />

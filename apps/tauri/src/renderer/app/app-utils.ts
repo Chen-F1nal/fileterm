@@ -409,15 +409,19 @@ export function setFileDragPreview(event: DragEvent<HTMLElement>, names: string[
 
 export function transferStatusText(transfer: TransferTask) {
   if (transfer.status === 'failed') {
+    if (transfer.direction === 'copy') return t.fileTransferCopyFailed
     return transfer.direction === 'upload' ? t.uploadFailed : t.downloadFailed
   }
   if (transfer.status === 'canceled') {
+    if (transfer.direction === 'copy') return t.fileTransferCopyCanceled
     return transfer.direction === 'upload' ? t.uploadCanceled : t.downloadCanceled
   }
   if (transfer.status === 'done') {
+    if (transfer.direction === 'copy') return t.fileTransferCopyDone
     return transfer.direction === 'upload' ? t.uploadDone : t.downloadDone
   }
   if (transfer.status === 'queued') {
+    if (transfer.direction === 'copy') return t.fileTransferCopyWaiting
     return transfer.direction === 'upload' ? t.waitingUpload : t.waitingDownload
   }
   if (transfer.status === 'paused') {
@@ -432,6 +436,7 @@ export function transferStatusText(transfer: TransferTask) {
   if (transfer.status === 'finalizing') {
     return t.transferFinalizing
   }
+  if (transfer.direction === 'copy') return t.fileTransferCopyRunning
   return transfer.direction === 'upload' ? t.uploading : t.downloading
 }
 

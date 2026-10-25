@@ -176,6 +176,11 @@ export function useWorkspaceTabs({
     setLocalTabs((previousTabs) => {
       let changed = false
       const nextTabs = previousTabs.map((tab) => {
+        if (tab.kind === 'transfers') {
+          if (tab.title === t.fileTransferWorkspace) return tab
+          changed = true
+          return { ...tab, title: t.fileTransferWorkspace }
+        }
         if (tab.kind === 'home') {
           if (tab.title === t.untitledTab) {
             return tab
@@ -298,7 +303,7 @@ export function useWorkspaceTabs({
     }
 
     const validSessionTabIds = new Set(visibleWorkspaceTabs.map((tab) => tab.id))
-    const nextLocalTabs = localTabs.filter((tab) => tab.kind === 'home' || validSessionTabIds.has(tab.sessionTabId))
+    const nextLocalTabs = localTabs.filter((tab) => tab.kind !== 'system' || validSessionTabIds.has(tab.sessionTabId))
     if (nextLocalTabs.length !== localTabs.length) {
       setLocalTabs(nextLocalTabs)
     }
@@ -411,10 +416,17 @@ export function useWorkspaceTabs({
     })
   }
   const workspaceStageKind: WorkspaceStageKind =
-    activeLocalTab?.kind === 'system' ? 'system' : activeTab && activeSession && !activeLocalTab ? 'session' : 'home'
+    activeLocalTab?.kind === 'transfers'
+      ? 'transfers'
+      : activeLocalTab?.kind === 'system'
+        ? 'system'
+        : activeTab && activeSession && !activeLocalTab
+          ? 'session'
+          : 'home'
   const isHomeWorkspaceVisible = workspaceStageKind === 'home'
   const isActiveRemoteSessionConnected = Boolean(activeTab && activeSession?.connected)
-  const showSidebar = activeTab !== null && activeSession !== null && !isHomeWorkspaceVisible
+  const showSidebar =
+    activeLocalTab?.kind !== 'transfers' && activeTab !== null && activeSession !== null && !isHomeWorkspaceVisible
   const effectiveActiveLocalTabId =
     activeLocalTab?.id ?? (isHomeWorkspaceVisible ? resolveFallbackHomeTabId(localTabs, tabOrder) : null)
   const activeProfile = activeTab
@@ -624,6 +636,7 @@ export function useWorkspaceTabs({
     dismissShortcutCloseConfirm,
     handleTabContextAction,
     openSystemInfo,
+    openFileTransfers,
     openTabContextMenu,
     closeTabContextMenu,
     startTabDrag,
@@ -729,6 +742,7 @@ export function useWorkspaceTabs({
     activateHomeTab,
     addHomeTab,
     openSystemInfo,
+    openFileTransfers,
     closeHomeTab,
     closeActiveWorkspaceItem,
     dismissShortcutCloseConfirm,

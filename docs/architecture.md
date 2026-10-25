@@ -641,6 +641,8 @@ SSH/SFTP 和 FTP/FTPS 会在会话建立后上报实际能力，而不是把所�
 ### 9.2 可恢复传输边界
 
 - Rust transfer run 在目录扫描、上传/下载、校验和替换目标期间持有共享系统防睡租约。`services/transfers/power.rs` 使用 `keepawake` 的原生电源请求：Windows `SetThreadExecutionState`、macOS IOPM assertion、Linux logind idle inhibitor。创建和释放均在同一专用线程上执行；最后一个活动任务退出（包括暂停、取消、失败、panic 与应用退出收口）后释放。仅抑制空闲自动睡眠，允许屏幕关闭，尊重用户显式睡眠；申请失败记日志并继续传输。手测步骤见 [传输防睡回归](./quality/transfer-power-regression.md)。
+- 独立“文件传输”本地标签提供本地/远端双栏，浏览命令不修改终端会话目录。服务器间复制采用 `direction=copy`，目标沿用任务的 `profileId/tabId`，来源保存在 `copySource`；普通文件面板也支持跨会话复制粘贴，禁止跨会话剪切。
+- 跨服务器文件流经过 Rust 的有界 duplex 管道，不落地本机完整文件；SSH/SFTP 与 FTP/FTPS 各自维护独立传输通道。复制任务复用 transfer journal、暂停/恢复、目标临时文件与防睡租约；恢复先验证两端配置与源/目标前缀，提交前回读两端 SHA-256。初版只支持普通用户文件通道，目录发现符号链接时停止，默认跳过同名文件，覆盖需显式确认。两端配置变化拒绝恢复与错误目标清理；含复制任务的 journal 写 v2，仍可读取 v1，旧客户端拒绝把复制任务误恢复为下载。详见 [跨服务器传输回归](./quality/remote-to-remote-transfer.md)。
 - 单文件和目录 manifest 任务由 Rust backend 持久化到当前存储根目录的 `transfer-journal.json`（便携版位于 exe 旁的 `config`）；renderer 不直接读写 journal。
 - 上传和下载都先写入 `.fileterm-part` 临时文件，校验大小后再替换正式目标。
 - 上传使用任务记录的固定源长度，读取数据块时累计 SHA-256，远端校验与该结果比较，不在上传后重读原文件，也不创建本地副本。SFTP/FTP 续传先核对本地和远端已有前缀的长度与 hash，再追加后缀；FTP 从零回退时重新初始化 hash。旧 root exec 回退路径恢复时必须取得远端完整 SHA-256，否则拒绝提交。原有源身份变化检查保留；固定长度不提供原地改写期间的原子快照语义。

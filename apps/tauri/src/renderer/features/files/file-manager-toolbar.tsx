@@ -20,6 +20,7 @@ export function FileManagerToolbar({
   onChooseUploadFiles,
   onDownloadFiles,
   onOpenCommandManager,
+  onOpenFileTransfers,
   onRefresh,
   onToggleRemoteFileAccessMode,
   remoteFileAccessMode,
@@ -40,6 +41,7 @@ export function FileManagerToolbar({
   onChooseUploadFiles(): void
   onDownloadFiles(items: RemoteFileItem[]): void
   onOpenCommandManager(): void
+  onOpenFileTransfers(): void
   onRefresh(): void
   onToggleRemoteFileAccessMode(): void
   remoteFileAccessMode: 'user' | 'root'
@@ -85,6 +87,10 @@ export function FileManagerToolbar({
       </span>
       {activeView === 'file' ? (
         <div className="file-tab-actions">
+          <button type="button" title={t.fileTransferWorkspace} onClick={onOpenFileTransfers}>
+            <AppIcon name="transfer" />
+            {t.fileTransferWorkspace}
+          </button>
           <button
             title={t.refresh}
             type="button"

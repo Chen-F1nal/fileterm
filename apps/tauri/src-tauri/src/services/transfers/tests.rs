@@ -12,21 +12,50 @@ mod tests {
 
     #[tokio::test]
     async fn upload_scan_maps_every_entry_without_changing_names() {
-        let root = std::env::temp_dir().join(format!("fileterm-complete-{}", rand::random::<u64>()));
-        let names = ["files/preferences/中文 空格.json", "shared/runtime/empty.dll", ".hidden/config", "shared/runtime/data.bin"];
-        tokio::fs::create_dir_all(root.join("empty/nested")).await.unwrap();
+        let root =
+            std::env::temp_dir().join(format!("fileterm-complete-{}", rand::random::<u64>()));
+        let names = [
+            "files/preferences/中文 空格.json",
+            "shared/runtime/empty.dll",
+            ".hidden/config",
+            "shared/runtime/data.bin",
+        ];
+        tokio::fs::create_dir_all(root.join("empty/nested"))
+            .await
+            .unwrap();
         for name in names {
             let path = root.join(name);
-            tokio::fs::create_dir_all(path.parent().unwrap()).await.unwrap();
-            tokio::fs::write(path, if name.ends_with("empty.dll") { &b""[..] } else { &b"contents"[..] }).await.unwrap();
+            tokio::fs::create_dir_all(path.parent().unwrap())
+                .await
+                .unwrap();
+            tokio::fs::write(
+                path,
+                if name.ends_with("empty.dll") {
+                    &b""[..]
+                } else {
+                    &b"contents"[..]
+                },
+            )
+            .await
+            .unwrap();
         }
         let (directories, files) = collect_local_tree(&root).await.unwrap();
-        let mapped: std::collections::BTreeSet<_> = files.iter().map(|(path, identity)| {
-            let relative = super::local_upload_relative_path(&root, path).unwrap();
-            assert_eq!(root.join(&relative), *path);
-            assert_eq!(identity.size, if relative.ends_with("empty.dll") { 0 } else { 8 });
-            relative
-        }).collect();
+        let mapped: std::collections::BTreeSet<_> = files
+            .iter()
+            .map(|(path, identity)| {
+                let relative = super::local_upload_relative_path(&root, path).unwrap();
+                assert_eq!(root.join(&relative), *path);
+                assert_eq!(
+                    identity.size,
+                    if relative.ends_with("empty.dll") {
+                        0
+                    } else {
+                        8
+                    }
+                );
+                relative
+            })
+            .collect();
         assert_eq!(mapped, names.into_iter().map(str::to_owned).collect());
         assert!(directories.contains(&root.join("empty/nested")));
         assert!(super::local_upload_relative_path(&root, &root).is_err());
@@ -39,10 +68,16 @@ mod tests {
     fn upload_mapping_preserves_backslashes_and_rejects_lossy_names() {
         use std::os::unix::ffi::OsStringExt;
         let root = std::path::Path::new("/tmp/upload");
-        assert_eq!(super::local_upload_relative_path(root, &root.join("a\\b.txt")).unwrap(), "a\\b.txt");
+        assert_eq!(
+            super::local_upload_relative_path(root, &root.join("a\\b.txt")).unwrap(),
+            "a\\b.txt"
+        );
         let invalid = root.join(std::ffi::OsString::from_vec(vec![b'a', 0xff]));
         assert!(super::local_upload_relative_path(root, &invalid).is_err());
-        assert!(super::local_upload_relative_path(root, std::path::Path::new("/tmp/other/file")).is_err());
+        assert!(
+            super::local_upload_relative_path(root, std::path::Path::new("/tmp/other/file"))
+                .is_err()
+        );
     }
 
     #[cfg(windows)]
@@ -51,7 +86,11 @@ mod tests {
         use std::path::Path;
         for root in [r"C:\upload", r"\\server\share\upload", r"\\?\C:\upload"] {
             let root = Path::new(root);
-            assert_eq!(super::local_upload_relative_path(root, &root.join(r"shared\runtime\文件.dll")).unwrap(), "shared/runtime/文件.dll");
+            assert_eq!(
+                super::local_upload_relative_path(root, &root.join(r"shared\runtime\文件.dll"))
+                    .unwrap(),
+                "shared/runtime/文件.dll"
+            );
         }
     }
 
@@ -331,6 +370,7 @@ mod tests {
         let task = TransferTask {
             id: "transfer-large-folder".to_string(),
             direction: "upload".to_string(),
+            copy_source: None,
             name: "node_modules".to_string(),
             progress: 50.0,
             status: "running".to_string(),
@@ -421,6 +461,7 @@ mod tests {
         TransferTask {
             id: id.to_string(),
             direction: "download".to_string(),
+            copy_source: None,
             name: format!("file-{id}"),
             progress: 0.0,
             status: "queued".to_string(),
@@ -848,8 +889,14 @@ mod large_directory_regressions {
 #[test]
 fn transfer_identity_accepts_legacy_fractional_milliseconds() {
     for (json, expected) in [
-        (r#"{"size":12,"modifiedAt":1720000000123.75}"#, Some(1720000000123)),
-        (r#"{"size":12,"modifiedAt":1720000000123}"#, Some(1720000000123)),
+        (
+            r#"{"size":12,"modifiedAt":1720000000123.75}"#,
+            Some(1720000000123),
+        ),
+        (
+            r#"{"size":12,"modifiedAt":1720000000123}"#,
+            Some(1720000000123),
+        ),
         (r#"{"size":12}"#, None),
         (r#"{"size":12,"modifiedAt":null}"#, None),
     ] {
@@ -863,9 +910,14 @@ fn transfer_identity_accepts_legacy_fractional_milliseconds() {
 
 #[test]
 fn transfer_identity_rejects_invalid_modification_times() {
-    for value in [serde_json::json!(-1), serde_json::json!("123"), serde_json::json!(1e30)] {
+    for value in [
+        serde_json::json!(-1),
+        serde_json::json!("123"),
+        serde_json::json!(1e30),
+    ] {
         assert!(serde_json::from_value::<TransferFileIdentity>(
             serde_json::json!({"size": 12, "modifiedAt": value})
-        ).is_err());
+        )
+        .is_err());
     }
 }

@@ -380,6 +380,29 @@ async fn run_ftp_worker(
                 .await;
                 respond_ftp_result!(respond_to, result);
             }
+            Some(WorkerCmd::RelayFile {
+                request,
+                mut stream,
+                cancellation,
+                respond_to,
+            }) => {
+                let profile = profile.clone();
+                let host = host.to_string();
+                transfer_jobs.spawn(async move {
+                    let result = async {
+                        let mut client = connect_ftp(&profile, &host, port).await?;
+                        let io_timeout = seconds_from_profile(&profile, "operationTimeoutSeconds", DEFAULT_FTP_OPERATION_TIMEOUT, Duration::from_secs(5), Duration::from_secs(3600));
+                        let result = tokio::select! {
+                            biased;
+                            _ = cancellation.cancelled() => Err(TRANSFER_CANCELED.to_string()),
+                            result = client_relay(&mut client, request, &mut stream, &cancellation, io_timeout) => result,
+                        };
+                        let _ = timeout(io_timeout, client_quit(&mut client)).await;
+                        result
+                    }.await;
+                    let _ = respond_to.send(result);
+                });
+            }
             Some(WorkerCmd::UploadLocalFile {
                 local_path,
                 source_size,

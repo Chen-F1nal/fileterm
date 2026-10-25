@@ -1,6 +1,7 @@
 import './file-tables.css'
 import '../workspace/workspace-list-rows.css'
 import { useCallback, useState, useEffect, FormEvent, MouseEvent, PointerEvent, ReactNode, RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { LocalFileItem, RemoteFileItem } from '@fileterm/core'
 import { formatMessage, t } from '../../i18n'
@@ -152,6 +153,7 @@ export function PaneFilterBar({
 
 export function FileTable({
   scrollRef,
+  headerContainer,
   rows,
   compact = false,
   emptyText,
@@ -169,6 +171,7 @@ export function FileTable({
   resetColumnsTrigger
 }: {
   scrollRef: RefObject<HTMLDivElement | null>
+  headerContainer?: HTMLDivElement | null
   rows: RemoteFileItem[]
   compact?: boolean
   emptyText?: string
@@ -264,121 +267,146 @@ export function FileTable({
   const paddingBottom =
     virtualItems.length > 0 ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0
 
+  const tableClass = `fs-file-table ${compact ? 'compact' : ''}`
+  const tableStyle = !compact ? { width: `${widths.reduce((sum, w) => sum + w, 0)}px`, minWidth: '100%' } : undefined
+  const columns = !compact ? (
+    <colgroup>
+      {widths.map((width, index) => (
+        <col key={index} style={{ width: `${width}px` }} />
+      ))}
+    </colgroup>
+  ) : null
+  const header = (
+    <thead>
+      <tr>
+        {headerCells.map((header, index) => {
+          if (compact && index > 0) {
+            return null
+          }
+
+          const isActive = sortState?.field === header.field
+          const directionIcon = isActive ? (
+            <AppIcon name={sortState?.direction === 'asc' ? 'arrow-up' : 'arrow-down'} size={11} />
+          ) : null
+
+          return (
+            <th
+              key={header.field}
+              className={onToggleSort ? 'is-sortable' : undefined}
+              style={!compact ? { width: `${widths[index]}px` } : undefined}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).classList.contains('col-resizer')) {
+                  e.stopPropagation()
+                  return
+                }
+                onToggleSort?.(header.field)
+              }}
+              title={onToggleSort ? formatMessage(t.sortHeaderTitle, { label: header.label }) : undefined}
+            >
+              <span className={`file-table-heading ${isActive ? 'is-active' : ''}`}>
+                <span>{header.label}</span>
+                {!compact ? <span className="file-table-sort-indicator">{directionIcon}</span> : null}
+              </span>
+              {!compact && index < headerCells.length - 1 && (
+                <div
+                  className="col-resizer"
+                  onMouseDown={(e) => handleMouseDown(e, index)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
+            </th>
+          )
+        })}
+      </tr>
+    </thead>
+  )
+
   return (
-    <table
-      className={`fs-file-table ${compact ? 'compact' : ''}`}
-      style={!compact ? { width: `${widths.reduce((sum, w) => sum + w, 0)}px`, minWidth: '100%' } : undefined}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          onClearSelection?.()
-        }
-      }}
-    >
-      <thead>
-        <tr>
-          {headerCells.map((header, index) => {
-            if (compact && index > 0) {
-              return null
-            }
-
-            const isActive = sortState?.field === header.field
-            const directionIcon = isActive ? (
-              <AppIcon name={sortState?.direction === 'asc' ? 'arrow-up' : 'arrow-down'} size={11} />
-            ) : null
-
-            return (
-              <th
-                key={header.field}
-                className={onToggleSort ? 'is-sortable' : undefined}
-                style={!compact ? { width: `${widths[index]}px` } : undefined}
-                onClick={(e) => {
-                  if ((e.target as HTMLElement).classList.contains('col-resizer')) {
-                    e.stopPropagation()
-                    return
-                  }
-                  onToggleSort?.(header.field)
-                }}
-                title={onToggleSort ? formatMessage(t.sortHeaderTitle, { label: header.label }) : undefined}
-              >
-                <span className={`file-table-heading ${isActive ? 'is-active' : ''}`}>
-                  <span>{header.label}</span>
-                  {!compact ? <span className="file-table-sort-indicator">{directionIcon}</span> : null}
-                </span>
-                {!compact && index < headerCells.length - 1 && (
-                  <div
-                    className="col-resizer"
-                    onMouseDown={(e) => handleMouseDown(e, index)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                )}
-              </th>
-            )
-          })}
-        </tr>
-      </thead>
-      <tbody
+    <>
+      {headerContainer
+        ? createPortal(
+            <table className={tableClass} style={tableStyle}>
+              {columns}
+              {header}
+            </table>,
+            headerContainer
+          )
+        : null}
+      <table
+        className={tableClass}
+        style={tableStyle}
         onClick={(event) => {
           if (event.target === event.currentTarget) {
             onClearSelection?.()
           }
         }}
       >
-        {rows.length ? (
-          <>
-            {paddingTop > 0 && (
-              <tr>
-                <td colSpan={compact ? 1 : 6} style={{ height: `${paddingTop}px`, padding: 0, border: 0 }} />
-              </tr>
-            )}
-            {virtualItems.map((virtualRow) => {
-              const row = rows[virtualRow.index]
-              const typeLabel = getDisplayFileTypeLabel(row)
-              const iconName = getDisplayFileIconName(row)
-
-              return (
-                <tr
-                  key={row.path}
-                  data-index={virtualRow.index}
-                  className={`${row.type === 'folder' ? 'is-folder' : 'is-file'} ${selectedPaths?.includes(row.path) ? 'is-selected' : ''} ${cutPaths?.includes(row.path) ? 'is-cut-pending' : ''}`}
-                  onClick={(event) => onSelectItem?.(event, row)}
-                  onContextMenu={(event) => onContextItem?.(event, row)}
-                  onDoubleClick={() => onOpenItem?.(row)}
-                  onMouseDown={(event) => {
-                    if (event.button === 0) {
-                      onSelectionDragStart?.(event, row)
-                    }
-                  }}
-                  onMouseEnter={() => onSelectionDragEnter?.(row)}
-                >
-                  <td>
-                    <FileNameCell
-                      iconName={iconName}
-                      item={row}
-                      draggable={row.name !== '..'}
-                      onPointerDown={row.name !== '..' ? (event) => onPointerDragStart?.(event, row) : undefined}
-                    />
-                  </td>
-                  {!compact ? <td>{row.size}</td> : null}
-                  {!compact ? <td>{typeLabel}</td> : null}
-                  {!compact ? <td>{formatFileModified(row.modified)}</td> : null}
-                  {!compact ? <td>{row.permission ?? ''}</td> : null}
-                  {!compact ? <td>{row.ownerGroup ?? ''}</td> : null}
+        {headerContainer !== undefined ? columns : null}
+        {headerContainer === undefined ? header : null}
+        <tbody
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              onClearSelection?.()
+            }
+          }}
+        >
+          {rows.length ? (
+            <>
+              {paddingTop > 0 && (
+                <tr>
+                  <td colSpan={compact ? 1 : 6} style={{ height: `${paddingTop}px`, padding: 0, border: 0 }} />
                 </tr>
-              )
-            })}
-            {paddingBottom > 0 && (
-              <tr>
-                <td colSpan={compact ? 1 : 6} style={{ height: `${paddingBottom}px`, padding: 0, border: 0 }} />
-              </tr>
-            )}
-          </>
-        ) : (
-          <tr>
-            <td colSpan={compact ? 1 : 6}>{emptyText ?? t.emptyFiles}</td>
-          </tr>
-        )}
-      </tbody>
-    </table>
+              )}
+              {virtualItems.map((virtualRow) => {
+                const row = rows[virtualRow.index]
+                const typeLabel = getDisplayFileTypeLabel(row)
+                const iconName = getDisplayFileIconName(row)
+
+                return (
+                  <tr
+                    key={row.path}
+                    data-index={virtualRow.index}
+                    className={`${row.type === 'folder' ? 'is-folder' : 'is-file'} ${selectedPaths?.includes(row.path) ? 'is-selected' : ''} ${cutPaths?.includes(row.path) ? 'is-cut-pending' : ''}`}
+                    onClick={(event) => onSelectItem?.(event, row)}
+                    onContextMenu={(event) => onContextItem?.(event, row)}
+                    onDoubleClick={() => onOpenItem?.(row)}
+                    onMouseDown={(event) => {
+                      if (event.button === 0) {
+                        onSelectionDragStart?.(event, row)
+                      }
+                    }}
+                    onMouseEnter={() => onSelectionDragEnter?.(row)}
+                  >
+                    <td>
+                      <FileNameCell
+                        iconName={iconName}
+                        item={row}
+                        draggable={row.name !== '..'}
+                        onPointerDown={row.name !== '..' ? (event) => onPointerDragStart?.(event, row) : undefined}
+                      />
+                    </td>
+                    {!compact ? <td>{row.size}</td> : null}
+                    {!compact ? <td>{typeLabel}</td> : null}
+                    {!compact ? <td>{formatFileModified(row.modified)}</td> : null}
+                    {!compact ? <td>{row.permission ?? ''}</td> : null}
+                    {!compact ? <td>{row.ownerGroup ?? ''}</td> : null}
+                  </tr>
+                )
+              })}
+              {paddingBottom > 0 && (
+                <tr>
+                  <td colSpan={compact ? 1 : 6} style={{ height: `${paddingBottom}px`, padding: 0, border: 0 }} />
+                </tr>
+              )}
+            </>
+          ) : (
+            <tr>
+              <td colSpan={compact ? 1 : 6}>{emptyText ?? t.emptyFiles}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </>
   )
 }
 

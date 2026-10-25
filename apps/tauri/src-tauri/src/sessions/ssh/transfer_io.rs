@@ -291,3 +291,50 @@ async fn replace_remote_file(
 // ─────────────────────────────────────────────────────────────────────────────
 // root-mode helpers (exec channel + `sudo` / `su`)
 // ─────────────────────────────────────────────────────────────────────────────
+
+async fn relay_sftp_file(
+    sftp: &SftpSession,
+    request: crate::sessions::relay_io::RelayRequest,
+    stream: &mut tokio::io::DuplexStream,
+    cancel: &tokio_util::sync::CancellationToken,
+    io_timeout: Duration,
+) -> Result<(), String> {
+    use crate::sessions::relay_io::copy_exact;
+    if request.upload {
+        ensure_transfer_parent_dir(sftp, &request.path).await?;
+    }
+    let metadata = sftp.symlink_metadata(&request.path).await;
+    match metadata {
+        Ok(metadata) if metadata.is_symlink() || metadata.is_dir() => {
+            return Err("中转路径必须是普通文件".into())
+        }
+        Err(error) if !(request.upload && request.offset == 0 && is_sftp_not_found(&error)) => {
+            return Err(error.to_string())
+        }
+        _ => {}
+    }
+    let flags = if request.upload {
+        if request.offset == 0 {
+            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE
+        } else {
+            OpenFlags::WRITE
+        }
+    } else {
+        OpenFlags::READ
+    };
+    let mut file = sftp
+        .open_with_flags(&request.path, flags)
+        .await
+        .map_err(|e| e.to_string())?;
+    file.seek(std::io::SeekFrom::Start(request.offset))
+        .await
+        .map_err(|e| e.to_string())?;
+    if request.upload {
+        copy_exact(stream, &mut file, request.length, cancel, io_timeout).await?;
+        file.flush().await.map_err(|e| e.to_string())?;
+        file.shutdown().await.map_err(|e| e.to_string())
+    } else {
+        copy_exact(&mut file, stream, request.length, cancel, io_timeout).await?;
+        stream.shutdown().await.map_err(|e| e.to_string())
+    }
+}

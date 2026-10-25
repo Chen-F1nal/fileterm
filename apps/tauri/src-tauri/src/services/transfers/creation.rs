@@ -133,6 +133,7 @@ async fn create_upload_task(
         let task = TransferTask {
             id: task_id,
             direction: "upload".to_string(),
+            copy_source: None,
             name,
             progress: 0.0,
             status: "queued".to_string(),
@@ -157,7 +158,11 @@ async fn create_upload_task(
             created_at: Some(now),
             updated_at: Some(now),
         };
-        state.transfers.write().await.push(task.clone());
+        {
+            let mut tasks = state.transfers.write().await;
+            ensure_copy_target_is_free(&tasks, &task)?;
+            tasks.push(task.clone());
+        }
         persist(app).await?;
         emit_task(app, &task).await;
         start(app.clone(), task.id).await?;
@@ -172,6 +177,7 @@ async fn create_upload_task(
     let task = TransferTask {
         id: task_id,
         direction: "upload".to_string(),
+        copy_source: None,
         name,
         progress: 0.0,
         status: "queued".to_string(),
@@ -203,7 +209,11 @@ async fn create_upload_task(
         created_at: Some(now),
         updated_at: Some(now),
     };
-    state.transfers.write().await.push(task.clone());
+    {
+        let mut tasks = state.transfers.write().await;
+        ensure_copy_target_is_free(&tasks, &task)?;
+        tasks.push(task.clone());
+    }
     persist(app).await?;
     emit_task(app, &task).await;
     start(app.clone(), task.id).await?;
@@ -246,6 +256,7 @@ pub async fn create_download(
     let task = TransferTask {
         id: format!("transfer-{}", uuid::Uuid::new_v4()),
         direction: "download".to_string(),
+        copy_source: None,
         name,
         progress: 0.0,
         status: "queued".to_string(),
@@ -278,7 +289,11 @@ pub async fn create_download(
         created_at: Some(now),
         updated_at: Some(now),
     };
-    state.transfers.write().await.push(task.clone());
+    {
+        let mut tasks = state.transfers.write().await;
+        ensure_copy_target_is_free(&tasks, &task)?;
+        tasks.push(task.clone());
+    }
     persist(app).await?;
     emit_task(app, &task).await;
     let task_id = task.id.clone();
@@ -353,6 +368,7 @@ pub async fn create_download_directory(
     let task = TransferTask {
         id: format!("transfer-{}", uuid::Uuid::new_v4()),
         direction: "download".to_string(),
+        copy_source: None,
         name,
         progress: 0.0,
         status: "queued".to_string(),
@@ -377,7 +393,11 @@ pub async fn create_download_directory(
         created_at: Some(now),
         updated_at: Some(now),
     };
-    state.transfers.write().await.push(task.clone());
+    {
+        let mut tasks = state.transfers.write().await;
+        ensure_copy_target_is_free(&tasks, &task)?;
+        tasks.push(task.clone());
+    }
     persist(app).await?;
     emit_task(app, &task).await;
     let task_id = task.id.clone();

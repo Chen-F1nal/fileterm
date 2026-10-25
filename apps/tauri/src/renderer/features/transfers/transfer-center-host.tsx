@@ -10,6 +10,7 @@ import { TransferCenter } from './transfer-center'
 
 export function TransferCenterHost({
   activeProfileId,
+  showAll,
   activeTabId,
   activeTabStatus,
   activeJumpHosts,
@@ -25,6 +26,7 @@ export function TransferCenterHost({
   transfers,
   visible
 }: {
+  showAll?: boolean
   activeProfileId?: string
   activeTabId: string | null
   activeTabStatus: WorkspaceTab['status'] | null
@@ -44,6 +46,7 @@ export function TransferCenterHost({
   return (
     <TransferCenter
       activeProfileId={activeProfileId}
+      showAll={showAll}
       activeTabId={activeTabId}
       activeTabStatus={activeTabStatus}
       activeJumpHosts={activeJumpHosts}

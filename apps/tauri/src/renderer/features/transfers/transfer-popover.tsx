@@ -31,7 +31,7 @@ export function TransferPopover({
   transfers: TransferTask[]
 }) {
   const [statusFilter, setStatusFilter] = useState<'running' | 'completed' | 'all'>('running')
-  const [directionFilter, setDirectionFilter] = useState<'all' | 'download' | 'upload'>('all')
+  const [directionFilter, setDirectionFilter] = useState<'all' | 'download' | 'upload' | 'copy'>('all')
   const [pendingActions, setPendingActions] = useState<Record<string, 'pause' | 'resume' | 'discard'>>({})
   const [isClearing, setIsClearing] = useState(false)
   const [forceDiscardId, setForceDiscardId] = useState<string | null>(null)
@@ -205,6 +205,13 @@ export function TransferPopover({
           >
             {t.upload}
           </button>
+          <button
+            className={directionFilter === 'copy' ? 'active' : ''}
+            onClick={() => setDirectionFilter('copy')}
+            type="button"
+          >
+            {t.fileTransferCopy}
+          </button>
         </div>
         <small className="transfer-hint">{t.transferUploadHint}</small>
       </div>
@@ -317,7 +324,11 @@ export function TransferPopover({
                 <div className="transfer-row-meta">
                   <span>
                     {[
-                      transfer.direction === 'upload' ? t.upload : t.download,
+                      transfer.direction === 'copy'
+                        ? `${transfer.copySource?.name} → ${transfer.copySource?.targetName}`
+                        : transfer.direction === 'upload'
+                          ? t.upload
+                          : t.download,
                       transferSizeText,
                       transfer.speed,
                       `${progress}%`
@@ -343,7 +354,11 @@ export function TransferPopover({
                   <small className="transfer-row-message" title={transferMessage}>
                     {transfer.manifest && !isCompletedTransfer(transfer) ? (
                       <span className="transfer-row-current-item-label">
-                        {transfer.direction === 'download' ? t.currentDownloadItem : t.currentUploadItem}
+                        {transfer.direction === 'copy'
+                          ? t.fileTransferCopy
+                          : transfer.direction === 'download'
+                            ? t.currentDownloadItem
+                            : t.currentUploadItem}
                       </span>
                     ) : null}
                     {transferMessage}

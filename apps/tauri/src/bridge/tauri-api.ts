@@ -454,6 +454,22 @@ export async function createTauriApi(): Promise<FileTermDesktopApi> {
     toggleDevtools: () => invoke<void>('app_window_action', { action: 'toggle-devtools' }),
     requestCloseCurrentWindow: () => invoke<void>('app_window_action', { action: 'request-close-window' }),
     requestQuitApp: () => invoke<void>('app_window_action', { action: 'request-quit' }),
+    browseTransferDirectory: (tabId: string, path: string) =>
+      invoke<RemoteFileItem[]>('app_browse_transfer_directory', { tabId, path }),
+    copyBetweenServers: (
+      sourceTabId: string,
+      targetTabId: string,
+      sourcePath: string,
+      targetDirectory: string,
+      replaceExisting: boolean
+    ) =>
+      invoke<string>('app_copy_between_servers', {
+        sourceTabId,
+        targetTabId,
+        sourcePath,
+        targetDirectory,
+        replaceExisting
+      }),
     listLocalDirectory: (dirPath?: string) =>
       invoke<{ path: string; items: LocalFileItem[] }>('app_list_local_directory', {
         dirPath: dirPath ?? null

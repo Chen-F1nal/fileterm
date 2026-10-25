@@ -414,3 +414,72 @@ fn format_bytes(bytes: u64) -> String {
         format!("{value:.1} {}", UNITS[unit])
     }
 }
+
+async fn relay_ftp_file<T: TokioTlsStream + Send + 'static>(
+    ftp: &mut ImplAsyncFtpStream<T>,
+    request: crate::sessions::relay_io::RelayRequest,
+    stream: &mut tokio::io::DuplexStream,
+    cancel: &tokio_util::sync::CancellationToken,
+    io_timeout: Duration,
+) -> Result<(), String> {
+    use crate::sessions::relay_io::copy_exact;
+    if request.upload {
+        ftp_io_with_timeout(
+            io_timeout,
+            "relay parent",
+            ensure_dir(ftp, &parent_remote_path(&request.path)),
+        )
+        .await?;
+        let mut remote = if request.offset > 0 {
+            // APPE preserves the verified prefix; never silently fall back to truncating STOR.
+            ftp_io_with_timeout(
+                io_timeout,
+                "relay append",
+                ftp.append_with_stream(&request.path),
+            )
+            .await?
+        } else {
+            ftp_io_with_timeout(
+                io_timeout,
+                "relay upload",
+                ftp.put_with_stream(&request.path),
+            )
+            .await?
+        };
+        copy_exact(stream, &mut remote, request.length, cancel, io_timeout).await?;
+        ftp_io_with_timeout(
+            io_timeout,
+            "relay upload close",
+            ftp.finalize_put_stream(remote),
+        )
+        .await
+    } else {
+        let total =
+            ftp_io_with_timeout(io_timeout, "relay size", ftp.size(&request.path)).await? as u64;
+        if request.offset > 0 {
+            let offset = usize::try_from(request.offset).map_err(|_| "FTP offset 超出范围")?;
+            ftp_io_with_timeout(io_timeout, "relay offset", ftp.resume_transfer(offset)).await?;
+        }
+        let mut remote = ftp_io_with_timeout(
+            io_timeout,
+            "relay download",
+            ftp.retr_as_stream(&request.path),
+        )
+        .await?;
+        copy_exact(&mut remote, stream, request.length, cancel, io_timeout).await?;
+        stream.shutdown().await.map_err(|e| e.to_string())?;
+        // Prefix verification deliberately stops before EOF. Closing this dedicated
+        // connection avoids leaving a partial RETR reply on the browsing connection.
+        if request.offset + request.length == total {
+            ftp_io_with_timeout(
+                io_timeout,
+                "relay download close",
+                ftp.finalize_retr_stream(remote),
+            )
+            .await
+        } else {
+            drop(remote);
+            Ok(())
+        }
+    }
+}

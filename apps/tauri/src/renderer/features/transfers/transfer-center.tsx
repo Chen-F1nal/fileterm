@@ -15,6 +15,7 @@ import { t } from '../../i18n'
 
 export function TransferCenter({
   activeProfileId,
+  showAll = false,
   activeTabId,
   activeTabStatus,
   activeJumpHosts,
@@ -30,6 +31,7 @@ export function TransferCenter({
   transfers,
   visible
 }: {
+  showAll?: boolean
   activeProfileId?: string
   activeTabId?: string | null
   activeTabStatus?: WorkspaceTab['status'] | null
@@ -48,7 +50,9 @@ export function TransferCenter({
 }) {
   const [showTransfers, setShowTransfers] = useState(false)
   const previousActiveCountRef = useRef(0)
-  const scopedTransfers = scopeTransfersToSession(transfers, activeTabId, activeProfileId, sessionTabs)
+  const scopedTransfers = showAll
+    ? transfers
+    : scopeTransfersToSession(transfers, activeTabId, activeProfileId, sessionTabs)
   const activeCount = scopedTransfers.reduce((count, transfer) => count + (isActiveTransfer(transfer) ? 1 : 0), 0)
 
   useEffect(() => {

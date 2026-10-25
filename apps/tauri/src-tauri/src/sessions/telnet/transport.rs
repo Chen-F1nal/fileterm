@@ -285,6 +285,7 @@ pub(crate) fn reject_unsupported(command: WorkerCmd, message: &str) {
         | WorkerCmd::DeleteRemotePath { respond_to, .. }
         | WorkerCmd::ChangeRemotePermissions { respond_to, .. }
         | WorkerCmd::SetRemoteFileAccessMode { respond_to, .. }
+        | WorkerCmd::RelayFile { respond_to, .. }
         | WorkerCmd::UploadLocalFile { respond_to, .. }
         | WorkerCmd::DownloadRemoteFile { respond_to, .. }
         | WorkerCmd::ReplaceRemoteFile { respond_to, .. }

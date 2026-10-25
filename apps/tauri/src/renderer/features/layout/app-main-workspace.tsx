@@ -91,6 +91,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     closeHomeTab,
     closeSessionTab,
     openSystemInfo,
+    openFileTransfers,
     splitPane,
     closePane,
     closeActiveWorkspaceItem,
@@ -251,6 +252,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     isAiCopilotOpen,
     isWorkspaceFocusMode,
     onAddHomeTab: usesHostGroups ? addTabToActiveHost : addHomeTab,
+    onOpenFileTransfers: openFileTransfers,
     onActivateHome: activateHomeTab,
     onActivateSession: activateSession,
     onCloseHomeTab: closeHomeTab,
@@ -391,6 +393,8 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
             >
               <KeepAliveWorkspaceStage
                 activeLocalTab={activeLocalTab}
+                fileTransferTab={workspaceState.localTabs.find((tab) => tab.kind === 'transfers')}
+                desktopApi={desktopApi}
                 activeHomeTabId={effectiveActiveLocalTabId}
                 activeProfile={activeProfile}
                 activeSession={activeSession}
@@ -451,6 +455,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
                 onTerminalDockSendScopeChange={updateTerminalDockSendScope}
                 onTerminalDockSelectedTabIdsChange={updateTerminalDockSelectedTabIds}
                 onOpenCommandManager={openCommandManager}
+                onOpenFileTransfers={openFileTransfers}
                 profiles={workspace.profiles}
                 backgroundTabs={backgroundWorkspaceTabs}
                 onAttachBackgroundSession={attachBackgroundSession}
@@ -564,11 +569,13 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         </main>
 
         {/* Machine info borders the terminal in the host-groups layout, so the edge frame would be a stray strip. */}
-        {!isHomeWorkspaceVisible && !isLocalTerminalWorkspace && !showHostRail && (
-          <div className="terminal-right-frame" aria-hidden="true" />
-        )}
+        {!isHomeWorkspaceVisible &&
+          !isLocalTerminalWorkspace &&
+          !showHostRail &&
+          activeLocalTab?.kind !== 'transfers' && <div className="terminal-right-frame" aria-hidden="true" />}
 
         <TransferCenterHost
+          showAll={activeLocalTab?.kind === 'transfers'}
           activeProfileId={activeTab?.profileId}
           activeTabId={activeTab?.id ?? null}
           activeTabStatus={activeTab?.status ?? null}

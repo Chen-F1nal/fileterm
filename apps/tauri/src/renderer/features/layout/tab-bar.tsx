@@ -11,7 +11,14 @@ import { usePointerSortFallback } from '../../hooks/use-pointer-sort-fallback'
 import type { HostNavigation } from './use-host-navigation'
 
 export type OrderedTabEntry =
-  | { key: string; kind: 'local'; id: string; title: string; tabKind: 'home' | 'system'; sessionTabId?: string }
+  | {
+      key: string
+      kind: 'local'
+      id: string
+      title: string
+      tabKind: 'home' | 'system' | 'transfers'
+      sessionTabId?: string
+    }
   | { key: string; kind: 'session'; tab: WorkspaceTab }
 
 export type TabContextTarget =
@@ -42,6 +49,7 @@ export interface TabBarProps {
   showAiCopilotToggle?: boolean
   isWorkspaceFocusMode: boolean
   onAddHomeTab(): void
+  onOpenFileTransfers?(): void
   onActivateHome(id: string): void
   onActivateSession(id: string): void
   onCloseHomeTab(event: MouseEvent<HTMLElement>, id: string): void
@@ -73,6 +81,7 @@ export function TabBar({
   showAiCopilotToggle = true,
   isWorkspaceFocusMode,
   onAddHomeTab,
+  onOpenFileTransfers,
   onActivateHome,
   onActivateSession,
   onCloseHomeTab,
@@ -246,6 +255,16 @@ export function TabBar({
           </button>
         </div>
         <div className="window-tools">
+          {onOpenFileTransfers ? (
+            <button
+              type="button"
+              title={t.fileTransferWorkspace}
+              aria-label={t.fileTransferWorkspace}
+              onClick={onOpenFileTransfers}
+            >
+              <AppIcon name="transfer" size={16} />
+            </button>
+          ) : null}
           <button
             aria-label={focusModeLabel}
             aria-pressed={isWorkspaceFocusMode}

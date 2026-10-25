@@ -16,8 +16,13 @@ async fn set_ftp_state(
         .find(|tab| tab.id == tab_id)
     {
         if tab.status != status {
-            crate::services::logging::session(app, "INFO", "app:connection", tab_id,
-                format!("state={:?}->{status:?}", tab.status));
+            crate::services::logging::session(
+                app,
+                "INFO",
+                "app:connection",
+                tab_id,
+                format!("state={:?}->{status:?}", tab.status),
+            );
         }
         tab.status = status;
     }
@@ -337,4 +342,14 @@ async fn client_remove(client: &mut FtpClient, path: &str) -> Result<(), String>
 
 async fn client_quit(client: &mut FtpClient) -> Result<(), String> {
     ftp_match!(client, ftp => quit(ftp))
+}
+
+async fn client_relay(
+    client: &mut FtpClient,
+    request: crate::sessions::relay_io::RelayRequest,
+    stream: &mut tokio::io::DuplexStream,
+    cancel: &tokio_util::sync::CancellationToken,
+    io_timeout: Duration,
+) -> Result<(), String> {
+    ftp_match!(client, ftp => relay_ftp_file(ftp, request, stream, cancel, io_timeout))
 }

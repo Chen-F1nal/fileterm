@@ -33,7 +33,15 @@ pub async fn pause_for_tab(app: &AppHandle, tab_id: &str, message: &str) -> Resu
         .read()
         .await
         .iter()
-        .filter(|task| task.tab_id.as_deref() == Some(tab_id) && task.active() && task.resumable)
+        .filter(|task| {
+            (task.tab_id.as_deref() == Some(tab_id)
+                || task
+                    .copy_source
+                    .as_ref()
+                    .is_some_and(|source| source.tab_id == tab_id))
+                && task.active()
+                && task.resumable
+        })
         .map(|task| task.id.clone())
         .collect::<Vec<_>>();
     for transfer_id in transfer_ids {
@@ -65,10 +73,18 @@ async fn remove_local_partial(path: &str) -> Result<(), AppError> {
 }
 
 async fn cleanup_transfer_partial(app: &AppHandle, task: &TransferTask) -> Result<(), AppError> {
+    if let Some(source) = &task.copy_source {
+        let target = copy_session(app, task.tab_id.as_deref().unwrap_or_default()).await?;
+        if task.profile_id.as_deref() != Some(target.0.as_str())
+            || target.2 != source.target_endpoint
+        {
+            return Err(transfer_error("目标连接已改变，未清理其他服务器上的文件"));
+        }
+    }
     if let Some(manifest) = &task.manifest {
         let mut failures = Vec::new();
         for entry in &manifest.files {
-            let result = if task.direction == "upload" {
+            let result = if matches!(task.direction.as_str(), "upload" | "copy") {
                 match task.tab_id.as_deref() {
                     Some(tab_id) => {
                         remove_remote_upload_artifacts(
@@ -96,7 +112,7 @@ async fn cleanup_transfer_partial(app: &AppHandle, task: &TransferTask) -> Resul
         };
     }
 
-    if task.direction == "upload" {
+    if matches!(task.direction.as_str(), "upload" | "copy") {
         return match (task.tab_id.as_deref(), task.partial_path.as_deref()) {
             (Some(tab_id), Some(path)) => {
                 remove_remote_upload_artifacts(
@@ -161,7 +177,9 @@ async fn retry_pending_local_cleanup(app: &AppHandle) -> Result<(), AppError> {
         .read()
         .await
         .iter()
-        .filter(|task| task.cleanup_pending && task.direction != "upload")
+        .filter(|task| {
+            task.cleanup_pending && !matches!(task.direction.as_str(), "upload" | "copy")
+        })
         .cloned()
         .collect::<Vec<_>>();
     for task in tasks {
@@ -204,7 +222,7 @@ pub async fn retry_pending_cleanup_for_tab(app: &AppHandle, tab_id: &str) -> Res
         .iter()
         .filter(|task| {
             task.cleanup_pending
-                && task.direction == "upload"
+                && matches!(task.direction.as_str(), "upload" | "copy")
                 && task.profile_id.as_deref() == Some(profile_id.as_str())
                 && task
                     .file_access_mode
@@ -235,7 +253,7 @@ pub async fn retry_pending_cleanup_for_tab(app: &AppHandle, tab_id: &str) -> Res
 /// staging cleanup keeps working; falls back to any connected tab of the
 /// same profile. Upload tasks only — downloads clean up locally.
 async fn refresh_stale_transfer_tab(app: &AppHandle, task: &mut TransferTask) {
-    if task.direction != "upload" {
+    if !matches!(task.direction.as_str(), "upload" | "copy") {
         return;
     }
     let state = app.state::<crate::services::workspace::WorkspaceState>();
@@ -371,9 +389,13 @@ pub async fn resume(app: &AppHandle, transfer_id: String) -> Result<(), AppError
         .profile_id
         .clone()
         .ok_or_else(|| transfer_error("传输任务缺少连接信息"))?;
-    let tab_id = find_connected_tab(app, &profile_id)
-        .await
-        .ok_or_else(|| transfer_error("请先打开并连接原传输使用的连接，再继续任务"))?;
+    let tab_id = if task.direction == "copy" {
+        resolve_copy_tabs(app, &task).await?.1
+    } else {
+        find_connected_tab(app, &profile_id)
+            .await
+            .ok_or_else(|| transfer_error("请先打开并连接原传输使用的连接，再继续任务"))?
+    };
     if let Some(expected_mode) = task.file_access_mode.as_deref() {
         let current_mode = state
             .sessions
