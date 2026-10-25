@@ -29,6 +29,7 @@
 ### 本版本包含的主要 PR 和问题修复
 
 - [PR #362](https://github.com/St0ff3l/fileterm/pull/362)：为 Linux AppImage、DEB 和 RPM 增加签名校验的应用内更新。
+- [PR #365](https://github.com/St0ff3l/fileterm/pull/365)：修复 Linux 窗口启动后侧栏宽度变窄的问题。
 
 完整变更记录请查看 [v2.3.1-beta.16 与 v2.3.2-beta.1 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.16...v2.3.2-beta.1)。
 
@@ -70,6 +71,7 @@ This beta adds signed Tauri in-app updates for supported Linux AppImage, DEB, an
 ### Main PRs and issues
 
 - [PR #362](https://github.com/St0ff3l/fileterm/pull/362): Add signed in-app updates for Linux AppImage, DEB, and RPM installations.
+- [PR #365](https://github.com/St0ff3l/fileterm/pull/365): Keep the Linux sidebar's default width after startup.
 
 See the [comparison between v2.3.1-beta.16 and v2.3.2-beta.1](https://github.com/St0ff3l/fileterm/compare/v2.3.1-beta.16...v2.3.2-beta.1) for the complete change set.
 

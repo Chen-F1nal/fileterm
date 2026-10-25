@@ -29,6 +29,7 @@
 ### 本版本包含的主要 PR 和问题修复
 
 - 本版本包含 Linux 侧栏启动宽度修正；Linux 应用内更新实现见 [PR #362](https://github.com/St0ff3l/fileterm/pull/362)。
+- [PR #365](https://github.com/St0ff3l/fileterm/pull/365)：修复 Linux 窗口启动后侧栏宽度变窄的问题。
 
 完整变更记录请查看 [v2.3.2-beta.1 与 v2.3.2-beta.2 的比较](https://github.com/St0ff3l/fileterm/compare/v2.3.2-beta.1...v2.3.2-beta.2)。
 
@@ -69,7 +70,7 @@ This beta is for testing the Linux in-app update from beta.1 to beta.2. Install 
 
 ### Main PRs and issues
 
-- This release also includes the Linux sidebar startup width fix; the Linux in-app updater is implemented in [PR #362](https://github.com/St0ff3l/fileterm/pull/362).
+- This release includes the Linux sidebar startup width fix in [PR #365](https://github.com/St0ff3l/fileterm/pull/365); the Linux in-app updater is implemented in [PR #362](https://github.com/St0ff3l/fileterm/pull/362).
 
 See the [comparison between v2.3.2-beta.1 and v2.3.2-beta.2](https://github.com/St0ff3l/fileterm/compare/v2.3.2-beta.1...v2.3.2-beta.2) for the complete change set.
 
