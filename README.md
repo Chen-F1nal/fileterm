@@ -50,7 +50,7 @@ The official Arch Linux distribution supports x86_64. The ARM64 package targets 
 
 On first launch, FileTerm uses Chinese for Chinese system locales and English for all other locales. You can change the language in Settings; a saved choice takes precedence on later launches.
 
-macOS and Linux update checks open the matching GitHub Release page for a user-selected download. Signed in-app updates are used by installed Windows releases.
+Windows, macOS, and supported Linux AppImage/DEB/RPM builds use signed in-app updates. AppImages must be in a writable directory; DEB/RPM installation may require administrator authorization. Pacman packages and unsupported installations open the matching GitHub Release page. See the installation guides for first-run requirements and older AppImage EGL workarounds.
 
 Want to run from source or contribute? Continue to [Getting Started from Source](#getting-started-from-source).
 
@@ -165,7 +165,7 @@ npm run release:linux
 ### Releases and Updates
 
 - A `vX.Y.Z` tag on a `release/*` commit runs the Tauri-only Release Action and publishes macOS arm64/x64 DMGs and signed updater archives, Windows x64/arm64 NSIS installers and portable executables, and Linux x86_64/arm64 `.deb`, `.rpm`, and `.AppImage` packages plus Arch x86_64/Arch Linux ARM aarch64 `.pkg.tar.zst` packages.
-- The Windows jobs publish signed installers and portable executables with `.sig` files. A combined `latest.json` contains Windows installer/portable and macOS archive entries for x64 and ARM64; installed clients verify the matching package before updating.
+- The release jobs publish signed Windows installers/portable executables, macOS updater archives, and Linux AppImage/DEB/RPM payloads with `.sig` files. A combined `latest.json` contains architecture- and format-specific entries; clients verify the matching package before updating. Linux payloads are signed after final repacking, including AppImage removal of display libraries that must match the host's Mesa/EGL stack.
 - Configure the repository Actions Secret `TAURI_SIGNING_PRIVATE_KEY` with the Tauri updater private-key contents. Never commit that private key.
 - macOS release bundles use ad-hoc signing without an Apple Developer certificate or notarization. The in-app updater verifies signed `.app.tar.gz` archives, backs up the old app before installation, and restarts after saving transfer checkpoints. Install the app in a writable Applications folder; first launch or a blocked update may require Open Anyway in Privacy & Security. Existing versions without the macOS updater need one manual DMG installation first.
 

@@ -50,7 +50,7 @@ Arch Linux 官方发行版目前仅支持 x86_64；ARM64 包面向独立的 Arch
 
 首次启动时，中文系统语言环境默认显示中文，其他语言环境默认显示英文。可以在设置中手动切换语言；已保存的选择会在之后的启动中优先使用。
 
-macOS 与 Linux 的“检查更新”会打开对应的 GitHub Release 下载页，由用户自行下载和安装；Windows 正式安装版使用签名的应用内更新。
+Windows、macOS 与受支持的 Linux AppImage/DEB/RPM 使用签名的应用内更新。AppImage 需放在可写目录，DEB/RPM 安装可能要求管理员授权；Pacman 包与不受支持的安装方式仍打开对应的 GitHub Release。首次运行要求及旧 AppImage 的 EGL 临时处理方法见安装指南。
 
 需要从源码运行或参与开发？请继续阅读 [从源码开始](#从源码开始)。
 
@@ -165,7 +165,8 @@ npm run release:linux
 - 推送位于 `release/*` 分支提交上的 `vX.Y.Z` tag，会运行 Tauri 专用 Release Action，发布 macOS arm64/x64 DMG、Windows x64/arm64 NSIS 安装包和便携版，以及 Linux x86_64/arm64 `.deb`、`.rpm`、`.AppImage` 和 Arch x86_64/Arch Linux ARM aarch64 `.pkg.tar.zst` 包。
 - Windows Action 为两种架构分别生成带签名的 NSIS 安装器、免安装 `*-windows-x64-portable.exe` / `*-windows-arm64-portable.exe` 和 `.sig` 文件，再合并到含架构专属更新条目的 `latest.json`；客户端按自身架构验签更新。portable 版本不写入安装器注册信息，配置保存到可执行文件旁的 `config/` 文件夹，首次运行空目录时会迁移已有安装版配置，运行前仍需系统已有 WebView2 Runtime。凭据加密仍绑定当前 Windows 设备，复制到另一台电脑后需重新配置凭据。
 - 仓库需要配置 GitHub Actions Secret `TAURI_SIGNING_PRIVATE_KEY`。它是 Tauri updater 私钥内容，只能保存为 GitHub Secret，绝不能提交到仓库。
-- macOS 发行包使用 ad hoc 签名（不使用 Apple Developer 证书或公证），不使用应用内 updater：检查到新版本后跳转 GitHub Release，由用户选择下载包；首次下载运行仍可能需要在“隐私与安全性”中手动放行。
+- macOS 发行包保留 ad hoc 签名（不使用 Apple Developer 证书或公证），应用内 updater 验证独立签名的更新归档，备份旧应用后安装并重启；首次下载运行或系统拦截新版时仍可能需要在“隐私与安全性”中手动放行。
+- Linux AppImage/DEB/RPM 在最终重打包后生成 `.sig`，统一 `latest.json` 按架构与包格式提供独立更新条目。AppImage 重打包时移除需与宿主机 Mesa/EGL 配套的图形库；Pacman 包继续使用发布页更新。
 
 ## 仓库结构
 

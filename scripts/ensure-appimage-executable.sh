@@ -45,6 +45,9 @@ if [ -L "$appdir/com.fileterm.desktop.desktop" ] || [ -f "$appdir/com.fileterm.d
 fi
 ln -sfn usr/share/icons/hicolor/256x256@2/apps/fileterm.png "$appdir/fileterm.png"
 
+# Ubuntu display libraries can break the host's newer Mesa/EGL stack (Tauri #15976).
+python3 scripts/appimage-host-libraries.py "$appdir" --remove
+
 # Runtime extraction may apply private permissions to its temporary tree, so
 # verify the repacked SquashFS directly instead of inspecting that temp tree.
 find "$appdir" -type d -exec chmod 755 {} +
@@ -85,6 +88,7 @@ fi
 
 payload_dir="$work_dir/verified-payload"
 unsquashfs -no-progress -offset "$squashfs_offset" -d "$payload_dir" "$appimage_file" >/dev/null
+python3 scripts/appimage-host-libraries.py "$payload_dir"
 
 for launcher in AppRun AppRun.wrapped; do
   test -n "$(find "$payload_dir/$launcher" -maxdepth 0 -perm -0001 -print -quit)" || {
