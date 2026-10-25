@@ -1716,6 +1716,11 @@ html[data-platform='linux'].tauri-standalone-window .modal-backdrop {
   padding-right: 36px;
 }
 
+/* Keep WebView2's reveal button from duplicating the custom toggle. */
+.ssh-secret-field__input-wrap > input::-ms-reveal {
+  display: none;
+}
+
 .ssh-secret-field__toggle {
   position: absolute;
   z-index: 2;
