@@ -30,15 +30,19 @@
   input:not([type='checkbox']):not(.command-code-area textarea):focus,
 :root[data-theme='default']
   .command-form-standalone-page
-  input:not([type='checkbox']):not(.command-code-area textarea):focus,
+  input:not([type='checkbox']):not(.command-code-area textarea):focus {
+  box-shadow: var(--input-focus-shadow);
+  background: var(--bg-hover);
+  outline: none;
+}
+
 :root:not([data-theme]) .command-form-standalone-page .dropdown-select-trigger:focus-visible,
 :root:not([data-theme*='light']) .command-form-standalone-page .dropdown-select-trigger:focus-visible,
 :root[data-theme='default'] .command-form-standalone-page .dropdown-select-trigger:focus-visible,
 :root:not([data-theme]) .command-form-standalone-page .ft-select-shell:focus-within,
 :root:not([data-theme*='light']) .command-form-standalone-page .ft-select-shell:focus-within,
 :root[data-theme='default'] .command-form-standalone-page .ft-select-shell:focus-within {
-  border-color: var(--text-muted);
-  box-shadow: none;
+  box-shadow: var(--input-focus-shadow);
   background: var(--bg-hover);
   outline: none;
 }
@@ -288,32 +292,35 @@
 :root:not([data-theme]) .command-editor-dialog-form input:not([type='checkbox']):focus,
 :root:not([data-theme*='light']) .command-editor-dialog-form input:not([type='checkbox']):focus,
 :root[data-theme='default'] .command-editor-dialog-form input:not([type='checkbox']):focus,
+:root:not([data-theme]) .command-editor-field input:not([type='checkbox']):focus,
+:root:not([data-theme*='light']) .command-editor-field input:not([type='checkbox']):focus,
+:root[data-theme='default'] .command-editor-field input:not([type='checkbox']):focus,
+:root:not([data-theme]) .command-form-standalone-page input:not([type='checkbox']):focus,
+:root:not([data-theme*='light']) .command-form-standalone-page input:not([type='checkbox']):focus,
+:root[data-theme='default'] .command-form-standalone-page input:not([type='checkbox']):focus {
+  box-shadow: var(--input-focus-shadow) !important;
+  background: var(--input-bg) !important;
+  outline: none !important;
+}
 :root:not([data-theme]) .command-editor-dialog-form .dropdown-select-trigger:focus-visible,
 :root:not([data-theme*='light']) .command-editor-dialog-form .dropdown-select-trigger:focus-visible,
 :root[data-theme='default'] .command-editor-dialog-form .dropdown-select-trigger:focus-visible,
 :root:not([data-theme]) .command-editor-dialog-form .ft-select-shell:focus-within,
 :root:not([data-theme*='light']) .command-editor-dialog-form .ft-select-shell:focus-within,
 :root[data-theme='default'] .command-editor-dialog-form .ft-select-shell:focus-within,
-:root:not([data-theme]) .command-editor-field input:not([type='checkbox']):focus,
-:root:not([data-theme*='light']) .command-editor-field input:not([type='checkbox']):focus,
-:root[data-theme='default'] .command-editor-field input:not([type='checkbox']):focus,
 :root:not([data-theme]) .command-editor-field .dropdown-select-trigger:focus-visible,
 :root:not([data-theme*='light']) .command-editor-field .dropdown-select-trigger:focus-visible,
 :root[data-theme='default'] .command-editor-field .dropdown-select-trigger:focus-visible,
 :root:not([data-theme]) .command-editor-field .ft-select-shell:focus-within,
 :root:not([data-theme*='light']) .command-editor-field .ft-select-shell:focus-within,
 :root[data-theme='default'] .command-editor-field .ft-select-shell:focus-within,
-:root:not([data-theme]) .command-form-standalone-page input:not([type='checkbox']):focus,
-:root:not([data-theme*='light']) .command-form-standalone-page input:not([type='checkbox']):focus,
-:root[data-theme='default'] .command-form-standalone-page input:not([type='checkbox']):focus,
 :root:not([data-theme]) .command-form-standalone-page .dropdown-select-trigger:focus-visible,
 :root:not([data-theme*='light']) .command-form-standalone-page .dropdown-select-trigger:focus-visible,
 :root[data-theme='default'] .command-form-standalone-page .dropdown-select-trigger:focus-visible,
 :root:not([data-theme]) .command-form-standalone-page .ft-select-shell:focus-within,
 :root:not([data-theme*='light']) .command-form-standalone-page .ft-select-shell:focus-within,
 :root[data-theme='default'] .command-form-standalone-page .ft-select-shell:focus-within {
-  border-color: var(--focus-outline) !important;
-  box-shadow: 0 0 0 2px var(--accent-focus-ring) !important;
+  box-shadow: var(--input-focus-shadow) !important;
   background: var(--input-bg) !important;
   outline: none !important;
 }
@@ -343,8 +350,9 @@
 :root:not([data-theme]) .command-editor-dialog-textarea .command-code-area:focus-within,
 :root:not([data-theme*='light']) .command-editor-dialog-textarea .command-code-area:focus-within,
 :root[data-theme='default'] .command-editor-dialog-textarea .command-code-area:focus-within {
-  border-color: var(--focus-outline) !important;
-  box-shadow: 0 0 0 3px var(--accent-focus-ring) !important;
+  border-color: var(--input-focus-inset) !important;
+  box-shadow: none;
+  outline: none;
 }
 
 /* Line numbers column */
@@ -600,7 +608,12 @@
 
 :root:not([data-theme]) .modal-card.ssh-modal input:not([type='checkbox']):not([type='radio']):focus,
 :root:not([data-theme*='light']) .modal-card.ssh-modal input:not([type='checkbox']):not([type='radio']):focus,
-:root[data-theme='default'] .modal-card.ssh-modal input:not([type='checkbox']):not([type='radio']):focus,
+:root[data-theme='default'] .modal-card.ssh-modal input:not([type='checkbox']):not([type='radio']):focus {
+  box-shadow: var(--input-focus-shadow) !important;
+  background: var(--input-bg) !important;
+  outline: none !important;
+}
+
 :root:not([data-theme]) .modal-card.ssh-modal .dropdown-select-trigger:focus-visible,
 :root:not([data-theme*='light']) .modal-card.ssh-modal .dropdown-select-trigger:focus-visible,
 :root[data-theme='default'] .modal-card.ssh-modal .dropdown-select-trigger:focus-visible,
@@ -610,8 +623,7 @@
 :root:not([data-theme]) .modal-card.ssh-modal textarea:focus,
 :root:not([data-theme*='light']) .modal-card.ssh-modal textarea:focus,
 :root[data-theme='default'] .modal-card.ssh-modal textarea:focus {
-  border-color: var(--focus-outline) !important;
-  box-shadow: 0 0 0 2px var(--accent-focus-ring) !important;
+  box-shadow: var(--input-focus-shadow) !important;
   background: var(--input-bg) !important;
   outline: none !important;
 }

@@ -34,13 +34,19 @@
   box-shadow: none;
 }
 
-.file-manager .file-tabs .file-tab-actions .file-pane-mode-select.dropdown-select-trigger:hover,
-.file-manager .file-tabs .file-tab-actions .file-pane-mode-select.dropdown-select-trigger:focus-visible,
-.file-manager .file-tabs .file-tab-actions .file-pane-mode-select.dropdown-select-trigger[aria-expanded='true'] {
+.file-manager .file-tabs .file-tab-actions .file-pane-mode-select.dropdown-select-trigger:hover {
   border-color: var(--focus-outline);
   color: var(--accent-secondary);
   background: var(--surface-input);
   box-shadow: none;
+}
+
+.file-manager .file-tabs .file-tab-actions .file-pane-mode-select.dropdown-select-trigger:focus-visible,
+.file-manager .file-tabs .file-tab-actions .file-pane-mode-select.dropdown-select-trigger[aria-expanded='true'] {
+  color: var(--accent-secondary);
+  background: var(--surface-input);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .file-pane-mode-select .dropdown-select-value {

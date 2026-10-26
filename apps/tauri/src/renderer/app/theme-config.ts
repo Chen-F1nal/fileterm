@@ -424,7 +424,7 @@ function resolveCompactUiVariables(
     '--modal-backdrop-bg': isLight ? 'rgba(0, 0, 0, 0.32)' : 'rgba(0, 0, 0, 0.62)',
     '--modal-card-shadow': isLight ? '0 20px 50px rgba(0, 0, 0, 0.12)' : '0 20px 60px rgba(0, 0, 0, 0.5)',
     '--control-shadow': isLight ? '0 1px 2px rgba(0, 0, 0, 0.05)' : '0 1px 2px rgba(0, 0, 0, 0.15)',
-    '--control-focus-shadow': `0 0 0 2px ${alpha(accent, isLight ? 14 : 18)}, 0 1px 2px rgba(0, 0, 0, 0.1)`,
+    '--control-focus-shadow': 'var(--input-focus-shadow)',
     '--control-inset-shadow': isLight ? 'inset 0 1px 2px rgba(0, 0, 0, 0.04)' : 'inset 0 1px 2px rgba(0, 0, 0, 0.15)',
     '--terminal-dock-shadow': isLight ? '0 12px 32px rgba(0, 0, 0, 0.1)' : '0 16px 36px rgba(0, 0, 0, 0.35)',
     '--terminal-dock-header-shadow': isLight ? '0 8px 20px rgba(0, 0, 0, 0.08)' : '0 10px 24px rgba(0, 0, 0, 0.25)',
@@ -797,6 +797,8 @@ function buildThemeVariables(
   const isCodex = normalized.baseThemeId === 'codex'
   const sidebarGlassActive = !theme.opaqueWindows && sidebarGlassSupported()
   const variables: Record<string, string> = {
+    '--ref-input-focus-inset': alpha(isLight ? '#000000' : '#ffffff', isLight ? 45 : 38),
+    '--ref-input-focus-outer': isLight ? 'rgba(0, 0, 0, 0.2)' : 'transparent',
     '--theme-accent': theme.accent,
     '--theme-accent-hover': blend(theme.accent, theme.ink, 8),
     '--theme-contrast': `${theme.contrast}%`,

@@ -83,7 +83,8 @@
 }
 
 .form-dialog .file-action-field input:focus {
-  border-color: var(--focus-outline);
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 .form-dialog .root-access-description,

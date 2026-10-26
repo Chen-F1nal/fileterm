@@ -684,9 +684,9 @@
    adding the large blue focus ring used by form inputs. */
 .system-sidebar-layout .network-select.dropdown-select-trigger:focus-visible,
 .system-sidebar-layout .network-select.dropdown-select-trigger[aria-expanded='true'] {
-  border-color: var(--border-light);
-  box-shadow: none;
+  box-shadow: var(--input-focus-shadow);
   background-color: var(--surface-hover);
+  outline: none;
 }
 
 .system-sidebar-layout .network-select.ft-select-shell {
@@ -694,9 +694,9 @@
 }
 
 .system-sidebar-layout .network-select.ft-select-shell:focus-within {
-  border-color: var(--border-light);
-  box-shadow: none;
+  box-shadow: var(--input-focus-shadow);
   background-color: var(--surface-hover);
+  outline: none;
 }
 
 .system-sidebar-layout .network-select.ft-select-shell .ft-select-shell__value {

@@ -15,11 +15,21 @@
 - 所有表单下拉框必须使用 DropdownSelect。
 - 禁止在业务组件中新增原生 select。
 - macOS 原生外壳和 Windows/Linux 自绘 Portal 都必须保持同一套语义变量和自适应箭头尺寸。
+- 聚焦与展开态沿用 Input 的中性双层阴影，不额外设置彩色 outline 或改变边框为强调色。原生 select 的焦点画在外壳，菜单项键盘高亮和选择行为保持现有实现。
 
 ### Input
 
 - 背景、边框、文字和错误状态只使用 --surface-input、--border-_、--text-_、--status-danger*。
 - 不要用 !important 解决普通校验状态的 selector 问题。
+- 普通聚焦使用 `outline: none` 和 `box-shadow: var(--input-focus-shadow)`；不通过聚焦 border-color 产生新的蓝/黑描边。颜色依次来自四主题/运行时 `--ref-input-focus-inset`、`--ref-input-focus-outer`，经 semantic.css 组合；自定义 accent 不应染色该中性阴影。
+- 复合 Input、搜索框和筛选框只在外壳反馈，内部输入保持无环；不修改 Monaco/xterm 内部渲染焦点。
+- 深色主题不绘制外部深色阴影层，亮色可用轻量外阴影；终端底部命令输入栏（`terminal-dock-input-shell`）保持原样。
+- 路径/筛选与运行时隧道聚焦时只使用既有单层 1px 中性边框，不叠加 inset 实线或外阴影；聚焦时指针移入/移出粗细和颜色一致，非聚焦 hover 不变。
+- 命令代码区复用包含行号列的完整 1px 外框，左边框位于数字左侧并与上下边框连通；不能单独给 textarea 加第二圈。运行时隧道字号消费与连接表单一致的 `--font-size-sm`。
+- 保留原 hover 的颜色、边框、背景与过渡；不能用全局重置覆盖 hover，特别是文件工具栏“本地文件 / 跟随终端 / SFTP”的悬停蓝框。默认/聚焦/hover/hover+聚焦应分开验收。
+- 禁用和错误校验保持原语义；按钮、单选、复选、滚动条的键盘焦点不能作为输入框一起清除。
+- 使用外阴影的输入外壳要在所有 overflow 裁剪祖先内预留绘制空间，不能贴着裁剪边界；留白在非聚焦状态就应存在，避免聚焦后移动布局。管理器搜索框右侧保留 12px 安全留白，顶部也必须留足绘制空间；滚动表单用 scroll-padding 保留焦点滚动余量，复合搜索框内层 input 不重复绘制阴影。
+- 强制色彩模式不显示 box-shadow，因此仅在 `forced-colors: active` 下允许 `CanvasText` 系统描边回退及用于抵消历史主题重置的 `!important`。这属于高对比度平台兼容，不适用于普通主题样式。
 
 ### Dialog 和危险操作
 

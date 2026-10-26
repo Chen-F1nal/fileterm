@@ -128,9 +128,8 @@
 
 .security-idle-lock-select.dropdown-select-trigger:focus-visible,
 .security-idle-lock-select.ft-select-shell select:focus-visible {
-  border-color: var(--focus-outline);
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .security-idle-lock-select.dropdown-select-trigger:disabled,
@@ -173,8 +172,8 @@
 }
 
 .security-form-grid input:focus {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .security-form-grid input:disabled {
@@ -322,8 +321,8 @@
 }
 
 .security-remove-lock-password-field input:focus {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .security-remove-lock-password-field input:disabled {
@@ -545,9 +544,9 @@
 }
 
 .session-lock-card__form input:focus {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
   background: var(--bg-input, var(--bg-card));
+  outline: none;
 }
 
 .session-lock-card__submit-button {

@@ -1,0 +1,73 @@
+/* Text controls share focus feedback; buttons and selection controls keep their own keyboard rings. */
+:where(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not(
+      [type='hidden']
+    ):not([type='button']):not([type='submit']):not([type='reset']),
+  textarea:not(.xterm-helper-textarea):not(.monaco-editor textarea):not(.terminal-dock-input-shell textarea),
+  select
+):focus {
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
+}
+
+/* Composite inputs draw the shadow once on their outer surface. */
+.ft-input-wrapper:focus-within,
+.pane-filter-input-wrapper:focus-within,
+.connection-manager-search:focus-within,
+.command-param-chip:focus-within {
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
+}
+
+.ft-input-wrapper .ft-input:focus,
+.pane-filter-input-wrapper .pane-filter-input:focus,
+.connection-manager-search input:focus,
+.ai-copilot-conversation-search input:focus,
+.command-code-area textarea:focus,
+.command-param-chip input:focus,
+.ft-select-shell select:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Forced-colors can suppress box-shadow; retain a system keyboard indicator there. */
+@media (forced-colors: active) {
+  :is(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+    textarea:not(.terminal-dock-input-shell textarea):not(.xterm-helper-textarea):not(.monaco-editor textarea),
+    select,
+    .dropdown-select-trigger
+  ):focus-visible {
+    outline: 2px solid CanvasText !important;
+    outline-offset: -2px;
+  }
+}
+
+/* Compact transparent fields use their existing border, without a second ring or outer shadow. */
+.pane-path-bar input,
+.pane-filter-input-wrapper {
+  --input-focus-shadow: none;
+}
+
+:root .pane-path-bar input:focus:not(:disabled),
+:root .pane-filter-input-wrapper:focus-within:has(input:not(:disabled)) {
+  border-color: var(--input-focus-inset);
+}
+
+/* Keep the transfer workspace's general keyboard outline for non-input controls. */
+.file-transfer-workspace
+  :is(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+    textarea,
+    select,
+    .dropdown-select-trigger
+  ):focus-visible {
+  outline: none;
+}
+
+/* Code preview has one connected outer frame, including the line-number gutter. */
+.command-code-area:focus-within {
+  outline: none;
+  border-color: var(--input-focus-inset);
+  box-shadow: none;
+}

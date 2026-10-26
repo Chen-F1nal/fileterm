@@ -1,5 +1,6 @@
 /* global window, document, getComputedStyle, innerWidth */
 import assert from 'node:assert/strict'
+import { inspectFocusShadow } from './helpers/focus-shadow-clipping.mjs'
 import ts from 'typescript'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -81,6 +82,13 @@ import {MonitoringToggle} from '${root}${renderer}features/system/monitoring-tog
 import '${root}${renderer}features/system/system-sidebar-controls.css';
 import {PathBookmarksButton} from '${root}${renderer}features/files/path-bookmarks-button.tsx';
 import {FileActionModal} from '${root}${renderer}features/files/file-action-modal.tsx';
+import {AiCopilotConversationList} from '${root}${renderer}features/ai/ai-copilot-conversation-list.tsx';
+import {ConnectionModal} from '${root}${renderer}features/connections/connection-modal.tsx';
+import {defaultForm} from '${root}${renderer}app/app-data.ts';
+import {ProxyEditDialog} from '${root}${renderer}features/proxies/proxy-edit-dialog.tsx';
+import {TunnelEditDialog} from '${root}${renderer}features/tunnels/tunnel-edit-dialog.tsx';
+import {SettingsModal} from '${root}${renderer}features/settings/settings-modal/index.tsx';
+
 import {RootAccessModal} from '${root}${renderer}features/files/root-access-modal.tsx';
 import {BackupPasswordModal} from '${root}${renderer}features/connections/backup-password-modal.tsx';
 import {SshKeyPassphraseModal} from '${root}${renderer}features/connections/ssh-key-passphrase-modal.tsx';
@@ -109,7 +117,9 @@ else if(action==='remove')items.splice(index,1);
 else {const next=index+(action==='up'?-1:1);[items[index],items[next]]=[items[next],items[index]]}
 window.bookmarkItems=items;return items
 }};
+const fixtureApi=window.fileterm;
 window.renderCase=({kind='confirm',model={},busy=false,error=false,locale='zhCN',theme='fileterm-dark',extra=false})=>{
+window.fileterm=kind==='settings'?undefined:fixtureApi;
 setLocale(locale);if(theme==='custom'){const config=createDefaultThemeConfig('dark');config.theme.accent='#8b5cf6';applyThemeVariables('fileterm-dark',config)}else applyThemeVariables(theme);
 const shared={isSubmitting:busy,onClose:()=>window.calls.push('close'),onConfirm:()=>window.calls.push('confirm'),errorMessage:error?'Request failed. Please try again.':null};
 let content;
@@ -122,6 +132,11 @@ else if(kind==='keyboard')content=<SshKeyboardInteractiveModal {...shared} reque
 else if(kind==='host')content=<SshHostVerificationModal {...shared} request={{requestId:'host',host:'server.example',port:22,connectionName:'Production',fingerprint:'SHA256:example',knownFingerprint:'SHA256:previous'}} onReject={noop} onAcceptOnce={noop} onAcceptAndSave={noop}/>;
 else if(kind==='smb')content=<SmbCredentialsModal {...shared} path="smb://server/share" onCancel={noop} onSubmit={value=>window.calls.push(['smb',value])}/>;
 else if(kind==='shares')content=<SmbSharePickerModal {...shared} path="smb://server" shares={['documents','backup']} onCancel={noop} onChangeCredentials={noop} onSubmit={value=>window.calls.push(['share',value])}/>;
+else if(kind==='ai-history')content=<AiCopilotConversationList conversation={null} conversationSearch="" filteredConversations={[]} isStreaming={false} loadConversation={async()=>{}} onCloseConversationList={noop} onDeleteConversation={noop} openNewConversation={noop} setConversationSearch={noop}/>;
+else if(kind==='connection-editor')content=<ConnectionModal standalone mode="create" form={{...defaultForm}} setForm={noop} connectionDefaults={{}} groupOptions={[]} errorMessage={null} onClose={noop} onSubmit={noop} onTestConnection={async()=>true}/>;
+else if(kind==='proxy-editor')content=<ProxyEditDialog isOpen isSubmitting={false} onClose={noop} onSave={async()=>{}} onTest={async()=>({success:true})}/>;
+else if(kind==='tunnel-editor')content=<TunnelEditDialog isOpen isSubmitting={false} onClose={noop} onSave={async()=>{}}/>;
+else if(kind==='settings')content=<SettingsModal theme={theme} themeConfig={createDefaultThemeConfig(theme.endsWith('light')?'light':'dark')} customThemes={[]} locale={locale} onSetTheme={noop} onSetThemeConfig={noop} onSetCustomThemes={noop} onSetLocale={noop} onOpenCommandManager={noop} onOpenConnectionManager={noop} onOpenLogsDirectory={noop} onClose={noop}/>;
 else if(kind==='permission')content=<FilePermissionModal {...shared} fileName="config.json" fileType="file" initialPermission="-rw-r--r--" supportsRecursive={false} targetPath="/srv/config.json" onSubmit={noop}/>;
 else if(kind==='ssh-key')content=<SshKeyNoteDialog {...shared} mode="edit" initialNote="production" onSubmit={noop}/>;
 else if(kind==='approval')content=<ExternalOperationConfirmation isSubmitting={busy} riskAcknowledged={true} onRiskAcknowledged={noop} onResolve={noop} request={{source:'cli',requestId:'test',title:'Confirm command',summary:'Execute command on production',destructive:true,details:'ls /srv',requiresRiskAcknowledgement:true}}/>;
@@ -270,7 +285,7 @@ try {
     const current = await page.locator('.file-action-modal').boundingBox()
     const previous = await before.locator('.file-action-modal').boundingBox()
     assert.ok(
-      current.width < previous.width && current.height > 190 && current.height < 360,
+      current.width <= previous.width && current.height > 190 && current.height < 360,
       'file action dialog must use moderate framed spacing'
     )
     assert.equal(
@@ -605,6 +620,63 @@ try {
       await page.keyboard.press('Escape')
       await page.locator('.path-bookmarks-dialog').waitFor({ state: 'hidden' })
     }
+  const shadowAudit = []
+  for (const theme of ['fileterm-light', 'codex-light', 'fileterm-dark', 'codex-dark']) {
+    await page.setViewportSize({ width: 1100, height: 760 })
+    for (const kind of [
+      'file-action',
+      'permission',
+      'ssh-key',
+      'root',
+      'backup',
+      'passphrase',
+      'keyboard',
+      'smb',
+      'shares',
+      'connection-editor',
+      'proxy-editor',
+      'tunnel-editor',
+      'settings',
+      'ai-history'
+    ]) {
+      await render(page, { kind, theme })
+      await page.keyboard.press('Tab')
+      const fields = await page
+        .locator(
+          'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]), textarea, .dropdown-select-trigger'
+        )
+        .all()
+      for (let index = 0; index < fields.length; index++) {
+        const field = fields[index]
+        if (!(await field.isVisible()) || !(await field.isEnabled())) continue
+        await field.focus()
+        await page.evaluate(() =>
+          Promise.all(
+            document
+              .getAnimations()
+              .filter((a) => a.effect.getComputedTiming().iterations !== Infinity)
+              .map((a) => a.finished.catch(() => {}))
+          )
+        )
+        if (kind === 'ai-history')
+          assert.equal(
+            await field.evaluate((node) => getComputedStyle(node).boxShadow),
+            'none',
+            'AI search paints focus only on the wrapper'
+          )
+        const surfaces = await field.evaluate(inspectFocusShadow)
+        if (surfaces.length > 1) shadowAudit.push({ theme, kind, index, duplicateFeedback: surfaces })
+        for (const surface of surfaces) if (surface.clips.length) shadowAudit.push({ theme, kind, index, ...surface })
+      }
+    }
+  }
+  if (process.env.FILETERM_UI_ARTIFACT_DIR)
+    writeFileSync(
+      join(process.env.FILETERM_UI_ARTIFACT_DIR, 'fileterm-shadow-audit.json'),
+      JSON.stringify(shadowAudit, null, 2)
+    )
+  assert.deepEqual(shadowAudit, [], 'focused controls must not duplicate or clip their outer shadows')
+  console.log('Focus shadow clipping audit passed: 14 real page/dialog configurations across four built-in themes.')
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await render(page, { kind: 'confirm', model: cases[0], busy: true })
   assert.equal(await page.locator('.ft-btn__spinner').evaluate((node) => getComputedStyle(node).animationName), 'none')

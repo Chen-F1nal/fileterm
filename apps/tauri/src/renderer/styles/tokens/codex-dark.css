@@ -50,6 +50,8 @@
   --ref-accent-muted: rgba(139, 191, 255, 0.12);
   --ref-accent-focus: rgba(139, 191, 255, 0.28);
   --ref-accent-secondary: #8bbfff;
+  --ref-input-focus-inset: rgba(255, 255, 255, 0.38);
+  --ref-input-focus-outer: transparent;
   --ref-focus-outline: #8bbfff;
 
   /* Status Colors */

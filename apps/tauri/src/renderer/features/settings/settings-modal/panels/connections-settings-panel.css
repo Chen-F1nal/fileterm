@@ -38,7 +38,6 @@
 }
 
 .settings-connection-defaults__field input:focus {
-  border-color: var(--focus-outline);
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }

@@ -423,7 +423,7 @@
   align-items: center !important;
   flex: 0 0 auto !important;
   min-height: 48px !important;
-  padding: 0 0 16px !important;
+  padding: 8px 0 16px !important;
   border-bottom: 0 !important;
   background: transparent !important;
   -webkit-app-region: no-drag !important;
@@ -450,7 +450,7 @@
   border: 1px solid var(--border-light) !important;
   background: var(--bg-card) !important;
   margin-left: 24px !important;
-  margin-right: 0 !important;
+  margin-right: 12px !important;
   padding: 0 12px !important;
   width: 280px !important;
 }

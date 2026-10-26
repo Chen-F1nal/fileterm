@@ -135,15 +135,27 @@ body,
 }
 
 button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
+input:where(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='color'],
+    [type='file'],
+    [type='button'],
+    [type='submit'],
+    [type='reset'],
+    [type='image']
+  ):focus-visible,
 .fs-tab:focus-visible,
-.quick-row:focus-visible,
-.pane-filter-input-wrapper:focus-within {
+.quick-row:focus-visible {
   outline: 1px solid var(--focus-outline);
   outline-offset: -1px;
   border-color: var(--focus-outline);
+}
+
+.pane-filter-input-wrapper:focus-within {
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 .fs-shell {

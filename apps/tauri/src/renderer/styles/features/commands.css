@@ -1134,7 +1134,7 @@
   height: 100%;
   min-height: 0;
   max-height: none;
-  border-width: 0;
+  border-width: 1px;
   border-radius: 0;
 }
 
@@ -1228,8 +1228,7 @@
 .command-target-select select:focus,
 .command-target-select select:active {
   outline: none;
-  border-color: var(--copy-link);
-  box-shadow: var(--control-focus-shadow);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .command-select-arrow {
@@ -1286,8 +1285,7 @@
 
 .custom-select-trigger:focus {
   outline: none;
-  border-color: var(--copy-link);
-  box-shadow: var(--control-focus-shadow);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .custom-select-dropdown {
@@ -1598,11 +1596,11 @@
 }
 
 .command-param-chip:focus-within {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 1px var(--focus-outline);
+  box-shadow: var(--input-focus-shadow);
   min-width: 180px;
   max-width: 520px;
   background: var(--surface-inset);
+  outline: none;
 }
 
 .command-param-chip-prefix {
@@ -2150,15 +2148,18 @@
 }
 
 .command-editor-dialog-form input:not([type='checkbox']):focus,
+.command-editor-field input:not([type='checkbox']):focus {
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
+}
+
 .command-editor-dialog-form .dropdown-select-trigger:focus-visible,
 .command-editor-dialog-form .ft-select-shell:focus-within,
-.command-editor-field input:not([type='checkbox']):focus,
 .command-editor-field .dropdown-select-trigger:focus-visible,
 .command-editor-field .ft-select-shell:focus-within,
 .command-folder-dialog-form input:focus {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 2px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 /* Code area textarea overrides: no border, transparent bg */

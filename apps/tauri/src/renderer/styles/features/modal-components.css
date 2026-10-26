@@ -43,8 +43,7 @@
 
 .file-action-field input:focus {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .file-action-field input:hover:not(:focus) {
@@ -504,8 +503,7 @@
 
 .file-permission-dialog__mode-input input:focus {
   outline: none;
-  border-color: var(--copy-link);
-  box-shadow: 0 0 0 3px var(--input-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .file-permission-dialog__recursive-card {
@@ -879,8 +877,8 @@
 }
 
 .connection-manager-search:focus-within {
-  border-color: var(--focus-outline);
-  box-shadow: inset 0 0 0 1px var(--focus-outline);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .connection-manager-search input {
@@ -1000,11 +998,16 @@
   background-color: var(--bg-main) !important;
 }
 
+.settings-modal .connection-manager-header {
+  min-height: 56px;
+}
+
 .settings-modal .connection-manager-sidebar {
   padding: 18px 12px;
 }
 
 .settings-modal .connection-manager-main {
+  scroll-padding-block: 12px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1282,9 +1285,8 @@
 .local-terminal-shell-input-label input:focus,
 .local-terminal-shell-select.dropdown-select-trigger:focus,
 .local-terminal-shell-select.ft-select-shell select:focus {
-  border-color: var(--focus-outline);
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .local-terminal-shell-input-label input:disabled,
@@ -1483,7 +1485,7 @@
 .update-check-preference-select:focus-visible,
 .update-check-preference-select.ft-select-shell select:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .update-check-preference-select:disabled,
@@ -1937,8 +1939,7 @@
 
 .theme-config-name-input:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .settings-modal .theme-config-actions-control .theme-config-save-button {
@@ -1999,8 +2000,7 @@
 .theme-config-select.dropdown-select-trigger:focus-visible,
 .theme-config-select.ft-select-shell:focus-within {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 2px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .theme-config-preview {
@@ -2321,8 +2321,8 @@
 }
 
 .theme-color-text:focus {
-  border-color: var(--focus-outline);
   outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 .theme-config-subsection {
