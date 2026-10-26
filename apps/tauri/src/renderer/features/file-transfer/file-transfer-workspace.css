@@ -91,6 +91,15 @@
   font-size: 11px;
 }
 
+.file-transfer-workspace__feedback {
+  min-height: 1.4em;
+  flex: none;
+}
+
+.file-transfer-workspace__feedback.is-error {
+  color: var(--status-danger);
+}
+
 .file-transfer-workspace__panes {
   display: grid;
   flex: 1;
@@ -244,6 +253,10 @@
   .file-transfer-workspace {
     padding: 8px calc(var(--file-transfer-frame-width) + 12px);
     gap: 8px;
+  }
+
+  .file-transfer-workspace__feedback {
+    min-height: 2.8em;
   }
 
   .file-transfer-workspace__toolbar {

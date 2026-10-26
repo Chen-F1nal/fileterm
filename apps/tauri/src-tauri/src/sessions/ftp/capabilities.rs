@@ -336,6 +336,15 @@ async fn client_replace(
     ftp_match!(client, ftp => replace_file(ftp, partial, destination))
 }
 
+async fn client_commit(
+    client: &mut FtpClient,
+    partial: &str,
+    destination: &str,
+    replace: bool,
+) -> Result<bool, String> {
+    ftp_match!(client, ftp => replace_file_with_policy(ftp, partial, destination, Some(replace)))
+}
+
 async fn client_remove(client: &mut FtpClient, path: &str) -> Result<(), String> {
     ftp_match!(client, ftp => remove_file(ftp, path))
 }

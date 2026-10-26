@@ -741,6 +741,7 @@ export interface TransferManifest {
 export interface TransferTask {
   id: string
   direction: 'upload' | 'download' | 'copy'
+  conflictPolicy?: 'skip' | 'replace'
   copySource?: { profileId: string; tabId: string; name: string; targetName: string }
   name: string
   progress: number
@@ -775,6 +776,7 @@ export interface TransferProgress {
 }
 
 export interface TransferTargetOptions {
+  conflictPolicy?: 'skip' | 'replace'
   targetName?: string
 }
 

@@ -14,7 +14,8 @@ import type {
   SavedTheme,
   SessionSnapshot,
   ThemeConfig,
-  WorkspaceTab
+  WorkspaceTab,
+  WorkspaceSnapshot
 } from '@fileterm/core'
 import { useEffect, useState, type Dispatch, type DragEvent, type SetStateAction } from 'react'
 import type { SendScope, SessionSendTarget } from '../common/session-send-targets'
@@ -43,6 +44,7 @@ export function WorkspaceStage({
   activeLocalTab,
   fileTransferTab,
   desktopApi,
+  onApplySnapshot,
   activeHomeTabId,
   activeProfile,
   activeSession,
@@ -171,6 +173,7 @@ export function WorkspaceStage({
   activeLocalTab: ActiveLocalTab
   fileTransferTab?: Extract<LocalTab, { kind: 'transfers' }>
   desktopApi?: FileTermDesktopApi
+  onApplySnapshot?(snapshot: WorkspaceSnapshot): void
   activeHomeTabId: string | null
   activeProfile: ConnectionProfile | null
   activeSession: SessionSnapshot | null
@@ -311,6 +314,7 @@ export function WorkspaceStage({
     return (
       <FileTransferWorkspace
         api={desktopApi}
+        onApplySnapshot={onApplySnapshot}
         tabs={[]}
         sessions={sessions}
         initialTabId={fileTransferTab?.initialTabId}
@@ -654,6 +658,7 @@ export function KeepAliveWorkspaceStage({
         >
           <FileTransferWorkspace
             api={stageProps.desktopApi}
+            onApplySnapshot={stageProps.onApplySnapshot}
             tabs={workspaceTabs}
             sessions={stageProps.sessions}
             initialTabId={stageProps.fileTransferTab.initialTabId}

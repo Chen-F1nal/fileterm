@@ -101,6 +101,13 @@ pub struct TransferManifest {
     pub files: Vec<TransferManifestEntry>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferConflictPolicy {
+    Skip,
+    Replace,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferTask {
@@ -108,6 +115,8 @@ pub struct TransferTask {
     pub direction: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copy_source: Option<CopySource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conflict_policy: Option<TransferConflictPolicy>,
     pub name: String,
     pub progress: f64,
     pub status: String,
@@ -178,6 +187,7 @@ impl TransferTask {
             id: self.id.clone(),
             direction: self.direction.clone(),
             copy_source: self.copy_source.clone(),
+            conflict_policy: self.conflict_policy,
             name: self.name.clone(),
             progress: self.progress,
             status: self.status.clone(),
@@ -401,8 +411,11 @@ fn prune_transfer_history(tasks: &mut Vec<TransferTask>) {
 fn write_journal(app: &AppHandle, tasks: &[TransferTask]) -> Result<(), AppError> {
     let (path, temporary, backup) = journal_paths(app)?;
     let journal = TransferJournal {
-        // Old clients must not interpret a two-server copy as a local download.
-        version: if tasks.iter().any(|task| task.direction == "copy") {
+        // Old clients must not ignore a two-server endpoint or an explicit conflict policy.
+        version: if tasks
+            .iter()
+            .any(|task| task.direction == "copy" || task.conflict_policy.is_some())
+        {
             JOURNAL_VERSION
         } else {
             1

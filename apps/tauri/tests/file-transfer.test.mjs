@@ -155,3 +155,41 @@ test('closing the last file transfer tab requests tab closure instead of closing
   assert.equal(state.windowClosed, false)
   assert.deepEqual(Array.from(state.closeRequests[0]), [fileTab.id])
 })
+
+test('completion refreshes only the destination pane and directory, including a visible folder child', () => {
+  const utilities = load('../src/renderer/hooks/file-operations-utils.ts', {
+    '../app/app-utils': { WINDOWS_DRIVES_PATH: '__drives__' }
+  })
+  const { shouldRefreshTransferPane } = load('../src/renderer/features/file-transfer/transfer-refresh.ts', {
+    '../../hooks/file-operations-utils': utilities
+  })
+  const task = {
+    status: 'done',
+    direction: 'copy',
+    tabId: 'b',
+    profileId: 'B',
+    destinationPath: '/backup/file',
+    copySource: { profileId: 'A' }
+  }
+  assert.equal(shouldRefreshTransferPane(task, 'b', '/backup', 'B'), true)
+  assert.equal(shouldRefreshTransferPane(task, 'new-b', '/backup', 'B'), true)
+  assert.equal(shouldRefreshTransferPane(task, 'a', '/backup', 'A'), false)
+  assert.equal(shouldRefreshTransferPane(task, 'b', '/other', 'B'), false)
+  assert.equal(shouldRefreshTransferPane(task, 'local', '/backup'), false)
+  assert.equal(shouldRefreshTransferPane({ ...task, status: 'running' }, 'b', '/backup', 'B'), false)
+  const folder = { ...task, targetType: 'folder', destinationPath: '/backup/data' }
+  assert.equal(shouldRefreshTransferPane(folder, 'b', '/backup/data/sub', 'B'), true)
+  assert.equal(shouldRefreshTransferPane(folder, 'b', '/backup/database', 'B'), false)
+  const download = { status: 'done', direction: 'download', destinationPath: '/local/data/file' }
+  assert.equal(shouldRefreshTransferPane(download, 'local', '/local/data'), true)
+  assert.equal(shouldRefreshTransferPane(download, 'local', '/unrelated'), false)
+  assert.equal(
+    shouldRefreshTransferPane(
+      { ...download, targetType: 'folder', destinationPath: '/local/data' },
+      'local',
+      '/local/data/sub'
+    ),
+    true
+  )
+  assert.equal(shouldRefreshTransferPane({ ...download, destinationPath: undefined }, 'local', '/local'), true)
+})

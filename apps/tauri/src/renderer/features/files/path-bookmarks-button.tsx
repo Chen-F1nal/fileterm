@@ -7,6 +7,7 @@ import { Dialog } from '../../components/common/dialog/dialog'
 import { AppIcon } from '../common/app-icon'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
 import { VerticalScrollbar } from '../common/vertical-scrollbar'
+import { StableButtonLabel } from '../common/stable-button-content'
 import { toPathBookmark } from './path-bookmark-provider'
 import './path-bookmarks-button.css'
 
@@ -78,7 +79,16 @@ export function PathBookmarksButton({
   )
 
   return (
-    <span className="path-bookmarks-control" onKeyDown={(event) => event.stopPropagation()}>
+    <span
+      className="path-bookmarks-control"
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        if (event.key === 'Escape' && removing && !busy) {
+          event.preventDefault()
+          setRemoving(null)
+        }
+      }}
+    >
       <Button
         ref={triggerRef}
         className="path-bookmarks-trigger"
@@ -97,6 +107,7 @@ export function PathBookmarksButton({
           <Dialog
             ref={dialogRef}
             isOpen={open}
+            closeOnEscape={!removing}
             title={t.pathBookmarks}
             aria-label={t.pathBookmarks}
             size="sm"
@@ -138,11 +149,14 @@ export function PathBookmarksButton({
                   onClick={() => void update('add', current)}
                   icon={<AppIcon name={isCurrentBookmarked ? 'check' : 'plus'} size={13} />}
                 >
-                  {isCurrentBookmarked ? t.bookmarkAlreadyAdded : t.bookmarkCurrent}
+                  <StableButtonLabel
+                    label={isCurrentBookmarked ? t.bookmarkAlreadyAdded : t.bookmarkCurrent}
+                    reserveLabel={isCurrentBookmarked ? t.bookmarkCurrent : t.bookmarkAlreadyAdded}
+                  />
                 </Button>
               </div>
               {error && (
-                <p role="alert" className="path-bookmarks-error">
+                <p role="alert" className="modal-error path-bookmarks-error">
                   {error}
                 </p>
               )}
@@ -225,6 +239,7 @@ export function PathBookmarksButton({
         )}
       {removing && (
         <ConfirmActionDialog
+          backdropClassName="path-bookmarks-remove-confirm-backdrop"
           title={t.bookmarkRemove}
           description={removing.path}
           confirmLabel={t.bookmarkRemove}

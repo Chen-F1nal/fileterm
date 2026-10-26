@@ -91,8 +91,7 @@
   transition:
     background-color 0.18s ease,
     border-color 0.18s ease,
-    color 0.18s ease,
-    transform 0.18s ease;
+    color 0.18s ease;
 }
 
 .confirm-action-dialog__button .button-spinner {
@@ -131,17 +130,9 @@
   color: var(--dialog-button-danger-hover-text);
 }
 
-.confirm-action-dialog__button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .confirm-action-dialog__button {
     transition: none;
-  }
-
-  .confirm-action-dialog__button:hover:not(:disabled) {
-    transform: none;
   }
 }
 

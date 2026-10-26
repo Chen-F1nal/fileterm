@@ -132,6 +132,17 @@ async fn run_ftp_worker(
             initial_files.len()
         ),
     );
+    if let Some(session) = app
+        .state::<crate::services::workspace::WorkspaceState>()
+        .sessions
+        .write()
+        .await
+        .get_mut(tab_id)
+    {
+        session.transfer_endpoint = Some(crate::sessions::transfer_endpoint::fingerprint(
+            std::slice::from_ref(profile),
+        ));
+    }
     set_ftp_state(
         app,
         tab_id,
@@ -524,6 +535,27 @@ async fn run_ftp_worker(
                     .await;
                     let _ = respond_to.send(result);
                 });
+            }
+            Some(WorkerCmd::CommitRemoteFile {
+                partial_path,
+                destination_path,
+                replace_existing,
+                cancellation,
+                respond_to,
+            }) => {
+                let result = ftp_with_cancellation(
+                    profile,
+                    "commit",
+                    cancellation,
+                    client_commit(
+                        &mut client,
+                        &partial_path,
+                        &destination_path,
+                        replace_existing,
+                    ),
+                )
+                .await;
+                respond_ftp_result!(respond_to, result);
             }
             Some(WorkerCmd::ReplaceRemoteFile {
                 partial_path,

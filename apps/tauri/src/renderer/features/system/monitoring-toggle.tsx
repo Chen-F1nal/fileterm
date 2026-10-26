@@ -93,6 +93,7 @@ export function MonitoringToggle({
         title={label}
         aria-label={label}
         loading={requested !== null}
+        reserveLoadingSpace
         disabled={!window.fileterm}
         icon={<span className="monitoring-toggle-icon" aria-hidden="true" />}
         onClick={() => {

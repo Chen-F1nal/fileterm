@@ -18,9 +18,8 @@ async fn resolve_copy_tabs(
     .ok_or_else(|| transfer_error("请先连接目标服务器并切回普通用户文件模式"))?;
     let current_source = copy_session(app, &source_tab).await?;
     let current_target = copy_session(app, &target_tab).await?;
-    if current_source.2 != source.source_endpoint || current_target.2 != source.target_endpoint {
-        return Err(transfer_error("源端或目标端连接配置已改变，请新建复制任务"));
-    }
+    ensure_copy_endpoint(&source.source_endpoint, &current_source.2)?;
+    ensure_copy_endpoint(&source.target_endpoint, &current_target.2)?;
     Ok((source_tab, target_tab))
 }
 
@@ -179,8 +178,25 @@ async fn run_remote_copy(
     mut task: TransferTask,
     cancel: &CancellationToken,
 ) -> Result<(), AppError> {
+    let state = app.state::<crate::services::workspace::WorkspaceState>();
+    let source_profile = task
+        .copy_source
+        .as_ref()
+        .ok_or_else(|| transfer_error("缺少源端信息"))?;
+    let _io_leases = state
+        .copy_io_gates
+        .acquire(
+            &source_profile.profile_id,
+            task.profile_id.as_deref().unwrap_or_default(),
+            cancel,
+        )
+        .await?;
+    // Re-resolve after waiting: either endpoint may have reconnected while queued.
     let (source_tab, target_tab) = resolve_copy_tabs(app, &task).await?;
-    let _power = power::acquire(app.clone()).await;
+    let _power = tokio::select! {
+        _ = cancel.cancelled() => return Err(transfer_error("传输已取消")),
+        lease = power::acquire(app.clone()) => lease,
+    };
     let source = task
         .copy_source
         .clone()
@@ -356,8 +372,10 @@ async fn run_remote_copy(
             ) {
                 return Err(transfer_error("源文件在传输期间发生变化"));
             }
-            if before
-                != copy_entry_metadata(app, &target_tab, &entry.destination_path, cancel).await?
+            if source.replace_existing
+                && before
+                    != copy_entry_metadata(app, &target_tab, &entry.destination_path, cancel)
+                        .await?
             {
                 return Err(transfer_error(
                     "目标在传输期间发生变化，已保留断点，请检查后继续",
@@ -373,15 +391,23 @@ async fn run_remote_copy(
             )
             .await?;
             // Finish replacement/rollback before honoring pause or discard.
-            worker_call(app, &target_tab, |respond_to, cancellation| {
-                WorkerCmd::ReplaceRemoteFile {
-                    partial_path: entry.partial_path.clone(),
-                    destination_path: entry.destination_path.clone(),
-                    cancellation,
-                    respond_to,
-                }
-            })
+            let committed = commit_remote_transfer(
+                app,
+                &target_tab,
+                &entry.partial_path,
+                &entry.destination_path,
+                if source.replace_existing {
+                    TransferConflictPolicy::Replace
+                } else {
+                    TransferConflictPolicy::Skip
+                },
+            )
             .await?;
+            if !committed {
+                remove_remote_transfer_file(app, &target_tab, &entry.partial_path, Some(cancel))
+                    .await?;
+                skipped += 1;
+            }
         }
         completed += current.size;
         patch_task(

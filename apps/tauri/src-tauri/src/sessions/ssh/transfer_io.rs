@@ -201,6 +201,17 @@ async fn replace_remote_file(
     partial_path: &str,
     destination_path: &str,
 ) -> Result<(), String> {
+    replace_remote_file_with_policy(sftp, partial_path, destination_path, None)
+        .await
+        .map(|_| ())
+}
+
+async fn replace_remote_file_with_policy(
+    sftp: &SftpSession,
+    partial_path: &str,
+    destination_path: &str,
+    replace_existing: Option<bool>,
+) -> Result<bool, String> {
     let partial_metadata = sftp
         .symlink_metadata(partial_path)
         .await
@@ -211,7 +222,22 @@ async fn replace_remote_file(
         Err(error) => return Err(format!("无法读取远端目标文件属性: {error}")),
     };
 
-    if destination_metadata.as_ref().is_some_and(|destination| {
+    if let Some(replace) = replace_existing {
+        if !partial_metadata.file_type().is_file() {
+            return Err("提交断点不是普通文件，已保留断点".into());
+        }
+        if destination_metadata.is_some() && !replace {
+            return Ok(false);
+        }
+        if destination_metadata
+            .as_ref()
+            .is_some_and(|metadata| !metadata.file_type().is_file())
+        {
+            return Err("目标不是普通文件，拒绝覆盖".into());
+        }
+    }
+
+    if replace_existing.is_none() && destination_metadata.as_ref().is_some_and(|destination| {
         destination.is_symlink()
             || matches!((destination.uid, partial_metadata.uid), (Some(left), Some(right)) if left != right)
     }) {
@@ -248,7 +274,7 @@ async fn replace_remote_file(
         sftp.remove_file(partial_path)
             .await
             .map_err(|error| format!("无法清理远端断点文件: {error}"))?;
-        return Ok(());
+        return Ok(true);
     }
 
     if let Some(permissions) = destination_metadata
@@ -285,7 +311,7 @@ async fn replace_remote_file(
     if moved_destination {
         let _ = sftp.remove_file(&backup_path).await;
     }
-    Ok(())
+    Ok(true)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

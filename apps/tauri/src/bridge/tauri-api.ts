@@ -31,6 +31,7 @@ import type {
   CommandSendPreferences,
   PathBookmark,
   TransferTask,
+  TransferTargetOptions,
   SessionMetricsUpdate,
   RemoteFilesUpdate,
   RemoteFileItem,
@@ -515,16 +516,16 @@ export async function createTauriApi(): Promise<FileTermDesktopApi> {
     getCommandSendPreferences: () => invoke<CommandSendPreferences>('app_get_command_send_preferences'),
     setCommandSendPreferences: (preferences: CommandSendPreferences) =>
       invoke<void>('app_set_command_send_preferences', { preferences }),
-    uploadFile: (tabId: string, localPath: string, remoteDirectory: string, options?: { targetName?: string }) =>
+    uploadFile: (tabId: string, localPath: string, remoteDirectory: string, options?: TransferTargetOptions) =>
       invoke<WorkspaceSnapshot>('app_upload_file', { tabId, localPath, remoteDirectory, options: options ?? null }),
-    downloadFile: (tabId: string, remotePath: string, localDirectory: string, options?: { targetName?: string }) =>
+    downloadFile: (tabId: string, remotePath: string, localDirectory: string, options?: TransferTargetOptions) =>
       invoke<WorkspaceSnapshot>('app_download_file', { tabId, remotePath, localDirectory, options: options ?? null }),
     downloadRemotePath: (
       tabId: string,
       remotePath: string,
       targetType: 'file' | 'folder',
       localDirectory: string,
-      options?: { targetName?: string }
+      options?: TransferTargetOptions
     ) =>
       invoke<WorkspaceSnapshot>('app_download_remote_path', {
         tabId,

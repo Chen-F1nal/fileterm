@@ -10,3 +10,6 @@ include!("capabilities.rs");
 include!("listing.rs");
 include!("file_operations.rs");
 include!("tests.rs");
+
+#[cfg(test)]
+mod commit_tests;

@@ -87,6 +87,7 @@ async fn spawn_session_for_profile(
         sessions.insert(
             tab_id.clone(),
             crate::services::SessionSnapshot {
+                transfer_endpoint: None,
                 profile_id: profile_id.to_string(),
                 ai_session_revision: "0".to_string(),
                 device_mode: crate::services::workspace::configured_device_mode_for_profile(
@@ -213,6 +214,7 @@ async fn spawn_local_terminal_tab(
         sessions.insert(
             tab_id.clone(),
             crate::services::SessionSnapshot {
+                transfer_endpoint: None,
                 profile_id: "__local_terminal__".to_string(),
                 ai_session_revision: "0".to_string(),
                 device_mode: None,

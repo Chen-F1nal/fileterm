@@ -76,7 +76,7 @@ async fn cleanup_transfer_partial(app: &AppHandle, task: &TransferTask) -> Resul
     if let Some(source) = &task.copy_source {
         let target = copy_session(app, task.tab_id.as_deref().unwrap_or_default()).await?;
         if task.profile_id.as_deref() != Some(target.0.as_str())
-            || target.2 != source.target_endpoint
+            || ensure_copy_endpoint(&source.target_endpoint, &target.2).is_err()
         {
             return Err(transfer_error("目标连接已改变，未清理其他服务器上的文件"));
         }

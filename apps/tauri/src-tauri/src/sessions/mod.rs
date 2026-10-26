@@ -11,6 +11,7 @@ pub mod telnet;
 mod telnet_direct;
 pub mod terminal;
 pub(crate) mod terminal_input;
+pub(crate) mod transfer_endpoint;
 pub(crate) mod transfer_file_safety;
 mod upload_source;
 
@@ -186,6 +187,13 @@ pub enum WorkerCmd {
         destination_path: String,
         cancellation: tokio_util::sync::CancellationToken,
         respond_to: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    CommitRemoteFile {
+        partial_path: String,
+        destination_path: String,
+        replace_existing: bool,
+        cancellation: tokio_util::sync::CancellationToken,
+        respond_to: tokio::sync::oneshot::Sender<Result<bool, String>>,
     },
     CommitRemoteStaging {
         staging_path: String,

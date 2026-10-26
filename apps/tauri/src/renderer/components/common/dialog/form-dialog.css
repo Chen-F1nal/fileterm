@@ -1,0 +1,126 @@
+.modal-card.form-dialog {
+  width: min(var(--form-dialog-width, 500px), calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.form-dialog > .modal-header {
+  min-height: 44px;
+  height: auto;
+  margin: 0;
+  padding: 0 16px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-sidebar);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.form-dialog__scroll-region {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.form-dialog__body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.form-dialog__body::-webkit-scrollbar {
+  display: none;
+}
+
+.form-dialog .ssh-fieldset {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 14px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.form-dialog .ssh-fieldset > legend {
+  padding-inline: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-dialog .file-action-field {
+  gap: 6px;
+  margin: 0;
+}
+
+.form-dialog .file-action-field input,
+.form-dialog .file-action-field .dropdown-select-trigger,
+.form-dialog .file-action-field .ft-select-shell {
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  transition:
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+.form-dialog .file-action-field input:focus {
+  border-color: var(--focus-outline);
+}
+
+.form-dialog .root-access-description,
+.form-dialog .file-action-description,
+.form-dialog .file-action-hint {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.form-dialog .root-access-meta,
+.form-dialog .ssh-verification-box {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface-input);
+}
+
+.form-dialog > .form-actions {
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 10px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.form-dialog > .form-actions > .ft-btn {
+  min-width: 88px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: var(--button-font-size-regular);
+  font-weight: var(--button-font-weight);
+  line-height: var(--button-line-height);
+}

@@ -12,6 +12,7 @@ pub async fn create_upload(
     local_path: String,
     remote_directory: String,
     target_name: Option<String>,
+    conflict_policy: Option<TransferConflictPolicy>,
 ) -> Result<(), AppError> {
     let request_id = format!("transfer-{}", uuid::Uuid::new_v4());
     let started = std::time::Instant::now();
@@ -25,6 +26,7 @@ pub async fn create_upload(
         local_path,
         remote_directory,
         target_name,
+        conflict_policy,
         request_id.clone(),
     )
     .await;
@@ -46,12 +48,14 @@ pub async fn create_upload(
     result
 }
 
+#[allow(clippy::too_many_arguments)] // Durable conflict policy is independent of the optional target name.
 async fn create_upload_task(
     app: &AppHandle,
     tab_id: String,
     local_path: String,
     remote_directory: String,
     target_name: Option<String>,
+    conflict_policy: Option<TransferConflictPolicy>,
     task_id: String,
 ) -> Result<(), AppError> {
     ensure_loaded(app).await?;
@@ -130,10 +134,11 @@ async fn create_upload_task(
         };
         let (_, total) = manifest_totals(&manifest);
         let now = now_ms();
-        let task = TransferTask {
+        let mut task = TransferTask {
             id: task_id,
             direction: "upload".to_string(),
             copy_source: None,
+            conflict_policy: None,
             name,
             progress: 0.0,
             status: "queued".to_string(),
@@ -158,6 +163,7 @@ async fn create_upload_task(
             created_at: Some(now),
             updated_at: Some(now),
         };
+        prepare_conflict_task(&mut task, conflict_policy)?;
         {
             let mut tasks = state.transfers.write().await;
             ensure_copy_target_is_free(&tasks, &task)?;
@@ -174,10 +180,11 @@ async fn create_upload_task(
     let partial = partial_path(&destination_path);
     let staging = (file_access_mode == "root").then(|| root_staging_path(&name));
     let now = now_ms();
-    let task = TransferTask {
+    let mut task = TransferTask {
         id: task_id,
         direction: "upload".to_string(),
         copy_source: None,
+        conflict_policy: None,
         name,
         progress: 0.0,
         status: "queued".to_string(),
@@ -209,6 +216,7 @@ async fn create_upload_task(
         created_at: Some(now),
         updated_at: Some(now),
     };
+    prepare_conflict_task(&mut task, conflict_policy)?;
     {
         let mut tasks = state.transfers.write().await;
         ensure_copy_target_is_free(&tasks, &task)?;
@@ -226,6 +234,7 @@ pub async fn create_download(
     remote_path: String,
     local_directory: String,
     target_name: Option<String>,
+    conflict_policy: Option<TransferConflictPolicy>,
 ) -> Result<String, AppError> {
     ensure_loaded(app).await?;
     let state = app.state::<crate::services::workspace::WorkspaceState>();
@@ -253,10 +262,11 @@ pub async fn create_download(
         .to_string_lossy()
         .into_owned();
     let now = now_ms();
-    let task = TransferTask {
+    let mut task = TransferTask {
         id: format!("transfer-{}", uuid::Uuid::new_v4()),
         direction: "download".to_string(),
         copy_source: None,
+        conflict_policy: None,
         name,
         progress: 0.0,
         status: "queued".to_string(),
@@ -289,6 +299,7 @@ pub async fn create_download(
         created_at: Some(now),
         updated_at: Some(now),
     };
+    prepare_conflict_task(&mut task, conflict_policy)?;
     {
         let mut tasks = state.transfers.write().await;
         ensure_copy_target_is_free(&tasks, &task)?;
@@ -307,6 +318,7 @@ pub async fn create_download_directory(
     remote_path: String,
     local_directory: String,
     target_name: Option<String>,
+    conflict_policy: Option<TransferConflictPolicy>,
 ) -> Result<String, AppError> {
     ensure_loaded(app).await?;
     let state = app.state::<crate::services::workspace::WorkspaceState>();
@@ -365,10 +377,11 @@ pub async fn create_download_directory(
     };
     let (_, total) = manifest_totals(&manifest);
     let now = now_ms();
-    let task = TransferTask {
+    let mut task = TransferTask {
         id: format!("transfer-{}", uuid::Uuid::new_v4()),
         direction: "download".to_string(),
         copy_source: None,
+        conflict_policy: None,
         name,
         progress: 0.0,
         status: "queued".to_string(),
@@ -393,6 +406,7 @@ pub async fn create_download_directory(
         created_at: Some(now),
         updated_at: Some(now),
     };
+    prepare_conflict_task(&mut task, conflict_policy)?;
     {
         let mut tasks = state.transfers.write().await;
         ensure_copy_target_is_free(&tasks, &task)?;

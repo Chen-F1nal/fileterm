@@ -133,6 +133,7 @@ struct SshDisconnectInfo {
 type SharedSshDisconnectReason = Arc<StdMutex<Option<SshDisconnectInfo>>>;
 
 struct OpenSshSession {
+    transfer_endpoint: String,
     handle: Arc<Handle<ClientHandler>>,
     cleanup: SshSessionCleanup<ClientHandler>,
     remote_sshid: Vec<u8>,

@@ -301,6 +301,30 @@ async fn dispatch_transfer_cmd(
             });
             Ok(false)
         }
+        WorkerCmd::CommitRemoteFile {
+            partial_path,
+            destination_path,
+            replace_existing,
+            cancellation,
+            respond_to,
+        } => {
+            let sftp = Arc::clone(sftp);
+            let root = file_access_mode == "root";
+            spawn_cancellable_file_operation(cancellation, respond_to, async move {
+                if root {
+                    return Err("严格提交不支持 root 文件模式".into());
+                }
+                let guard = sftp.write().await;
+                replace_remote_file_with_policy(
+                    &guard,
+                    &partial_path,
+                    &destination_path,
+                    Some(replace_existing),
+                )
+                .await
+            });
+            Ok(false)
+        }
         WorkerCmd::ReplaceRemoteFile {
             partial_path,
             destination_path,

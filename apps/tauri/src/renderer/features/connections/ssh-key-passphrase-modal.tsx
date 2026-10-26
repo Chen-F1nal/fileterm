@@ -1,9 +1,11 @@
+import { FormDialogBody } from '../../components/common/dialog/form-dialog-body'
 import { useEffect, useState } from 'react'
 import type { SshKeyPassphrasePromptRequest } from '@fileterm/core'
 import { t } from '../../i18n'
 import { CloseButton } from '../common/close-button'
 import { SelectionControl } from '../common/selection-control'
-import { StableButtonContent } from '../common/stable-button-content'
+import { StableButtonLabel } from '../common/stable-button-content'
+import { Button } from '../../components/common/button/button'
 import { sshInteractionConnectionLabel } from './ssh-interaction-labels'
 
 export function SshKeyPassphraseModal({
@@ -31,58 +33,64 @@ export function SshKeyPassphraseModal({
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-card ssh-interaction-modal">
+      <div className="modal-card form-dialog ssh-interaction-modal">
         <div className="modal-header">
           <span>{t.sshKeyPassphraseTitle}</span>
           <CloseButton disabled={isSubmitting} onClick={onCancel} />
         </div>
-        <div className="root-access-description">
-          {request.reason === 'invalid-saved' ? t.sshKeyPassphraseInvalidSaved : t.sshKeyPassphraseRequired}
-        </div>
-        <div className="root-access-meta">
-          <span>{t.sshKeyboardInteractiveConnection}</span>
-          <strong>{sshInteractionConnectionLabel(request.authenticationTarget, request.connectionName)}</strong>
-        </div>
-        <div className="root-access-meta">
-          <span>{t.sshKeyPassphraseKey}</span>
-          <strong>{request.keyName}</strong>
-        </div>
-        <label className="file-action-field">
-          <span>{t.sshKeyPassphraseLabel}</span>
-          <input
-            autoFocus
-            disabled={isSubmitting}
-            type="password"
-            value={passphrase}
-            onChange={(event) => setPassphrase(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') submit()
-            }}
-          />
-        </label>
-        <label className="ssh-checkbox">
-          <SelectionControl
-            checked={savePassphrase}
-            disabled={isSubmitting}
-            type="checkbox"
-            onChange={(event) => setSavePassphrase(event.target.checked)}
-          />
-          <span>{t.sshKeyPassphraseSave}</span>
-        </label>
-        {errorMessage ? <div className="modal-error">{errorMessage}</div> : null}
+        <FormDialogBody>
+          <fieldset className="ssh-fieldset">
+            <legend>{t.general}</legend>
+            <div className="root-access-description">
+              {request.reason === 'invalid-saved' ? t.sshKeyPassphraseInvalidSaved : t.sshKeyPassphraseRequired}
+            </div>
+            <div className="root-access-meta">
+              <span>{t.sshKeyboardInteractiveConnection}</span>
+              <strong>{sshInteractionConnectionLabel(request.authenticationTarget, request.connectionName)}</strong>
+            </div>
+            <div className="root-access-meta">
+              <span>{t.sshKeyPassphraseKey}</span>
+              <strong>{request.keyName}</strong>
+            </div>
+            <label className="file-action-field">
+              <span>{t.sshKeyPassphraseLabel}</span>
+              <input
+                autoFocus
+                disabled={isSubmitting}
+                type="password"
+                value={passphrase}
+                onChange={(event) => setPassphrase(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') submit()
+                }}
+              />
+            </label>
+            <label className="ssh-checkbox">
+              <SelectionControl
+                checked={savePassphrase}
+                disabled={isSubmitting}
+                type="checkbox"
+                onChange={(event) => setSavePassphrase(event.target.checked)}
+              />
+              <span>{t.sshKeyPassphraseSave}</span>
+            </label>
+            {errorMessage ? <div className="modal-error">{errorMessage}</div> : null}
+          </fieldset>
+        </FormDialogBody>
         <div className="form-actions">
-          <button className="flat-button" disabled={isSubmitting} onClick={onCancel} type="button">
+          <Button variant="secondary" disabled={isSubmitting} onClick={onCancel} type="button">
             {t.cancel}
-          </button>
-          <button
-            aria-busy={isSubmitting}
-            className="primary-button"
+          </Button>
+          <Button
+            loading={isSubmitting}
+            reserveLoadingSpace
+            variant="primary"
             disabled={!passphrase || isSubmitting}
             onClick={submit}
             type="button"
           >
-            <StableButtonContent busy={isSubmitting} label={t.sshKeyPassphraseContinue} />
-          </button>
+            <StableButtonLabel label={t.sshKeyPassphraseContinue} />
+          </Button>
         </div>
       </div>
     </div>

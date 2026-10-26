@@ -189,6 +189,10 @@ async fn handle_worker_cmd_without_sftp(
             let _ = respond_to.send(sftp_unavailable_result(unavailable_reason));
             Ok(false)
         }
+        WorkerCmd::CommitRemoteFile { respond_to, .. } => {
+            let _ = respond_to.send(Err("SFTP 不可用".into()));
+            Ok(false)
+        }
         WorkerCmd::StatRemoteFile { respond_to, .. } => {
             let _ = respond_to.send(sftp_unavailable_result(unavailable_reason));
             Ok(false)

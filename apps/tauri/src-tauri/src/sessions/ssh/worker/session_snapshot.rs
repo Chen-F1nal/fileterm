@@ -72,6 +72,7 @@ let state = startup.state;
     sessions.insert(
         tab_id.to_string(),
         crate::services::SessionSnapshot {
+            transfer_endpoint: None,
             profile_id: profile
                 .get("id")
                 .and_then(|id| id.as_str())

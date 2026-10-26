@@ -2681,6 +2681,67 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
+    async fn strict_sftp_commit_rejects_links_skips_late_conflicts_and_rolls_back_failed_rename() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let fixture = start_openssh_fixture();
+        wait_for_openssh(fixture.port).await;
+        let handle =
+            authenticate_openssh_fixture(&fixture, &serde_json::json!({"proxy":{"type":"none"}}))
+                .await;
+        let channel = handle.channel_open_session().await.unwrap();
+        channel.request_subsystem(true, "sftp").await.unwrap();
+        let sftp = russh_sftp::client::SftpSession::new(channel.into_stream())
+            .await
+            .unwrap();
+        let root = &fixture.remote_dir;
+        let partial = root.join("part");
+        let destination = root.join("target");
+        let outside = root.join("outside");
+        std::fs::write(&partial, b"new").unwrap();
+        std::fs::write(&outside, b"untouched").unwrap();
+        symlink(&outside, &destination).unwrap();
+        let commit = |replace| {
+            super::replace_remote_file_with_policy(
+                &sftp,
+                partial.to_str().unwrap(),
+                destination.to_str().unwrap(),
+                Some(replace),
+            )
+        };
+        assert!(commit(true).await.is_err());
+        assert_eq!(std::fs::read(&outside).unwrap(), b"untouched");
+        assert!(!commit(false).await.unwrap());
+        std::fs::remove_file(&destination).unwrap();
+        std::fs::write(&destination, b"old").unwrap();
+        assert!(!commit(false).await.unwrap());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"old");
+        assert!(commit(true).await.unwrap());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+        symlink(&outside, &partial).unwrap();
+        assert!(commit(true).await.is_err());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+        std::fs::remove_file(&partial).unwrap();
+
+        let locked = root.join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        let blocked_partial = locked.join("part");
+        std::fs::write(&blocked_partial, b"pending").unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let result = super::replace_remote_file_with_policy(
+            &sftp,
+            blocked_partial.to_str().unwrap(),
+            destination.to_str().unwrap(),
+            Some(true),
+        )
+        .await;
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(result.is_err(), "readonly source parent must fail commit");
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+        assert_eq!(std::fs::read(&blocked_partial).unwrap(), b"pending");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
     async fn real_sftp_relay_preserves_binary_ranges_and_rejects_symlink_targets() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let fixture = start_openssh_fixture();

@@ -348,6 +348,43 @@ async fn replace_file<T: TokioTlsStream + Send>(
     partial: &str,
     destination: &str,
 ) -> Result<(), String> {
+    replace_file_with_policy(ftp, partial, destination, None)
+        .await
+        .map(|_| ())
+}
+
+async fn replace_file_with_policy<T: TokioTlsStream + Send>(
+    ftp: &mut ImplAsyncFtpStream<T>,
+    partial: &str,
+    destination: &str,
+    replace_existing: Option<bool>,
+) -> Result<bool, String> {
+    if let Some(replace) = replace_existing {
+        let entries = list_files(ftp, &parent_remote_path(destination)).await?;
+        let entry = |path: &str| {
+            entries
+                .iter()
+                .find(|entry| entry["path"].as_str() == Some(path))
+        };
+        let regular = |entry: &Value| entry["type"] == "file" && entry["isSymlink"] != true;
+        if !entry(partial).is_some_and(regular) {
+            return Err("提交断点不是普通文件".into());
+        }
+        if let Some(target) = entry(destination) {
+            if !replace {
+                return Ok(false);
+            }
+            if !regular(target) {
+                return Err("目标不是普通文件，拒绝覆盖".into());
+            }
+        }
+    }
+    if replace_existing == Some(false) {
+        ftp.rename(partial, destination)
+            .await
+            .map_err(|error| error.to_string())?;
+        return Ok(true);
+    }
     let backup = format!("{destination}.fileterm-backup-{}", uuid::Uuid::new_v4());
     let moved_destination = match ftp.rename(destination, backup.as_str()).await {
         Ok(()) => true,
@@ -378,7 +415,7 @@ async fn replace_file<T: TokioTlsStream + Send>(
     if moved_destination {
         let _ = ftp.rm(backup).await;
     }
-    Ok(())
+    Ok(true)
 }
 
 fn parent_remote_path(path: &str) -> String {

@@ -28,6 +28,7 @@ pub async fn app_upload_file(
         local_path,
         remote_directory,
         target_name,
+        transfer_conflict_policy(options.as_ref())?,
     )
     .await?;
     get_workspace_snapshot(app).await
@@ -53,6 +54,7 @@ pub async fn app_download_file(
         remote_path,
         local_directory,
         target_name,
+        transfer_conflict_policy(options.as_ref())?,
     )
     .await?;
     get_workspace_snapshot(app).await
@@ -82,6 +84,7 @@ pub async fn app_download_remote_path(
                 remote_path,
                 local_directory,
                 target_name,
+                transfer_conflict_policy(options.as_ref())?,
             )
             .await?;
             get_workspace_snapshot(app).await
@@ -163,4 +166,16 @@ pub async fn app_copy_between_servers(
         replace_existing,
     )
     .await
+}
+
+fn transfer_conflict_policy(
+    options: Option<&serde_json::Value>,
+) -> Result<Option<crate::services::transfers::TransferConflictPolicy>, AppError> {
+    options
+        .and_then(|options| options.get("conflictPolicy"))
+        .map(|value| {
+            serde_json::from_value(value.clone())
+                .map_err(|_| AppError::Command("无效的文件冲突策略".into()))
+        })
+        .transpose()
 }

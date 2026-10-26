@@ -118,6 +118,7 @@ async fn run_worker_loop(
             startup_started_at.elapsed().as_millis()
         ),
     );
+    let transfer_endpoint = session.transfer_endpoint;
     let agent_forwarding = session.agent_forwarding;
     let remote_sshid = session.remote_sshid;
     let disconnect_reason = session.disconnect_reason;
@@ -264,6 +265,9 @@ async fn run_worker_loop(
         state: &state,
     };
     initialize_ssh_session_snapshot(&startup).await;
+    if let Some(session) = state.sessions.write().await.get_mut(tab_id) {
+        session.transfer_endpoint = Some(transfer_endpoint);
+    }
     update_tab_status_and_emit_without_snapshot(app, tab_id, WorkspaceTabStatus::Connected).await;
     schedule_workspace_snapshot_emit(app);
     emit_terminal_data(app, tab_id, "连接主机成功\r\n").await;

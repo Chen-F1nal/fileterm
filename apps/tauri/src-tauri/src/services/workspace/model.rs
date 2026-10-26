@@ -346,6 +346,8 @@ impl ConnectionCapabilities {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSnapshot {
+    #[serde(skip)]
+    pub transfer_endpoint: Option<String>,
     pub profile_id: String,
     /// Monotonic terminal-target identity. This must not change for ordinary
     /// terminal output; it changes only when the interactive target changes.

@@ -26,9 +26,79 @@ fn remote_parent_path(path: &str) -> String {
 
 fn validate_remote_directory_path(path: &str) -> Result<(), AppError> {
     if path.is_empty() || path.len() > 4096 || path.contains('\0') {
-        return Err(AppError::Command("Invalid remote directory path".to_string()));
+        return Err(AppError::Command(
+            "Invalid remote directory path".to_string(),
+        ));
     }
     Ok(())
+}
+
+async fn refresh_mutated_remote_directory(
+    app: &AppHandle,
+    tab_id: &str,
+    directory: &str,
+) -> Result<(), AppError> {
+    let state = app.state::<crate::services::workspace::WorkspaceState>();
+    let visible = state
+        .sessions
+        .read()
+        .await
+        .get(tab_id)
+        .map(|session| session.remote_path.clone());
+    // Independent transfer/tree panes must not replace the terminal pane's listing with a different directory.
+    if !visible
+        .as_deref()
+        .is_some_and(|visible| visible.trim_end_matches('/') == directory.trim_end_matches('/'))
+    {
+        return Ok(());
+    }
+    let files = send_worker_file_cmd(app, tab_id, |respond_to, cancellation| {
+        WorkerCmd::ListRemoteFiles {
+            path: directory.to_string(),
+            cancellation,
+            respond_to,
+        }
+    })
+    .await?;
+    if let Some(session) = state.sessions.write().await.get_mut(tab_id) {
+        if session.connected {
+            apply_remote_mutation_listing(
+                &session.remote_path,
+                directory,
+                &mut session.remote_files,
+                files,
+            );
+        }
+    }
+    Ok(())
+}
+
+fn apply_remote_mutation_listing(
+    visible: &str,
+    requested: &str,
+    current: &mut Vec<serde_json::Value>,
+    incoming: Vec<serde_json::Value>,
+) {
+    if visible.trim_end_matches('/') == requested.trim_end_matches('/') {
+        *current = incoming;
+    }
+}
+
+#[cfg(test)]
+mod independent_mutation_listing_tests {
+    use super::*;
+    #[test]
+    fn modifying_an_independent_directory_or_navigating_during_refresh_keeps_the_visible_listing() {
+        let old = vec![serde_json::json!({"name":"visible-file"})];
+        let incoming = vec![serde_json::json!({"name":"transfer-file"})];
+        let mut files = old.clone();
+        apply_remote_mutation_listing("/terminal", "/transfer", &mut files, incoming.clone());
+        assert_eq!(files, old);
+        apply_remote_mutation_listing("/navigated", "/terminal", &mut files, incoming.clone());
+        assert_eq!(files, old);
+        apply_remote_mutation_listing("/terminal/", "/terminal", &mut files, incoming.clone());
+        assert_eq!(files, incoming);
+    }
 }
 
 #[tauri::command]
@@ -45,14 +115,18 @@ pub async fn app_list_remote_directory(
             .get(&tab_id)
             .ok_or_else(|| AppError::Command("Session not found".to_string()))?;
         if !session.connected || !session.capabilities.files {
-            return Err(AppError::Command("Remote file access is unavailable".to_string()));
+            return Err(AppError::Command(
+                "Remote file access is unavailable".to_string(),
+            ));
         }
     }
     // Tree expansion must not replace the workspace's current directory or files.
-    send_worker_file_cmd(&app, &tab_id, |respond_to, cancellation| WorkerCmd::ListRemoteFiles {
-        path: target_path,
-        cancellation,
-        respond_to,
+    send_worker_file_cmd(&app, &tab_id, |respond_to, cancellation| {
+        WorkerCmd::ListRemoteFiles {
+            path: target_path,
+            cancellation,
+            respond_to,
+        }
     })
     .await
 }
@@ -208,7 +282,7 @@ pub async fn app_write_remote_file(
     .await?;
 
     let parent = remote_parent_path(&target_path);
-    let _ = refresh_remote_files(&app, &tab_id, &parent).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent).await;
     get_workspace_snapshot(app).await
 }
 
@@ -230,7 +304,7 @@ pub async fn app_create_remote_directory(
     })
     .await?;
 
-    let _ = refresh_remote_files(&app, &tab_id, &parent_path).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent_path).await;
     get_workspace_snapshot(app).await
 }
 
@@ -252,7 +326,7 @@ pub async fn app_create_remote_file(
     })
     .await?;
 
-    let _ = refresh_remote_files(&app, &tab_id, &parent_path).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent_path).await;
     get_workspace_snapshot(app).await
 }
 
@@ -276,7 +350,7 @@ pub async fn app_copy_remote_path(
     .await?;
 
     let parent = remote_parent_path(&destination_path);
-    let _ = refresh_remote_files(&app, &tab_id, &parent).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent).await;
     get_workspace_snapshot(app).await
 }
 
@@ -300,9 +374,9 @@ pub async fn app_move_remote_path(
     let parent_src = remote_parent_path(&target_path);
     let parent_dest = remote_parent_path(&destination_path);
 
-    let _ = refresh_remote_files(&app, &tab_id, &parent_src).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent_src).await;
     if parent_src != parent_dest {
-        let _ = refresh_remote_files(&app, &tab_id, &parent_dest).await;
+        let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent_dest).await;
     }
     get_workspace_snapshot(app).await
 }
@@ -326,7 +400,7 @@ pub async fn app_rename_remote_path(
     .await?;
 
     let parent = remote_parent_path(&target_path);
-    let _ = refresh_remote_files(&app, &tab_id, &parent).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent).await;
     get_workspace_snapshot(app).await
 }
 
@@ -350,7 +424,7 @@ pub async fn app_delete_remote_path(
     .await?;
 
     let parent = remote_parent_path(&target_path);
-    let _ = refresh_remote_files(&app, &tab_id, &parent).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent).await;
     get_workspace_snapshot(app).await
 }
 
@@ -423,7 +497,7 @@ pub async fn app_change_remote_permissions(
     .await?;
 
     let parent = remote_parent_path(&target_path);
-    let _ = refresh_remote_files(&app, &tab_id, &parent).await;
+    let _ = refresh_mutated_remote_directory(&app, &tab_id, &parent).await;
     get_workspace_snapshot(app).await
 }
 

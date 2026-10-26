@@ -590,18 +590,17 @@
   gap: 8px;
 }
 
-.file-permission-dialog__actions .flat-button,
-.file-permission-dialog__actions .primary-button {
+.file-permission-dialog__actions .ft-btn {
   min-width: 88px;
   min-height: 36px;
   height: 36px;
-  padding: 0 12px;
+  --control-padding-x-md: 16px;
   border-radius: var(--radius-md, 6px);
   font-size: var(--button-font-size-regular);
   font-weight: var(--button-font-weight);
 }
 
-.file-permission-dialog__actions .primary-button {
+.file-permission-dialog__actions .ft-btn--primary {
   box-shadow: 0 2px 10px var(--accent-tint);
 }
 

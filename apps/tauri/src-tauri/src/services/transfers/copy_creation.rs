@@ -60,20 +60,17 @@ async fn copy_session(app: &AppHandle, tab_id: &str) -> Result<(String, String, 
     {
         return Err(transfer_error("请选择已连接的普通用户 SFTP/FTP 会话"));
     }
-    let (profiles, _) = crate::services::profile_ops::read_and_heal_profiles(app)?;
-    let profile = profiles
-        .iter()
-        .find(|p| p.get("id").and_then(Value::as_str) == Some(&session.profile_id))
-        .ok_or_else(|| transfer_error("连接配置不存在"))?;
-    let endpoint = serde_json::json!([
-        profile.get("type"),
-        profile.get("host"),
-        profile.get("port"),
-        profile.get("username"),
-        profile.get("sshConfigHost")
-    ])
-    .to_string();
+    let endpoint = session
+        .transfer_endpoint
+        .ok_or_else(|| transfer_error("连接缺少已建立的文件端点身份，请重新连接"))?;
     Ok((session.profile_id, tab.title, endpoint))
+}
+
+fn ensure_copy_endpoint(expected: &str, connected: &str) -> Result<(), AppError> {
+    if expected != connected {
+        return Err(transfer_error("连接端点已改变，请新建传输任务"));
+    }
+    Ok(())
 }
 
 async fn copy_entry_metadata(
@@ -152,6 +149,7 @@ pub async fn create_remote_copy(
         staging_path: None,
         source_identity: None,
         manifest: None,
+        conflict_policy: None,
         copy_source: Some(CopySource {
             profile_id: source.0,
             tab_id: source_tab,

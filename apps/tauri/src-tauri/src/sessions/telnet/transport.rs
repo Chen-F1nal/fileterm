@@ -293,6 +293,9 @@ pub(crate) fn reject_unsupported(command: WorkerCmd, message: &str) {
         | WorkerCmd::RemoveRemoteFile { respond_to, .. } => {
             let _ = respond_to.send(Err(message.to_string()));
         }
+        WorkerCmd::CommitRemoteFile { respond_to, .. } => {
+            let _ = respond_to.send(Err("此连接不支持文件传输".into()));
+        }
         WorkerCmd::StatRemoteFile { respond_to, .. } => {
             let _ = respond_to.send(Err(message.to_string()));
         }

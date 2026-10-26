@@ -402,6 +402,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
               data-nav-direction={workspaceNavDirection}
             >
               <KeepAliveWorkspaceStage
+                onApplySnapshot={shell.applySnapshot}
                 activeLocalTab={activeLocalTab}
                 fileTransferTab={workspaceState.localTabs.find((tab) => tab.kind === 'transfers')}
                 desktopApi={desktopApi}

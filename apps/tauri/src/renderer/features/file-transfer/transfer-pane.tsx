@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useMemo, useRef, useState, type PointerEvent, type ComponentProps, type SyntheticEvent } from 'react'
 import type { RemoteFileItem } from '@fileterm/core'
 import { Button } from '../../components/common/button/button'
 import { DropdownSelect } from '../common/dropdown-select'
 import { AppIcon } from '../common/app-icon'
 import { VerticalScrollbar } from '../common/vertical-scrollbar'
-import { ContextMenu } from '../common/context-menu'
+import { TransferPaneContextMenu } from './transfer-pane-context-menu'
 import { FileTable, PaneFilterBar, PanePathBar } from '../files/file-tables'
 import type { TransferPaneState } from './use-transfer-pane'
 import { matchesFileFilter, type FileFilterConfig } from '../files/file-filter'
@@ -19,8 +19,13 @@ export function TransferPane({
   dropTarget,
   onActivate,
   onCopy,
-  onDragStart
+  onDragStart,
+  contextMenuProps
 }: {
+  contextMenuProps: Omit<
+    ComponentProps<typeof TransferPaneContextMenu>,
+    'pane' | 'menu' | 'onClose' | 'copyLabel' | 'onCopyAcross'
+  >
   pane: TransferPaneState
   side: 'left' | 'right'
   options: { value: string; label: string; disabled?: boolean }[]
@@ -43,17 +48,22 @@ export function TransferPane({
     [pane.items, filter]
   )
   const selection = pane.items.filter((item) => pane.selected.includes(item.path) && item.name !== '..')
+  const activatePane = (event: SyntheticEvent<HTMLElement>) => {
+    if (event.target instanceof Element && event.target.closest('.file-transfer-pane__refresh')) return
+    onActivate()
+  }
   return (
     <section
       className={`file-transfer-pane ${active ? 'is-active' : ''} ${dropTarget ? 'is-drop-target' : ''}`}
       data-transfer-pane={side}
-      onFocusCapture={onActivate}
-      onPointerDownCapture={onActivate}
+      onFocusCapture={activatePane}
+      onPointerDownCapture={activatePane}
       aria-label={side === 'left' ? t.fileTransferLeft : t.fileTransferRight}
     >
       <div className="file-transfer-pane__heading">
         <DropdownSelect
           ariaLabel={side === 'left' ? t.fileTransferLeft : t.fileTransferRight}
+          disabled={contextMenuProps.busy}
           value={pane.endpoint}
           options={options}
           onChange={pane.chooseEndpoint}
@@ -65,16 +75,16 @@ export function TransferPane({
           type="button"
           title={t.refresh}
           aria-label={t.refresh}
-          disabled={pane.loading || !pane.connected}
-          onClick={() => void pane.load(pane.path)}
-        >
-          <AppIcon name="refresh" />
-        </Button>
+          disabled={!pane.connected || contextMenuProps.busy}
+          loading={pane.loading}
+          icon={<AppIcon name="refresh" />}
+          onClick={() => void pane.refresh()}
+        />
       </div>
       <PanePathBar
         label={t.path}
         value={pane.draftPath}
-        disabled={pane.loading || !pane.connected}
+        disabled={!pane.connected || contextMenuProps.busy}
         onChange={pane.setDraftPath}
         onSubmit={(event) => {
           event.preventDefault()
@@ -85,7 +95,7 @@ export function TransferPane({
         filter={filter}
         matchCount={rows.filter((item) => item.name !== '..').length}
         totalCount={pane.items.filter((item) => item.name !== '..').length}
-        disabled={pane.loading || !pane.connected}
+        disabled={!pane.connected || contextMenuProps.busy}
         onFilterChange={setFilter}
         onClear={() => setFilter((current) => ({ ...current, query: '' }))}
       />
@@ -102,6 +112,11 @@ export function TransferPane({
           tabIndex={0}
           aria-label={t.fileName}
           aria-busy={pane.loading}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            pane.setSelected([])
+            setMenu({ x: event.clientX, y: event.clientY, items: [] })
+          }}
           onScroll={(event) => {
             if (headerContainer) headerContainer.scrollLeft = event.currentTarget.scrollLeft
           }}
@@ -132,6 +147,11 @@ export function TransferPane({
             headerContainer={headerContainer}
             rows={rows}
             selectedPaths={pane.selected}
+            cutPaths={
+              contextMenuProps.clipboard?.operation === 'cut' && contextMenuProps.clipboard.endpoint === pane.endpoint
+                ? contextMenuProps.clipboard.items.map((item) => item.path)
+                : undefined
+            }
             emptyText={pane.loading ? t.fileTransferLoading : t.emptyFiles}
             onClearSelection={() => pane.setSelected([])}
             onOpenItem={(item) => {
@@ -152,12 +172,18 @@ export function TransferPane({
             }}
             onContextItem={(event, item) => {
               event.preventDefault()
-              if (item.name === '..') return
+              event.stopPropagation()
+              if (item.name === '..') {
+                pane.setSelected([])
+                setMenu({ x: event.clientX, y: event.clientY, items: [] })
+                return
+              }
               const items = pane.selected.includes(item.path) ? selection : [item]
               pane.setSelected(items.map((item) => item.path))
               setMenu({ x: event.clientX, y: event.clientY, items })
             }}
             onPointerDragStart={(event, item) => {
+              if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return
               const items = pane.selected.includes(item.path) ? selection : [item]
               pane.setSelected(items.map((item) => item.path))
               onDragStart(event, items)
@@ -169,22 +195,14 @@ export function TransferPane({
       <footer>
         {selection.length} / {pane.items.filter((item) => item.name !== '..').length} · {pane.path}
       </footer>
-      {menu ? (
-        <ContextMenu
-          position={menu}
-          onClose={() => setMenu(null)}
-          items={[
-            {
-              label: side === 'left' ? t.fileTransferCopyRight : t.fileTransferCopyLeft,
-              disabled: pane.loading || !pane.connected,
-              action: () => {
-                onCopy(menu.items)
-                setMenu(null)
-              }
-            }
-          ]}
-        />
-      ) : null}
+      <TransferPaneContextMenu
+        {...contextMenuProps}
+        pane={pane}
+        menu={menu}
+        onClose={() => setMenu(null)}
+        copyLabel={side === 'left' ? t.fileTransferCopyRight : t.fileTransferCopyLeft}
+        onCopyAcross={onCopy}
+      />
     </section>
   )
 }

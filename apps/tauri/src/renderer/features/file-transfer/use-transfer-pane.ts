@@ -17,14 +17,21 @@ export function useTransferPane(
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
+  const loaded = useRef<{ endpoint: string; path: string } | null>(null)
+  const failed = useRef<{ endpoint: string; path: string } | null>(null)
   const connected =
     endpoint === 'local' || Boolean(sessions[endpoint]?.connected && sessions[endpoint]?.fileAccessMode !== 'root')
   const load = async (nextPath: string, nextEndpoint = endpoint) => {
     const id = ++request.current
     setLoading(true)
-    setError(null)
-    setSelected([])
-    setItems([])
+    if (failed.current?.endpoint !== nextEndpoint || failed.current.path !== nextPath) setError(null)
+    const refreshing = loaded.current?.endpoint === nextEndpoint && loaded.current.path === nextPath
+    const draftAtStart = refreshing ? draftPath : nextPath
+    if (!refreshing) {
+      setDraftPath(nextPath)
+      setSelected([])
+      setItems([])
+    }
     try {
       if (!api) throw new Error(t.fileTransferDesktopRequired)
       const snapshot =
@@ -32,17 +39,24 @@ export function useTransferPane(
           ? await api.listLocalDirectory(nextPath || undefined)
           : { path: nextPath || '/', items: await api.browseTransferDirectory(nextEndpoint, nextPath || '/') }
       if (id !== request.current) return
-      setItems(
-        withParentRow(
-          snapshot.path,
-          snapshot.items.filter((item) => item.name !== '..')
-        )
+      const nextItems = withParentRow(
+        snapshot.path,
+        snapshot.items.filter((item) => item.name !== '..')
       )
+      loaded.current = { endpoint: nextEndpoint, path: snapshot.path }
+      failed.current = null
+      setError(null)
+      setItems(nextItems)
+      const nextPaths = new Set(nextItems.map((item) => item.path))
+      setSelected((current) => (refreshing ? current.filter((path) => nextPaths.has(path)) : []))
       setPath(snapshot.path)
-      setDraftPath(snapshot.path)
+      setDraftPath((current) => (refreshing || current !== draftAtStart ? current : snapshot.path))
     } catch (error) {
       if (id === request.current) {
+        loaded.current = null
+        failed.current = { endpoint: nextEndpoint, path: nextPath }
         setItems([])
+        setSelected([])
         setError(String(error))
       }
     } finally {
@@ -53,6 +67,8 @@ export function useTransferPane(
     if (connected) void load(path)
     else {
       request.current += 1
+      loaded.current = null
+      failed.current = null
       setItems([])
       setSelected([])
       setLoading(false)
@@ -65,7 +81,12 @@ export function useTransferPane(
   const chooseEndpoint = (value: string) => {
     if (value === endpoint) return
     request.current += 1
-    setPath(value === 'local' ? '' : (sessions[value]?.remotePath ?? '/'))
+    loaded.current = null
+    failed.current = null
+    setError(null)
+    const nextPath = value === 'local' ? '' : (sessions[value]?.remotePath ?? '/')
+    setPath(nextPath)
+    setDraftPath(nextPath)
     setItems([])
     setSelected([])
     setEndpoint(value)
@@ -82,6 +103,7 @@ export function useTransferPane(
     connected,
     error,
     load,
+    refresh: () => load(error ? draftPath : path),
     chooseEndpoint
   }
 }

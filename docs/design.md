@@ -149,6 +149,12 @@ FileTerm 的层级主要靠边界，不靠重装饰。
 - macOS 原生 select 与 Windows/Linux 自绘 `DropdownSelect` 必须为同一语义控件提供等高的外框和等效文字/箭头留白；平台差异只保留菜单呈现方式。
 - 新增表单区块前，先复用现有控件基线；若确需变体，应在组件容器上声明局部 CSS 变量，避免在单个 input 或 select 上散落尺寸。
 
+### Lightweight Form Dialogs
+
+- 文件命名、备份密码、SSH 交互认证和共享目录选择等轻量弹窗采用标题栏、带 legend 的分组框和底部操作区，以 1px 语义边框分隔。
+- 复用 `components/common/dialog/form-dialog-body.tsx` 的内容布局和公共滚动条；内容间距约 12px、四周 16px，输入/下拉框等高 36px，圆角统一使用 `--radius-sm`。这属于轻量弹窗变体，不改变大型连接编辑器的控件基线。
+- 只有一个名称输入框的文件命名弹窗使用普通 label，不额外套分组边框；标签同时作为输入框的无障碍名称。错误提示使用相同的小圆角；长内容不挤出底部按钮。
+
 ### Top Tabs
 
 - tab 高度由 `.fs-shell` 上的 `--window-tabbar-height` 统一控制：默认 48px，`.is-compact-tabbar` 时 36px。「设置 → 界面与概览 → 标签页布局 → 紧凑标签栏」切换，默认关闭。
