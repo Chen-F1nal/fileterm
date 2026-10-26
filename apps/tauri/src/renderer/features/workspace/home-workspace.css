@@ -4,3 +4,10 @@
   color: var(--text-primary);
   font-weight: 500;
 }
+
+.home-sidebar .sidebar-nav-link > span:not(.material-symbols-outlined) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

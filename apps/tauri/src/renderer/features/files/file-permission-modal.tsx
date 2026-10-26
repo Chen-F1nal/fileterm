@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
+import { useEffect, useId, useMemo, useState } from 'react'
 import type { PermissionChangeOptions } from '@fileterm/core'
 import { AppIcon } from '../common/app-icon'
 import { CloseButton } from '../common/close-button'
 import { SelectionControl } from '../common/selection-control'
-import { StableButtonContent } from '../common/stable-button-content'
+import { Button } from '../../components/common/button/button'
+import { StableButtonLabel } from '../common/stable-button-content'
 import { t } from '../../i18n'
 
 type PermissionState = { read: boolean; write: boolean; execute: boolean }
@@ -37,6 +39,7 @@ export function FilePermissionModal({
   supportsRecursive: boolean
   targetPath: string
 }) {
+  const titleId = useId()
   const initialMatrix = useMemo(() => parsePermission(initialPermission), [initialPermission])
   const [matrix, setMatrix] = useState<PermissionMatrix>(initialMatrix)
   const [modeValue, setModeValue] = useState(() => matrixToMode(initialMatrix))
@@ -55,12 +58,22 @@ export function FilePermissionModal({
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-card file-permission-dialog">
+      <div
+        className="modal-card file-permission-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!isSubmitting) onClose()
+          }
+        }}
+      >
         <div className="file-permission-dialog__header">
-          <span className="file-permission-dialog__title">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              lock
-            </span>
+          <span id={titleId} className="file-permission-dialog__title">
+            <MaterialIcon name="lock" aria-hidden="true" className="material-symbols-outlined" />
             <span>{t.permissionDialogTitle}</span>
           </span>
           <CloseButton className="file-permission-dialog__close" disabled={isSubmitting} onClick={onClose} />
@@ -132,6 +145,7 @@ export function FilePermissionModal({
                   </div>
                   <label className="file-permission-dialog__mode-input">
                     <input
+                      autoFocus
                       aria-label={t.permissionMode}
                       inputMode="numeric"
                       maxLength={4}
@@ -212,12 +226,13 @@ export function FilePermissionModal({
           </div>
 
           <div className="form-actions file-permission-dialog__actions">
-            <button className="flat-button" disabled={isSubmitting} onClick={onClose} type="button">
+            <Button variant="secondary" disabled={isSubmitting} onClick={onClose} type="button">
               {t.cancel}
-            </button>
-            <button
-              aria-busy={isSubmitting}
-              className="primary-button"
+            </Button>
+            <Button
+              variant="primary"
+              loading={isSubmitting}
+              reserveLoadingSpace
               disabled={!isModeValid || isSubmitting}
               onClick={() => {
                 if (!isModeValid) {
@@ -232,8 +247,8 @@ export function FilePermissionModal({
               }}
               type="button"
             >
-              <StableButtonContent busy={isSubmitting} label={t.permissionApplyChanges} />
-            </button>
+              <StableButtonLabel label={t.permissionApplyChanges} />
+            </Button>
           </div>
         </fieldset>
       </div>

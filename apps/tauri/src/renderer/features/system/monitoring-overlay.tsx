@@ -147,8 +147,14 @@ export function MonitoringOverlay({
         {phase === 'recovering' ? <p>{t.monitoringRecoveryDescription}</p> : null}
         {phase === 'failed' ? <p>{formatMessage(t.monitoringExhausted, { max: state.maxAttempts })}</p> : null}
         {canRetry ? (
-          <Button size="sm" disabled={!window.fileterm} loading={submitting} onClick={() => void retry()}>
-            {submitting ? t.monitoringRetryBusy : t.monitoringRetry}
+          <Button
+            size="sm"
+            disabled={!window.fileterm}
+            loading={submitting}
+            reserveLoadingSpace
+            onClick={() => void retry()}
+          >
+            {t.monitoringRetry}
           </Button>
         ) : null}
         {error ? <p role="alert">{error}</p> : null}

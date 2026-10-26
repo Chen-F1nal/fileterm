@@ -7,7 +7,7 @@ description: Use for FileTerm desktop application icon artwork and platform asse
 
 ## Scope and source artwork
 
-This skill covers the branded application icon and its operating-system assets. For file-type, folder, or general renderer icons, use the [common-components skill](../common-components-skill/SKILL.md).
+This skill covers the branded application icon and its operating-system assets. For file-type, folder, or general renderer icons, use the [common-components skill](../fileterm-common-components/SKILL.md).
 
 Read [platform and protocol contracts](../../../docs/quality/agent-platform-contracts.md) before changing platform outputs. The editable Icon Composer projects live in `apps/tauri/assets/icons/source/`. Export the Windows/Linux full-bleed masters directly to `apps/tauri/src-tauri/icons/app/shared/{classic,material,clean}-1024.png`; keep the macOS Dock images in `apps/tauri/src/renderer/assets/app-icons/dock-{classic,material,clean}.png`.
 

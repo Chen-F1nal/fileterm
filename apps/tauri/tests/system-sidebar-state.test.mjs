@@ -23,6 +23,9 @@ function fixture(options = {}) {
     '../app/app-shell-utils': { DEFAULT_FILE_PANEL_RATIO: 30, DEFAULT_COMMAND_LIST_WIDTH: 250 },
     '../features/workspace/file-panel-snap': {},
     './connection-host-trust': {},
+    './use-workspace-sidebar-width': {
+      useWorkspaceSidebarWidth: () => ({ activeSidebarWidth: 214, setActiveSidebarWidth() {} })
+    },
     './use-workspace-tabs': {
       useWorkspaceTabs: () => ({
         activeTab: tab,

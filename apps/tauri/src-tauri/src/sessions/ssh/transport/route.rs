@@ -223,6 +223,7 @@ async fn open_session(
         .last()
         .is_some_and(|target| ssh_config_agent_forwarding(target).is_some());
     Ok(OpenSshSession {
+        transfer_endpoint: crate::sessions::transfer_endpoint::fingerprint(&route),
         agent_forwarding,
         handle: cleanup.handles.last().unwrap().clone(),
         cleanup,

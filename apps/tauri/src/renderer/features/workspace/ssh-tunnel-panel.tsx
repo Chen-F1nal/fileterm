@@ -1,3 +1,4 @@
+import './ssh-tunnel-panel.css'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { SshForwardRule, SshTunnelSnapshot } from '@fileterm/core'

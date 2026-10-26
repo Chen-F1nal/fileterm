@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { ConnectionFolder, ConnectionProfile, OverviewSectionId } from '@fileterm/core'
 import { DEFAULT_OVERVIEW_SECTION_ORDER } from '@fileterm/core'
 import { t } from '../../i18n'
@@ -65,7 +66,7 @@ export function OverviewPage({
     >
       <div className="recent-card-header">
         <div className={`recent-icon recent-icon-${profile.type.toLowerCase()}`}>
-          <span className="material-symbols-outlined">dns</span>
+          <MaterialIcon name="dns" className="material-symbols-outlined" />
         </div>
         <div className={`type-badge type-badge-${profile.type.toLowerCase()}`}>{profile.type.toUpperCase()}</div>
       </div>
@@ -87,7 +88,7 @@ export function OverviewPage({
           }}
           type="button"
         >
-          <span className="material-symbols-outlined">terminal</span>
+          <MaterialIcon name="terminal" className="material-symbols-outlined" />
         </button>
       </div>
     </div>
@@ -99,7 +100,7 @@ export function OverviewPage({
         <section className="overview-stats" key={sectionId}>
           <div className="stat-card">
             <div className="stat-icon stat-icon-total">
-              <span className="material-symbols-outlined">dns</span>
+              <MaterialIcon name="dns" className="material-symbols-outlined" />
             </div>
             <div className="stat-content">
               <div className="stat-value">{profiles.length}</div>
@@ -108,7 +109,7 @@ export function OverviewPage({
           </div>
           <div className="stat-card">
             <div className="stat-icon stat-icon-ssh">
-              <span className="material-symbols-outlined">terminal</span>
+              <MaterialIcon name="terminal" className="material-symbols-outlined" />
             </div>
             <div className="stat-content">
               <div className="stat-value">{sshCount}</div>
@@ -117,7 +118,7 @@ export function OverviewPage({
           </div>
           <div className="stat-card">
             <div className="stat-icon stat-icon-telnet">
-              <span className="material-symbols-outlined">settings_ethernet</span>
+              <MaterialIcon name="settings_ethernet" className="material-symbols-outlined" />
             </div>
             <div className="stat-content">
               <div className="stat-value">{telnetCount}</div>
@@ -126,7 +127,7 @@ export function OverviewPage({
           </div>
           <div className="stat-card">
             <div className="stat-icon stat-icon-ftp">
-              <span className="material-symbols-outlined">cloud</span>
+              <MaterialIcon name="cloud" className="material-symbols-outlined" />
             </div>
             <div className="stat-content">
               <div className="stat-value">{ftpCount}</div>
@@ -157,7 +158,7 @@ export function OverviewPage({
           <div className="action-grid">
             <button className="action-card" onClick={onOpenLocalTerminal} type="button">
               <div className="action-icon">
-                <span className="material-symbols-outlined">terminal</span>
+                <MaterialIcon name="terminal" className="material-symbols-outlined" />
               </div>
               <div className="action-content">
                 <h3 className="action-title">{t.localTerminal}</h3>
@@ -166,7 +167,7 @@ export function OverviewPage({
             </button>
             <button className="action-card" onClick={onOpenCommandManager} type="button">
               <div className="action-icon">
-                <span className="material-symbols-outlined">terminal</span>
+                <MaterialIcon name="terminal" className="material-symbols-outlined" />
               </div>
               <div className="action-content">
                 <h3 className="action-title">{t.commandManager}</h3>
@@ -175,7 +176,7 @@ export function OverviewPage({
             </button>
             <button className="action-card" onClick={onOpenConnectionManager} type="button">
               <div className="action-icon">
-                <span className="material-symbols-outlined">tune</span>
+                <MaterialIcon name="tune" className="material-symbols-outlined" />
               </div>
               <div className="action-content">
                 <h3 className="action-title">{t.connectionManager}</h3>
@@ -184,7 +185,7 @@ export function OverviewPage({
             </button>
             <button className="action-card" onClick={onOpenDocs} type="button">
               <div className="action-icon">
-                <span className="material-symbols-outlined">description</span>
+                <MaterialIcon name="description" className="material-symbols-outlined" />
               </div>
               <div className="action-content">
                 <h3 className="action-title">{t.overviewDocsTitle}</h3>
@@ -218,15 +219,15 @@ export function OverviewPage({
           <p className="hero-subtitle">{t.overviewWelcomeSubtitle}</p>
           <div className="hero-actions">
             <button className="hero-btn hero-btn-primary" onClick={onOpenNewConnection} type="button">
-              <span className="material-symbols-outlined">add</span>
+              <MaterialIcon name="add" className="material-symbols-outlined" />
               <span>{t.newConnection}</span>
             </button>
             <button className="hero-btn hero-btn-secondary" onClick={onOpenConnectionManager} type="button">
-              <span className="material-symbols-outlined">settings_ethernet</span>
+              <MaterialIcon name="settings_ethernet" className="material-symbols-outlined" />
               <span>{t.connectionManager}</span>
             </button>
             <button className="hero-btn hero-btn-secondary" onClick={onOpenLocalTerminal} type="button">
-              <span className="material-symbols-outlined">terminal</span>
+              <MaterialIcon name="terminal" className="material-symbols-outlined" />
               <span>{t.localTerminal}</span>
             </button>
           </div>

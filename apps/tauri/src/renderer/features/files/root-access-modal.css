@@ -1,0 +1,16 @@
+.modal-card.root-access-modal.root-access-entry-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.root-access-entry-modal .form-actions > .ft-btn {
+  min-width: 88px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: var(--button-font-size-regular);
+  font-weight: var(--button-font-weight);
+  line-height: var(--button-line-height);
+}
+
+.root-access-entry-modal .root-access-modal__body {
+  padding-top: 16px;
+}

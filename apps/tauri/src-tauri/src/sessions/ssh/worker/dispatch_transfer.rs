@@ -60,6 +60,42 @@ async fn dispatch_transfer_cmd(
             });
             Ok(false)
         }
+        WorkerCmd::RelayFile {
+            request,
+            mut stream,
+            cancellation,
+            respond_to,
+        } => {
+            let handle = Arc::clone(handle);
+            let sftp = Arc::clone(sftp);
+            let slot = Arc::clone(transfer_sftp_slot);
+            let app = app.clone();
+            let tab_id = tab_id.to_string();
+            let root = file_access_mode == "root";
+            spawn_cancellable_file_operation(cancellation.clone(), respond_to, async move {
+                if root {
+                    return Err("跨服务器传输暂不支持 root 文件模式".into());
+                }
+                let transfer =
+                    acquire_transfer_sftp(&handle, &sftp, &slot, &app, &tab_id, operation_timeout)
+                        .await;
+                let guard = transfer.write().await;
+                let result = relay_sftp_file(
+                    &guard,
+                    request,
+                    &mut stream,
+                    &cancellation,
+                    operation_timeout,
+                )
+                .await;
+                drop(guard);
+                if result.is_err() {
+                    invalidate_transfer_sftp(&transfer, &sftp, &slot).await;
+                }
+                result
+            });
+            Ok(false)
+        }
         WorkerCmd::UploadLocalFile {
             local_path,
             source_size,
@@ -265,6 +301,30 @@ async fn dispatch_transfer_cmd(
             });
             Ok(false)
         }
+        WorkerCmd::CommitRemoteFile {
+            partial_path,
+            destination_path,
+            replace_existing,
+            cancellation,
+            respond_to,
+        } => {
+            let sftp = Arc::clone(sftp);
+            let root = file_access_mode == "root";
+            spawn_cancellable_file_operation(cancellation, respond_to, async move {
+                if root {
+                    return Err("严格提交不支持 root 文件模式".into());
+                }
+                let guard = sftp.write().await;
+                replace_remote_file_with_policy(
+                    &guard,
+                    &partial_path,
+                    &destination_path,
+                    Some(replace_existing),
+                )
+                .await
+            });
+            Ok(false)
+        }
         WorkerCmd::ReplaceRemoteFile {
             partial_path,
             destination_path,
@@ -394,6 +454,27 @@ async fn dispatch_transfer_cmd(
             });
             Ok(false)
         }
-        _ => dispatch_file_cmd(cmd, handle, shell_writer, sftp, transfer_sftp_slot, operation_timeout, file_access_mode, root_file_access_method, sudo_user, sudo_password, saved_sudo_password, saved_su_password, tab_id, app, state, tunnel_commands, exec_channel_enabled).await,
+        _ => {
+            dispatch_file_cmd(
+                cmd,
+                handle,
+                shell_writer,
+                sftp,
+                transfer_sftp_slot,
+                operation_timeout,
+                file_access_mode,
+                root_file_access_method,
+                sudo_user,
+                sudo_password,
+                saved_sudo_password,
+                saved_su_password,
+                tab_id,
+                app,
+                state,
+                tunnel_commands,
+                exec_channel_enabled,
+            )
+            .await
+        }
     }
 }

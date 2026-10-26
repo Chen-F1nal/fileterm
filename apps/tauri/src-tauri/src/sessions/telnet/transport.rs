@@ -285,12 +285,16 @@ pub(crate) fn reject_unsupported(command: WorkerCmd, message: &str) {
         | WorkerCmd::DeleteRemotePath { respond_to, .. }
         | WorkerCmd::ChangeRemotePermissions { respond_to, .. }
         | WorkerCmd::SetRemoteFileAccessMode { respond_to, .. }
+        | WorkerCmd::RelayFile { respond_to, .. }
         | WorkerCmd::UploadLocalFile { respond_to, .. }
         | WorkerCmd::DownloadRemoteFile { respond_to, .. }
         | WorkerCmd::ReplaceRemoteFile { respond_to, .. }
         | WorkerCmd::CommitRemoteStaging { respond_to, .. }
         | WorkerCmd::RemoveRemoteFile { respond_to, .. } => {
             let _ = respond_to.send(Err(message.to_string()));
+        }
+        WorkerCmd::CommitRemoteFile { respond_to, .. } => {
+            let _ = respond_to.send(Err("此连接不支持文件传输".into()));
         }
         WorkerCmd::StatRemoteFile { respond_to, .. } => {
             let _ = respond_to.send(Err(message.to_string()));

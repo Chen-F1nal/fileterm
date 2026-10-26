@@ -38,6 +38,10 @@ node apps/tauri/tests/browser/terminal-resize-repaint.mjs
 一次性把真实 `cols` 同步给本地 xterm 和 PTY，不再等待输出安静或 shell
 提示符。
 
+该尺寸夹具使用项目已有的 Vite 打包，无需额外 esbuild。另覆盖 2 倍 DPI 下
+隐藏标签宽度改变后的首帧适配，以及垂直拖拽后 WebGL 画布在下一次浏览器
+绘制前完成重绘；DOM 回退刷新路径由 `terminal-render-recovery.test.mjs` 检查。
+
 ## 本机验证结果
 
 macOS Chrome（`PLAYWRIGHT_CHANNEL=chrome`）与 Playwright WebKit 两个引擎，

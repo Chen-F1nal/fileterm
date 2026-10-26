@@ -2,8 +2,7 @@
 mod tests {
     use super::{
         authentication_result_from_auth_result, build_http_connect_request, build_legacy_preferred,
-        capture_root_access_password_input, coalesce_terminal_input,
-        coalesce_terminal_writes,
+        capture_root_access_password_input, coalesce_terminal_input, coalesce_terminal_writes,
         configured_authentication_method, contains_interrupt_byte, decode_bytes,
         default_ssh_key_paths, delete_remote_path_command, detect_network_device_family,
         detect_remote_exec_input_kind, effective_exec_channel_enabled, effective_remote_file_type,
@@ -2189,7 +2188,9 @@ mod tests {
         );
     }
 
-    fn budgeted_input(value: impl Into<String>) -> crate::sessions::terminal_input::TerminalInput<String> {
+    fn budgeted_input(
+        value: impl Into<String>,
+    ) -> crate::sessions::terminal_input::TerminalInput<String> {
         crate::sessions::terminal_input::TerminalInput::try_new(value.into()).unwrap()
     }
 
@@ -2242,7 +2243,11 @@ mod tests {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let bytes = [0xff, 0x00, 0x1b, b'[', b'6', b'n', 0x03];
         for _ in 0..2_000 {
-            sender.send(crate::sessions::terminal_input::TerminalInput::from(bytes.to_vec())).unwrap();
+            sender
+                .send(crate::sessions::terminal_input::TerminalInput::from(
+                    bytes.to_vec(),
+                ))
+                .unwrap();
         }
         let first = receiver.try_recv().unwrap();
         let mut merged = coalesce_terminal_writes(first, &mut receiver);
@@ -2672,6 +2677,160 @@ mod tests {
             .await
             .expect("multi-round MFA fixture did not release its SSH socket")
             .unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn strict_sftp_commit_rejects_links_skips_late_conflicts_and_rolls_back_failed_rename() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let fixture = start_openssh_fixture();
+        wait_for_openssh(fixture.port).await;
+        let handle =
+            authenticate_openssh_fixture(&fixture, &serde_json::json!({"proxy":{"type":"none"}}))
+                .await;
+        let channel = handle.channel_open_session().await.unwrap();
+        channel.request_subsystem(true, "sftp").await.unwrap();
+        let sftp = russh_sftp::client::SftpSession::new(channel.into_stream())
+            .await
+            .unwrap();
+        let root = &fixture.remote_dir;
+        let partial = root.join("part");
+        let destination = root.join("target");
+        let outside = root.join("outside");
+        std::fs::write(&partial, b"new").unwrap();
+        std::fs::write(&outside, b"untouched").unwrap();
+        symlink(&outside, &destination).unwrap();
+        let commit = |replace| {
+            super::replace_remote_file_with_policy(
+                &sftp,
+                partial.to_str().unwrap(),
+                destination.to_str().unwrap(),
+                Some(replace),
+            )
+        };
+        assert!(commit(true).await.is_err());
+        assert_eq!(std::fs::read(&outside).unwrap(), b"untouched");
+        assert!(!commit(false).await.unwrap());
+        std::fs::remove_file(&destination).unwrap();
+        std::fs::write(&destination, b"old").unwrap();
+        assert!(!commit(false).await.unwrap());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"old");
+        assert!(commit(true).await.unwrap());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+        symlink(&outside, &partial).unwrap();
+        assert!(commit(true).await.is_err());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+        std::fs::remove_file(&partial).unwrap();
+
+        let locked = root.join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        let blocked_partial = locked.join("part");
+        std::fs::write(&blocked_partial, b"pending").unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let result = super::replace_remote_file_with_policy(
+            &sftp,
+            blocked_partial.to_str().unwrap(),
+            destination.to_str().unwrap(),
+            Some(true),
+        )
+        .await;
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(result.is_err(), "readonly source parent must fail commit");
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+        assert_eq!(std::fs::read(&blocked_partial).unwrap(), b"pending");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn real_sftp_relay_preserves_binary_ranges_and_rejects_symlink_targets() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let fixture = start_openssh_fixture();
+        wait_for_openssh(fixture.port).await;
+        let profile = serde_json::json!({ "proxy": { "type": "none" } });
+        let handle = authenticate_openssh_fixture(&fixture, &profile).await;
+        let channel = handle.channel_open_session().await.unwrap();
+        channel.request_subsystem(true, "sftp").await.unwrap();
+        let sftp = russh_sftp::client::SftpSession::new(channel.into_stream())
+            .await
+            .unwrap();
+        let path = fixture
+            .remote_dir
+            .join("relay.bin")
+            .to_string_lossy()
+            .into_owned();
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let content = vec![0x81; crate::sessions::TRANSFER_IO_BUFFER_BYTES * 3 + 17];
+        for offset in [0, 123] {
+            sftp.create(&path).await.unwrap();
+            sftp.write(&path, &content[..offset]).await.unwrap();
+            let (mut writer, mut stream) = tokio::io::duplex(1024);
+            let data = &content[offset..];
+            let ((), ()) = tokio::try_join!(
+                async { writer.write_all(data).await.map_err(|e| e.to_string()) },
+                super::relay_sftp_file(
+                    &sftp,
+                    crate::sessions::relay_io::RelayRequest {
+                        path: path.clone(),
+                        offset: offset as u64,
+                        length: data.len() as u64,
+                        upload: true
+                    },
+                    &mut stream,
+                    &cancel,
+                    Duration::from_secs(5)
+                )
+            )
+            .unwrap();
+            assert_eq!(sftp.read(&path).await.unwrap(), content);
+        }
+        let (mut reader, mut stream) = tokio::io::duplex(1024);
+        let mut output = Vec::new();
+        tokio::try_join!(
+            async {
+                reader
+                    .read_to_end(&mut output)
+                    .await
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            },
+            super::relay_sftp_file(
+                &sftp,
+                crate::sessions::relay_io::RelayRequest {
+                    path: path.clone(),
+                    offset: 7,
+                    length: 100,
+                    upload: false
+                },
+                &mut stream,
+                &cancel,
+                Duration::from_secs(5)
+            )
+        )
+        .unwrap();
+        assert_eq!(output, content[7..107]);
+        let link = fixture
+            .remote_dir
+            .join("relay-link")
+            .to_string_lossy()
+            .into_owned();
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        let (_, mut stream) = tokio::io::duplex(1024);
+        assert!(super::relay_sftp_file(
+            &sftp,
+            crate::sessions::relay_io::RelayRequest {
+                path: link,
+                offset: 0,
+                length: 0,
+                upload: true
+            },
+            &mut stream,
+            &cancel,
+            Duration::from_secs(5)
+        )
+        .await
+        .is_err());
+        assert_eq!(sftp.read(&path).await.unwrap(), content);
+        sftp.close().await.unwrap();
     }
 
     #[cfg(unix)]

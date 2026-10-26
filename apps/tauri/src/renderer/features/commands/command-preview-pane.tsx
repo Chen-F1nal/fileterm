@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { CommandTemplate, WorkspaceTab } from '@fileterm/core'
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
@@ -113,15 +114,11 @@ export function CommandPreviewPane({
                 type="button"
                 onClick={onTemporaryEdit}
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  edit
-                </span>
+                <MaterialIcon name="edit" className="material-symbols-outlined" aria-hidden="true" />
                 <span>{t.edit}</span>
               </button>
               <button disabled={!temporaryCommand.trim()} type="button" onClick={onTemporarySave}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  save
-                </span>
+                <MaterialIcon name="save" className="material-symbols-outlined" aria-hidden="true" />
                 <span>{t.save}</span>
               </button>
               <button
@@ -132,11 +129,7 @@ export function CommandPreviewPane({
               >
                 <StableButtonContent
                   busy={isSavingToCommandManager}
-                  icon={
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      save_as
-                    </span>
-                  }
+                  icon={<MaterialIcon name="save_as" className="material-symbols-outlined" aria-hidden="true" />}
                   label={t.commandSaveToManager}
                 />
               </button>
@@ -186,15 +179,11 @@ export function CommandPreviewPane({
           <>
             <div className="command-pane-edit-actions">
               <button type="button" onClick={onTemplateEdit} disabled={isEditingTemplate}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  edit
-                </span>
+                <MaterialIcon name="edit" className="material-symbols-outlined" aria-hidden="true" />
                 <span>{t.edit}</span>
               </button>
               <button type="button" onClick={onTemplateSave} disabled={!isEditingTemplate || isBusy}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  save
-                </span>
+                <MaterialIcon name="save" className="material-symbols-outlined" aria-hidden="true" />
                 <span>{t.save}</span>
               </button>
             </div>

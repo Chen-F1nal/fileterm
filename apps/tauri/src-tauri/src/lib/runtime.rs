@@ -623,6 +623,8 @@ pub fn run() {
             crate::commands::app_delete_remote_path,
             crate::commands::app_change_remote_permissions,
             crate::commands::app_set_remote_file_access_mode,
+            crate::commands::app_browse_transfer_directory,
+            crate::commands::app_copy_between_servers,
             crate::commands::app_queue_upload,
             crate::commands::app_upload_file,
             crate::commands::app_download_file,

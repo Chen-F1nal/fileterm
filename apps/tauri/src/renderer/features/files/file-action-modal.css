@@ -1,0 +1,14 @@
+.modal-card.form-dialog.file-action-modal {
+  --form-dialog-width: 440px;
+}
+
+.file-action-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.file-action-label {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}

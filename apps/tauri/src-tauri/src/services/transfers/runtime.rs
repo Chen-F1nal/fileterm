@@ -164,19 +164,20 @@ pub async fn report_progress(app: &AppHandle, transfer_id: &str, transferred: u6
         app,
         transfer_id,
         |task| {
-            let (aggregate_transferred, aggregate_total) =
-                if let Some(manifest) = task.manifest.as_mut() {
-                    if let Some(entry) = manifest
-                        .files
-                        .iter_mut()
-                        .find(|entry| entry.status == "running")
-                    {
-                        entry.transferred_bytes = transferred.min(entry.source_identity.size);
-                    }
-                    manifest_totals(manifest)
-                } else {
-                    (transferred, total)
-                };
+            let (aggregate_transferred, aggregate_total) = if let Some(manifest) =
+                task.manifest.as_mut().filter(|_| task.direction != "copy")
+            {
+                if let Some(entry) = manifest
+                    .files
+                    .iter_mut()
+                    .find(|entry| entry.status == "running")
+                {
+                    entry.transferred_bytes = transferred.min(entry.source_identity.size);
+                }
+                manifest_totals(manifest)
+            } else {
+                (transferred, total)
+            };
             task.status = "running".to_string();
             task.transferred_bytes = Some(aggregate_transferred);
             task.total_bytes = Some(aggregate_total);
@@ -276,7 +277,9 @@ async fn dispatch_worker_command<T>(
     let (respond_to, result) = oneshot::channel();
     // Operation timeouts must stop the worker without marking the whole run
     // as user-canceled, otherwise its error never reaches fail_if_running.
-    let cancellation = cancellation.map(|parent| parent.child_token()).unwrap_or_default();
+    let cancellation = cancellation
+        .map(|parent| parent.child_token())
+        .unwrap_or_default();
     let _cancel_on_drop = cancellation.clone().drop_guard();
     let command = make_command(respond_to, cancellation.clone());
     let send_result = tokio::select! {

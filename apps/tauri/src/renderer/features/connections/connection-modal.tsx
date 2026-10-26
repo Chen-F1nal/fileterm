@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type {
   ConnectionFormMode,
@@ -324,7 +325,7 @@ export function ConnectionModal({
     <div className={`modal-card ssh-modal ${standalone ? 'standalone' : ''}`}>
       <div className="connection-manager-header" data-tauri-drag-region={standalone ? 'deep' : undefined}>
         <span className="connection-manager-title">
-          <span className="material-symbols-outlined">settings_ethernet</span>
+          <MaterialIcon name="settings_ethernet" className="material-symbols-outlined" />
           <span>{mode === 'edit' ? t.editConnection : t.newConnection}</span>
         </span>
         <div className="connection-manager-header-actions">

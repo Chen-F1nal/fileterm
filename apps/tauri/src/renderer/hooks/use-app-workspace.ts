@@ -21,6 +21,7 @@ import type {
 import { DEFAULT_COMMAND_LIST_WIDTH, DEFAULT_FILE_PANEL_RATIO, retainOpenTabUiState } from '../app/app-shell-utils'
 import type { ErrorDetails } from '../app/app-error-utils'
 import { useWorkspaceTabs } from './use-workspace-tabs'
+import { useWorkspaceSidebarWidth } from './use-workspace-sidebar-width'
 import { consumeHomeTabTransition, peekHomeTabTransition } from '../features/workspace/home-transition'
 import type { UseWorkspaceTabsOptions } from './workspace-tabs-types'
 import { useWorkspaceModals } from './use-workspace-modals'
@@ -201,6 +202,7 @@ export function useAppWorkspace({
     closeHomeTab,
     closeSessionTab,
     openSystemInfo,
+    openFileTransfers,
     splitPane,
     closePane,
     closeActiveWorkspaceItem,
@@ -227,6 +229,11 @@ export function useAppWorkspace({
   } satisfies UseWorkspaceTabsOptions)
 
   const activeWorkspaceFocusKey = activeTab?.id ?? effectiveActiveLocalTabId
+  const { activeSidebarWidth, setActiveSidebarWidth } = useWorkspaceSidebarWidth(
+    activeWorkspaceFocusKey,
+    workspace.tabs,
+    localTabs
+  )
   const isWorkspaceFocusMode = activeWorkspaceFocusKey ? (workspaceFocusModes[activeWorkspaceFocusKey] ?? false) : false
   const activeWorkspaceView = activeTab ? (workspaceViews[activeTab.id] ?? 'file') : 'file'
   const activeCommandPaneWidth = activeTab
@@ -756,6 +763,7 @@ export function useAppWorkspace({
     closeHomeTab,
     closeSessionTab,
     openSystemInfo,
+    openFileTransfers,
     splitPane,
     closePane,
     closeActiveWorkspaceItem,
@@ -765,6 +773,8 @@ export function useAppWorkspace({
     activeFilePanelRatio,
     activeFilePanelSnapTarget,
     activeWorkspaceFocusKey,
+    activeSidebarWidth,
+    setActiveSidebarWidth,
     isWorkspaceFocusMode,
     activeWorkspaceView,
     activeCommandPaneWidth,

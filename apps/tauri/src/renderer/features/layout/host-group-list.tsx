@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import './host-group-list.css'
 import { useRef } from 'react'
 import { tabStatusClass } from '../../app/app-utils'
@@ -60,9 +61,11 @@ export function HostGroupList({
                 type="button"
                 onClick={() => navigation.onSelectGroup(group.key)}
               >
-                <span aria-hidden="true" className="host-group-icon material-symbols-outlined">
-                  {hostGroupIcon(group)}
-                </span>
+                <MaterialIcon
+                  name={hostGroupIcon(group)}
+                  aria-hidden="true"
+                  className="host-group-icon material-symbols-outlined"
+                />
                 {!collapsed ? (
                   <span className="host-group-text">
                     <strong>{label}</strong>

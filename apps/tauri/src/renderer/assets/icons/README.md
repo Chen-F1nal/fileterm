@@ -1,46 +1,28 @@
-# FileTerm UI Functional Icons (UI 功能矢量图标库)
+# FileTerm UI 图标资源
 
-本目录归档 FileTerm 前端渲染层使用的全部离线 UI 功能矢量图标（SVG）。
+应用自身的静态 UI 图形统一存储为本目录中的独立 SVG，按 actions、navigation、files、network、security、system 分类。动态图表由数据生成，不属于静态图标。Dock、托盘、安装包等应用身份资产继续使用各平台的独立资源目录。
 
-## 1. 资产边界：应用图标 vs UI 功能图标
+## 两组现有造型
 
-在 FileTerm 中，**应用身份图标**与 **UI 功能图标**具有严格的物理与架构隔离，禁止混淆：
+- `app-*.svg`：从原 `AppIcon` 组件逐项提取的 SVG，以及原自绘窗口控件。保留原路径、嵌套 SVG、坐标变换、填充和描边。`brand` 与 `terminal` 共用 `network/app-terminal.svg`。
+- `material-*.svg`：从原本地 Material Symbols Outlined 400 字重字体中提取的 58 个实际使用字形，保留轮廓和 `viewBox="0 -960 960 960"` 的字体基线。使用静态字体实际生效的 400 字重，没有换成同名图库中的另一种造型。来源摘要见 `tests/fixtures/material-icon-geometry.json`；Apache 2.0 许可与版权见应用的 `licenses/material-symbols/LICENSE.txt` 和根目录 `THIRD_PARTY_NOTICES.md`。
+- 未带前缀的现有素材保留原造型。其中部分用于 CSS mask；同名但不同路径的素材不直接合并，避免改变既有外观。
 
-| 类型                                       | 归属与路径                                                                                                         | 规范与用途                                                                                                                                                                          |
-| :----------------------------------------- | :----------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **应用身份与平台图标**<br>_(App Identity)_ | • `apps/tauri/assets/icons/trayTemplate.svg`<br>• `apps/tauri/src-tauri/icons/*`<br>• `apps/tauri/public/icon.png` | 供操作系统、Dock、任务栏、系统托盘与安装包使用的客户端本体图标。<br>macOS Dock 图标严格遵守 1024×1024 画布与约 100px 安全留白（图形 824×824）；macOS 托盘为纯黑单色 Template 图标。 |
-| **UI 业务与功能图标**<br>_(UI Functional)_ | • `apps/tauri/src/renderer/assets/icons/<category>/*`                                                              | 供应用内界面控件（按钮、树状图、侧边栏、对话框、设置项等）渲染使用的矢量图标。<br>统一采用标准 SVG，离线就地化，按功能域分类存储。                                                  |
+## 使用方式
 
----
-
-## 2. 目录分类与清单
-
-```text
-apps/tauri/src/renderer/assets/icons/
-├── actions/       # 操作与编辑功能（增删改查、保存、刷新等）
-├── navigation/    # 页面导航与窗口控制（前进后退、展开折叠、全屏、关闭等）
-├── files/         # 文件管理与存储操作（文件夹、文件文档、上传下载等）
-├── network/       # 连接、协议与终端（终端模拟、局域网、DNS、云同步等）
-├── security/      # 安全凭据与权限（密码锁、密钥、盾牌、指纹、可见性等）
-└── system/        # 系统配置与状态（偏好设置、调色板、语言、更新、日志等）
+```tsx
+<AppIcon name="shield" size={20} strokeWidth={1.8} />
+<MaterialIcon name="settings" className="material-symbols-outlined" />
 ```
 
-### 分类清单（共 60 个图标）
+组件从 SVG 文件通过 Vite `?raw` 静态导入图形，再生成 SVG DOM，因此不需要等待图标字体或逐个请求图片文件。图形数据的唯一来源是资源文件；不要在业务 TSX 中复制路径。
 
-- **`actions/` (15)**: `add.svg`, `add_comment.svg`, `check.svg`, `delete.svg`, `delete_sweep.svg`, `drag_indicator.svg`, `edit.svg`, `edit_note.svg`, `more_horiz.svg`, `refresh.svg`, `restart_alt.svg`, `save.svg`, `save_as.svg`, `search.svg`, `stop.svg`
-- **`navigation/` (9)**: `apps.svg`, `arrow_back.svg`, `arrow_forward.svg`, `chevron_right.svg`, `close.svg`, `close_fullscreen.svg`, `dashboard.svg`, `open_in_full.svg`, `open_in_new.svg`
-- **`files/` (6)**: `description.svg`, `download.svg`, `folder.svg`, `folder_open.svg`, `folder_shared.svg`, `upload_file.svg`
-- **`network/` (7)**: `account_tree.svg`, `cloud.svg`, `cloud_sync.svg`, `dns.svg`, `lan.svg`, `settings_ethernet.svg`, `terminal.svg`
-- **`security/` (9)**: `admin_panel_settings.svg`, `fingerprint.svg`, `key.svg`, `key_off.svg`, `lock.svg`, `shield.svg`, `visibility.svg`, `visibility_off.svg`, `vpn_key.svg`
-- **`system/` (14)**: `auto_awesome.svg`, `forum.svg`, `history.svg`, `info.svg`, `palette.svg`, `power.svg`, `preview.svg`, `progress_activity.svg`, `settings.svg`, `settings_suggest.svg`, `star.svg`, `system_update.svg`, `translate.svg`, `tune.svg`
+`AppIcon` 保留原 `name`、`size`、`strokeWidth`、`className` API。素材中的 `--app-icon-stroke-width` 与 `--app-icon-scaled-stroke-width` 占位值由组件按参数替换成原有数字属性，确保生成的 SVG DOM 与原组件一致；不要把它们改成固定值。固定描边（如拖拽点、信息圆点）也保持原值。
 
----
+`MaterialIcon` 保留原 span 包装和 CSS class，以保持尺寸、颜色、动画与布局选择器的行为。
 
-## 3. 技术规范
+## 编辑与验证
 
-1. **`fill="currentColor"` 颜色继承**：
-   所有 SVG 图标必须将填充设为 `currentColor`，严禁写死 hex/rgb 颜色值。这保证图标能自然跟随 CSS `--theme-text`、`--folder-accent`、hover 或 active 伪类自动变色。
-2. **离线就地化**：
-   100% 静态打包随应用分发，禁止运行时调用任何在线 CDN。
-3. **彻底杜绝 FOUT 闪烁**：
-   纯矢量 SVG 渲染不依赖 WebFont 字体文件的异步加载与排版引擎字符替换，首屏即可瞬时精准渲染，杜绝字母连字（Ligature）闪烁。
+所有单色图标使用 `currentColor` 跟随主题、状态和文件夹颜色，不引入 CDN。修改素材时检查不同尺寸、深浅主题、描边参数、折叠侧栏、自绘窗口控件及拖拽预览。
+
+`tests/svg-icon-assets.test.mjs` 对照迁移前的图形摘要验证 AppIcon 的 57 个原名称与 7 组描边，并验证 Material 字形轮廓、资源安全性和图标来源。窗口控件保留 10×10 坐标；其余 AppIcon 保留 16×16 坐标。

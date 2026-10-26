@@ -1,28 +1,27 @@
 /* global window, document */
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { build } from 'vite'
+import react from '@vitejs/plugin-react'
 import { terminalSymbolTable } from '../fixtures/terminal-symbol-table.mjs'
 
 const require = createRequire(import.meta.url)
-const { build } = require(process.env.ESBUILD_MODULE_PATH || 'esbuild')
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
 const directory = mkdtempSync(join(tmpdir(), 'fileterm-resize-repaint-'))
-await build({
-  stdin: {
-    resolveDir: root,
-    loader: 'tsx',
-    contents: `
-import { useState } from 'react'
+writeFileSync(
+  join(directory, 'fixture.tsx'),
+  `
+import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import { Terminal } from '@xterm/xterm'
-import { TerminalView } from './apps/tauri/src/renderer/components/terminal-view'
-import './apps/tauri/src/renderer/styles/index.css'
+import { TerminalView } from '${root}apps/tauri/src/renderer/components/terminal-view'
+import '${root}apps/tauri/src/renderer/styles/index.css'
 const open = Terminal.prototype.open
 Terminal.prototype.open = function(host) {
   window.terminal = this
@@ -31,21 +30,41 @@ Terminal.prototype.open = function(host) {
 }
 function Fixture() {
   const [width, setWidth] = useState(900)
+  const [height, setHeight] = useState(700)
+  const [active, setActive] = useState(true)
   window.setWidth = (value) => flushSync(() => setWidth(value))
-  return <div style={{width, maxWidth:'calc(100vw - 80px)', height:700}}>
-    <TerminalView profileId="profile" tabId="tab" sessionType="ssh" connected={true} isActive={true}
+  window.setHeight = (value) => flushSync(() => setHeight(value))
+  window.setActive = (value) => flushSync(() => setActive(value))
+  return <div style={{width, maxWidth:'calc(100vw - 80px)', height, visibility: active ? 'visible' : 'hidden'}}>
+    <TerminalView profileId="profile" tabId="tab" sessionType="ssh" connected={true} isActive={active}
       bootText="fixture shell\\r\\n$ " onActivate={() => {}}/>
   </div>
 }
 createRoot(document.getElementById('root')).render(<Fixture/>);
 `
+)
+await build({
+  configFile: false,
+  root,
+  plugins: [react()],
+  logLevel: 'error',
+  define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+  resolve: {
+    alias: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@xterm/xterm'].map((name) => ({
+      find: new RegExp('^' + name + '$'),
+      replacement: require.resolve(name)
+    }))
   },
-  bundle: true,
-  outfile: join(directory, 'bundle.js'),
-  jsx: 'automatic',
-  define: { 'process.env.NODE_ENV': JSON.stringify('production'), 'import.meta.env.DEV': 'false' },
-  loader: { '.svg': 'dataurl', '.ttf': 'dataurl', '.woff2': 'dataurl', '.png': 'dataurl' },
-  logLevel: 'silent'
+  build: {
+    lib: {
+      entry: join(directory, 'fixture.tsx'),
+      name: 'TerminalResizeFixture',
+      formats: ['iife'],
+      fileName: () => 'bundle.js',
+      cssFileName: 'bundle'
+    },
+    outDir: join(directory, 'dist')
+  }
 })
 const engine = process.env.PLAYWRIGHT_ENGINE === 'webkit' ? webkit : chromium
 let browser
@@ -54,7 +73,7 @@ try {
     channel: process.env.PLAYWRIGHT_CHANNEL,
     executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH
   })
-  const page = await browser.newPage({ viewport: { width: 1200, height: 850 } })
+  const page = await browser.newPage({ viewport: { width: 1200, height: 850 }, deviceScaleFactor: 2 })
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.setContent(
@@ -82,14 +101,65 @@ try {
       writeTerminal: async () => {}
     }
   })
-  await page.addStyleTag({ content: readFileSync(join(directory, 'bundle.css'), 'utf8') })
-  await page.addScriptTag({ content: readFileSync(join(directory, 'bundle.js'), 'utf8') })
+  await page.addStyleTag({ content: readFileSync(join(directory, 'dist/bundle.css'), 'utf8') })
+  await page.addScriptTag({ content: readFileSync(join(directory, 'dist/bundle.js'), 'utf8') })
   await page.waitForFunction(() => window.terminal && window.sizes.length > 0 && window.output)
   await page.evaluate(async (table) => {
     await document.fonts.ready
     await window.output({ tabId: 'tab', chunk: '\x1b[H\x1b[2J' + table })
   }, terminalSymbolTable)
   await page.waitForTimeout(400)
+  await page.evaluate(() => {
+    window.setActive(false)
+    window.setWidth(600)
+  })
+  await page.waitForTimeout(200)
+  const activation = await page.evaluate(() => {
+    window.setActive(true)
+    return {
+      host: document.querySelector('.terminal-inner').getBoundingClientRect().width,
+      screen: document.querySelector('.xterm-screen').getBoundingClientRect().width
+    }
+  })
+  assert.ok(
+    activation.screen <= activation.host + 1,
+    'activation must fit the cached terminal before the first visible frame'
+  )
+  await page.evaluate(() => window.setWidth(900))
+  await page.waitForTimeout(250)
+  const gpu = await page.evaluate(() => {
+    const terminal = window.terminal
+    const renderer = terminal._core._renderService._renderer.value
+    if (!renderer._gl) return false
+    window.unpaintedResizes = []
+    let paints = 0
+    const render = renderer.renderRows
+    renderer.renderRows = function (...args) {
+      paints++
+      return render.apply(this, args)
+    }
+    const resize = terminal.resize
+    terminal.resize = function (cols, rows) {
+      const changed = this.cols !== cols || this.rows !== rows
+      const before = paints
+      resize.call(this, cols, rows)
+      if (changed)
+        queueMicrotask(() => {
+          if (paints === before) window.unpaintedResizes.push({ cols, rows })
+        })
+    }
+    return true
+  })
+  assert.ok(gpu, 'the resize regression must exercise the real WebGL renderer')
+  for (const height of [640, 580, 520, 600, 700]) {
+    await page.evaluate((height) => window.setHeight(height), height)
+    await page.waitForTimeout(40)
+  }
+  assert.deepEqual(
+    await page.evaluate(() => window.unpaintedResizes),
+    [],
+    'vertical resizing must repaint the cleared WebGL canvas before the next browser paint'
+  )
   const before = await page.evaluate(() => ({ renders: window.renders, cols: window.terminal.cols }))
   await page.evaluate(() => window.setWidth(910))
   await page.waitForFunction((renders) => window.renders > renders, before.renders, { timeout: 600 })

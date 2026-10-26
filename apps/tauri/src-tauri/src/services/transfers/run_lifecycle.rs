@@ -110,6 +110,9 @@ async fn run(
     if task.terminal() || task.status == "paused" {
         return Ok(());
     }
+    if task.direction == "copy" {
+        return run_remote_copy(&app, task, &cancel).await;
+    }
     crate::services::logging::info(
         &app,
         &format!("transfer:{transfer_id}"),
@@ -197,15 +200,47 @@ async fn run(
                 .clone()
                 .ok_or_else(|| transfer_error("传输任务缺少断点路径"))?;
             let staging = task.staging_path.clone();
+            if skip_existing_transfer_target(
+                &app,
+                &tab_id,
+                &task.direction,
+                &destination_path,
+                task.conflict_policy,
+                &cancel,
+            )
+            .await?
+            {
+                if task.direction == "upload" {
+                    remove_remote_transfer_file(&app, &tab_id, &partial, Some(&cancel)).await?;
+                } else {
+                    remove_local_partial(&partial).await?;
+                }
+                patch_task(
+                    &app,
+                    &transfer_id,
+                    |task| {
+                        task.status = "done".into();
+                        task.message = Some("同名文件已跳过".into());
+                        task.progress = 100.0;
+                        task.resumable = false;
+                        task.speed = None;
+                    },
+                    PatchDelivery::PersistedEvent,
+                )
+                .await?;
+                return Ok(());
+            }
+
             let source_size = if task.direction == "upload" {
-                let metadata = tokio::fs::symlink_metadata(&source_path)
-                    .await
-                    .map_err(|error| {
-                        transfer_error(format!(
-                            "上传源文件不存在或无法读取 {}: {error}",
-                            source_path
-                        ))
-                    })?;
+                let metadata =
+                    tokio::fs::symlink_metadata(&source_path)
+                        .await
+                        .map_err(|error| {
+                            transfer_error(format!(
+                                "上传源文件不存在或无法读取 {}: {error}",
+                                source_path
+                            ))
+                        })?;
                 if metadata.file_type().is_symlink() {
                     return Err(transfer_error(
                         "上传源文件是符号链接，不能继续旧断点；请选择实际文件",
@@ -404,33 +439,52 @@ async fn run(
                 PatchDelivery::PersistedEvent,
             )
             .await?;
-            if task.direction == "upload" {
-                finalize_remote_upload(
-                    &app,
-                    &tab_id,
-                    RemoteUploadFinalize {
-                        partial_path: &partial,
-                        staging_path: staging.as_deref(),
-                        destination_path: &destination_path,
-                        source_size,
-                        partial_ready: upload_plan
-                            .as_ref()
-                            .ok_or_else(|| transfer_error("上传任务缺少 upload plan"))?
-                            .partial_ready,
-                    },
-                    Some(&cancel),
-                )
-                .await?;
+            let committed = if task.direction == "upload" {
+                if let Some(policy) = task.conflict_policy {
+                    commit_remote_transfer(&app, &tab_id, &partial, &destination_path, policy)
+                        .await?
+                } else {
+                    finalize_remote_upload(
+                        &app,
+                        &tab_id,
+                        RemoteUploadFinalize {
+                            partial_path: &partial,
+                            staging_path: staging.as_deref(),
+                            destination_path: &destination_path,
+                            source_size,
+                            partial_ready: upload_plan
+                                .as_ref()
+                                .ok_or_else(|| transfer_error("上传任务缺少 upload plan"))?
+                                .partial_ready,
+                        },
+                        Some(&cancel),
+                    )
+                    .await?;
+                    true
+                }
             } else {
-                replace_local_file(Path::new(&partial), Path::new(&destination_path)).await?;
+                commit_local_transfer(
+                    Path::new(&partial),
+                    Path::new(&destination_path),
+                    task.conflict_policy,
+                )
+                .await?
+            };
+            if !committed {
+                if task.direction == "upload" {
+                    remove_remote_transfer_file(&app, &tab_id, &partial, None).await?;
+                } else {
+                    remove_local_partial(&partial).await?;
+                }
             }
+
             patch_task(
                 &app,
                 &transfer_id,
                 |task| {
                     task.status = "done".to_string();
                     task.progress = 100.0;
-                    task.message = None;
+                    task.message = (!committed).then(|| "同名文件已跳过".into());
                     task.speed = None;
                     task.transferred_bytes = Some(source_size);
                     task.total_bytes = Some(source_size);

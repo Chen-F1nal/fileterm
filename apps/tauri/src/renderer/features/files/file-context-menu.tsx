@@ -1,8 +1,10 @@
 import type { LocalFileItem, RemoteFileItem } from '@fileterm/core'
 import { t } from '../../i18n'
-import { ContextMenu } from '../common/context-menu'
+import { ContextMenu, type ContextMenuEntry } from '../common/context-menu'
 
 export function FileContextMenu({
+  transferAction,
+  disabled = false,
   onBookmark,
   canChangePermissions,
   canCopy,
@@ -34,6 +36,8 @@ export function FileContextMenu({
   pane,
   position
 }: {
+  transferAction?: ContextMenuEntry
+  disabled?: boolean
   onBookmark(item: RemoteFileItem): void
   canChangePermissions: boolean
   canCopy: boolean
@@ -69,6 +73,7 @@ export function FileContextMenu({
   const canMutateItem = Boolean(item && item.name !== '..')
   const items = [
     { label: t.refresh, action: onRefresh },
+    ...(transferAction ? [transferAction] : []),
     { separator: true },
     {
       label: t.bookmarkAdd,
@@ -97,6 +102,12 @@ export function FileContextMenu({
   ]
 
   return (
-    <ContextMenu autoFocus={false} className="file-context-menu" items={items} onClose={onClose} position={position} />
+    <ContextMenu
+      autoFocus={false}
+      className="file-context-menu"
+      items={disabled ? items.map((item) => ({ ...item, disabled: true })) : items}
+      onClose={onClose}
+      position={position}
+    />
   )
 }

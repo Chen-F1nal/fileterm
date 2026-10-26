@@ -248,6 +248,11 @@
   padding-right: 36px;
 }
 
+/* Keep WebView2's reveal button from duplicating the custom toggle. */
+.proxy-password-field input::-ms-reveal {
+  display: none;
+}
+
 .proxy-pwd-toggle-btn {
   position: absolute;
   right: 6px;

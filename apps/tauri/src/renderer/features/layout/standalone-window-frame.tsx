@@ -56,9 +56,7 @@ export function StandaloneWindowTitlebar({ isWindows, title }: { isWindows: bool
             void desktopApi?.minimizeCurrentWindow()
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10">
-            <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1" />
-          </svg>
+          <AppIcon name="window-minimize" size={10} strokeWidth={1} />
         </button>
         <button
           aria-label="Maximize"
@@ -67,20 +65,7 @@ export function StandaloneWindowTitlebar({ isWindows, title }: { isWindows: bool
             void desktopApi?.toggleMaximizeCurrentWindow()
           }}
         >
-          {isMaximized ? (
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <path
-                d="M1.5,3.5 L6.5,3.5 L6.5,8.5 L1.5,8.5 Z M3.5,3.5 L3.5,1.5 L8.5,1.5 L8.5,6.5 L6.5,6.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1"
-              />
-            </svg>
-          ) : (
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
-            </svg>
-          )}
+          <AppIcon name={isMaximized ? 'window-restore' : 'window-maximize'} size={10} strokeWidth={1} />
         </button>
         <CloseButton
           aria-label="Close"

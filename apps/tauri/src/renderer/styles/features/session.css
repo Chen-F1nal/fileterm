@@ -218,8 +218,7 @@
 .terminal-find input:focus,
 .terminal-find input:focus-visible {
   outline: none;
-  box-shadow: none;
-  border-color: var(--border-dark);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .terminal-find .terminal-find-actions > .terminal-find-submit {
@@ -520,8 +519,8 @@
 
 .terminal-dock-history-search:focus {
   outline: none;
-  border-color: var(--border-dark);
   background: color-mix(in srgb, var(--text-main) 8%, transparent);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .terminal-dock-suggestion-list button.is-selected {
@@ -794,6 +793,10 @@
 .session-workspace.file-only .session-bottom-panel {
   grid-row: 1;
   grid-column: 1 / -1;
+}
+
+.session-workspace.file-only .file-tabs {
+  border-top: 0;
 }
 
 .session-bottom-panel .file-manager {
@@ -1194,10 +1197,9 @@
 }
 
 .pane-filter-input-wrapper:focus-within {
-  outline: 1px solid var(--focus-outline);
-  outline-offset: -1px;
-  border-color: var(--focus-outline);
+  outline: none;
   background: var(--bg-main);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .pane-filter-search-icon {
@@ -2195,8 +2197,7 @@
 .root-access-modal .file-action-field input:focus,
 .root-access-modal .file-action-field select:focus {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .network-share-credentials-modal .file-action-field input:hover:not(:focus),
@@ -2235,8 +2236,7 @@
 
 .root-access-modal .file-action-field .dropdown-select-trigger:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .root-access-modal .file-action-field .dropdown-select-trigger:hover:not(:disabled):not(:focus-visible),
@@ -2727,8 +2727,9 @@
 }
 
 .connection-manager-search:focus-within {
-  border-color: var(--text-muted);
   background: var(--surface-hover);
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 .connection-manager-search input {
@@ -3658,7 +3659,6 @@
   color: var(--text-main);
   background: var(--input-bg);
   font: inherit;
-  font-size: 14px;
 }
 .ssh-tunnel-field-grid input:hover,
 .ssh-tunnel-field-grid select:hover {
@@ -3666,9 +3666,8 @@
 }
 .ssh-tunnel-field-grid input:focus,
 .ssh-tunnel-field-grid select:focus {
-  border-color: var(--text-muted);
   outline: none;
-  box-shadow: 0 0 0 3px var(--input-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 .ssh-tunnel-port-input {
   appearance: textfield;

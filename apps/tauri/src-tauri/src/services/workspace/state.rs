@@ -30,6 +30,7 @@ impl Default for WorkspaceState {
             remote_forwards: Arc::new(RwLock::new(HashMap::new())),
             transfers: Arc::new(RwLock::new(Vec::new())),
             transfer_runs: Arc::new(RwLock::new(HashMap::new())),
+            copy_io_gates: Default::default(),
             transfer_lifecycle: Arc::new(Mutex::new(())),
             next_transfer_generation: Arc::new(AtomicU64::new(0)),
             transfer_journal_loaded: Arc::new(Mutex::new(false)),
@@ -150,5 +151,4 @@ impl WorkspaceState {
     pub async fn remove_ai_session_revision(&self, tab_id: &str) {
         self.ai_session_revisions.write().await.remove(tab_id);
     }
-
 }

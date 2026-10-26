@@ -2,7 +2,26 @@ import type { LocalFileItem, PermissionChangeOptions, RemoteFileItem } from '@fi
 import type { FileOperationsRuntime, FilePane } from './file-operations-types'
 import { t } from '../i18n'
 
-type FileOperationsActionContext = FileOperationsRuntime & {
+type FileOperationsActionContext = Pick<
+  FileOperationsRuntime,
+  | 'desktopApi'
+  | 'activeTab'
+  | 'onApplySnapshot'
+  | 'onBusyChange'
+  | 'setFileActionDialog'
+  | 'fileActionDialog'
+  | 'setFileActionError'
+  | 'fileActionSubmittingRef'
+  | 'setIsFileActionSubmitting'
+  | 'setPermissionDialog'
+  | 'permissionDialog'
+  | 'setPermissionDialogError'
+  | 'permissionSubmittingRef'
+  | 'setIsPermissionSubmitting'
+  | 'reportOperationError'
+  | 'reportStatusError'
+  | 'ensureActiveRemoteSessionConnected'
+> & {
   refreshCurrentPane(pane: FilePane): Promise<void>
 }
 

@@ -65,6 +65,7 @@ export function FileManager({
   onSaveTemporaryCommand,
   onUpdateCommand,
   onOpenCommandManager,
+  onOpenFileTransfers,
   onCopyItems,
   onCutItems,
   onClearCutState,
@@ -131,6 +132,7 @@ export function FileManager({
   onSaveTemporaryCommand(command: string, appendCarriageReturn: boolean): Promise<boolean> | boolean | void
   onUpdateCommand(commandId: string, input: CommandTemplateInput): Promise<boolean> | boolean | void
   onOpenCommandManager(): void
+  onOpenFileTransfers(): void
   onCopyItems(pane: 'local' | 'remote', items: Array<LocalFileItem | RemoteFileItem>): void
   onCutItems(pane: 'local' | 'remote', items: Array<LocalFileItem | RemoteFileItem>): void
   onClearCutState(): void
@@ -643,6 +645,7 @@ export function FileManager({
           onChooseUploadFiles={onChooseUploadFiles}
           onDownloadFiles={onDownloadFiles}
           onOpenCommandManager={onOpenCommandManager}
+          onOpenFileTransfers={onOpenFileTransfers}
           onRefresh={onRefresh}
           onToggleRemoteFileAccessMode={onToggleRemoteFileAccessMode}
           remoteFileAccessMode={remoteFileAccessMode}

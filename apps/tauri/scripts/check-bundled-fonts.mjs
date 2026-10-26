@@ -16,8 +16,7 @@ const groups = {
   geist: 'OFL.txt',
   'hanken-grotesk': 'OFL.txt',
   inter: 'OFL.txt',
-  'noto-sans-sc': 'OFL.txt',
-  'material-symbols': 'LICENSE.txt'
+  'noto-sans-sc': 'OFL.txt'
 }
 
 function files(directory) {
@@ -51,7 +50,7 @@ for (const path of sourceFonts) {
   assert.ok(groups[group], `Font group has no declared license: ${group}`)
   const license = join(group, groups[group])
   const licenseText = readFileSync(join(licenses, license), 'utf8')
-  assert.ok(licenseText.includes(group === 'material-symbols' ? 'Apache License' : 'SIL OPEN FONT LICENSE'))
+  assert.ok(licenseText.includes('SIL OPEN FONT LICENSE'))
   assert.ok(notices.includes(`licenses/${group}/${groups[group]}`), `Missing notice for ${group}`)
   assert.ok(references.has(path), `Font is not referenced by CSS: ${path}`)
   const digest = hash(path)
@@ -59,6 +58,8 @@ for (const path of sourceFonts) {
   knownHashes.add(digest)
 }
 assert.equal(references.size, sourceFonts.length, 'CSS must reference exactly the inventoried fonts')
+assert.ok(readFileSync(join(licenses, 'material-symbols/LICENSE.txt'), 'utf8').includes('Apache License'))
+assert.ok(notices.includes('licenses/material-symbols/LICENSE.txt'), 'Extracted icon artwork must retain attribution')
 
 // Monaco emits an additional icon font from node_modules, outside our asset tree.
 const codicon = join(root, 'node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.ttf')

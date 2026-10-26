@@ -7,6 +7,7 @@ import { SelectionControl } from '../common/selection-control'
 import { SessionSendTargetPicker } from '../common/session-send-target-picker'
 import type { SendScope, SessionSendTarget } from '../common/session-send-targets'
 import { summarizeSendTarget } from '../common/session-send-targets'
+import { createTerminalModifierTapTracker } from './terminal-modifier-tap'
 
 type DockPanel = 'history' | 'options' | null
 
@@ -187,7 +188,7 @@ export function TerminalDock({
   }, [panel])
 
   useEffect(() => {
-    let lastCtrlPress = 0
+    const modifierTap = createTerminalModifierTapTracker()
     const isEventInTerminalZone = (target: EventTarget | null) => {
       if (!(target instanceof Node)) {
         return false
@@ -197,29 +198,31 @@ export function TerminalDock({
       return Boolean(terminalArea && terminalArea.contains(target))
     }
 
+    const handleModifierKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (isEventInTerminalZone(event.target) || panel === 'history') modifierTap.keyDown(event)
+      else modifierTap.reset()
+    }
+    const handleModifierKeyUp = (event: globalThis.KeyboardEvent) => {
+      if (!isEventInTerminalZone(event.target) && panel !== 'history') {
+        modifierTap.reset()
+        return
+      }
+      if (!modifierTap.keyUp(event)) return
+      event.preventDefault()
+      if (document.activeElement === inputRef.current || document.activeElement === historySearchInputRef.current) {
+        inputRef.current?.blur()
+        historySearchInputRef.current?.blur()
+        focusTerminal()
+      } else if (panel === 'history') {
+        historySearchInputRef.current?.focus()
+      } else {
+        inputRef.current?.focus()
+      }
+    }
+
     const handleGlobalKeyDown = (event: globalThis.KeyboardEvent) => {
       const eventInTerminalZone = isEventInTerminalZone(event.target)
       if (!eventInTerminalZone && panel !== 'history') {
-        return
-      }
-
-      if (event.key === 'Control' || event.key === 'Meta') {
-        const now = Date.now()
-        if (!event.repeat && now - lastCtrlPress < 400) {
-          event.preventDefault()
-          if (document.activeElement === inputRef.current || document.activeElement === historySearchInputRef.current) {
-            inputRef.current?.blur()
-            historySearchInputRef.current?.blur()
-            focusTerminal()
-          } else {
-            if (panel === 'history') {
-              historySearchInputRef.current?.focus()
-            } else {
-              inputRef.current?.focus()
-            }
-          }
-        }
-        lastCtrlPress = now
         return
       }
 
@@ -293,8 +296,16 @@ export function TerminalDock({
         }
       }
     }
+    window.addEventListener('keydown', handleModifierKeyDown, true)
+    window.addEventListener('keyup', handleModifierKeyUp, true)
+    window.addEventListener('blur', modifierTap.reset)
     window.addEventListener('keydown', handleGlobalKeyDown)
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleModifierKeyDown, true)
+      window.removeEventListener('keyup', handleModifierKeyUp, true)
+      window.removeEventListener('blur', modifierTap.reset)
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+    }
   }, [panel, filteredHistory, activeHistoryIndex, activeTokenIndex, focusTerminal])
 
   useEffect(() => {

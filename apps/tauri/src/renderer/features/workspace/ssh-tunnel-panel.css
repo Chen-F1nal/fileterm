@@ -1,0 +1,22 @@
+/* Match connection-form text controls without stacking hover and focus rings. */
+.ssh-tunnel-field-grid {
+  --input-focus-shadow: none;
+}
+
+:root .ssh-tunnel-field-grid input,
+:root .ssh-tunnel-field-grid select {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+:root .ssh-tunnel-field-grid input:focus,
+:root .ssh-tunnel-field-grid select:focus,
+:root .ssh-tunnel-field-grid .dropdown-select-trigger:focus-visible,
+:root .ssh-tunnel-field-grid .dropdown-select-trigger[aria-expanded='true'],
+:root .ssh-tunnel-field-grid .ft-select-shell:focus-within {
+  outline: none;
+  border-color: var(--input-focus-inset);
+  box-shadow: none;
+}

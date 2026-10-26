@@ -13,6 +13,7 @@ export type DialogProps = HTMLAttributes<HTMLDivElement> & {
   size?: DialogSize
   showCloseButton?: boolean
   closeOnBackdropClick?: boolean
+  closeOnEscape?: boolean
 }
 
 export function Dialog({
@@ -24,12 +25,13 @@ export function Dialog({
   size = 'md',
   showCloseButton = true,
   closeOnBackdropClick = true,
+  closeOnEscape = true,
   className = '',
   children,
   ...rest
 }: DialogProps) {
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || !closeOnEscape) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -42,7 +44,7 @@ export function Dialog({
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true })
     }
-  }, [isOpen, onClose])
+  }, [closeOnEscape, isOpen, onClose])
 
   if (!isOpen) return null
 

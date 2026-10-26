@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::sessions::WorkerCmd;
 use crate::AppError;
 
-const JOURNAL_VERSION: u8 = 1;
+const JOURNAL_VERSION: u8 = 2;
 const JOURNAL_MAX_TASKS: usize = 200;
 const UPDATE_INTERVAL: Duration = Duration::from_millis(200);
 const SPEED_SAMPLE_INTERVAL: Duration = Duration::from_millis(120);
@@ -46,9 +46,7 @@ where
         return Ok(None);
     };
     let Value::Number(number) = value else {
-        return Err(D::Error::custom(
-            "modifiedAt must be a non-negative number",
-        ));
+        return Err(D::Error::custom("modifiedAt must be a non-negative number"));
     };
     if let Some(timestamp) = number.as_u64() {
         return Ok(Some(timestamp));
@@ -103,11 +101,22 @@ pub struct TransferManifest {
     pub files: Vec<TransferManifestEntry>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferConflictPolicy {
+    Skip,
+    Replace,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferTask {
     pub id: String,
     pub direction: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy_source: Option<CopySource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conflict_policy: Option<TransferConflictPolicy>,
     pub name: String,
     pub progress: f64,
     pub status: String,
@@ -177,6 +186,8 @@ impl TransferTask {
         TransferTask {
             id: self.id.clone(),
             direction: self.direction.clone(),
+            copy_source: self.copy_source.clone(),
+            conflict_policy: self.conflict_policy,
             name: self.name.clone(),
             progress: self.progress,
             status: self.status.clone(),
@@ -400,7 +411,15 @@ fn prune_transfer_history(tasks: &mut Vec<TransferTask>) {
 fn write_journal(app: &AppHandle, tasks: &[TransferTask]) -> Result<(), AppError> {
     let (path, temporary, backup) = journal_paths(app)?;
     let journal = TransferJournal {
-        version: JOURNAL_VERSION,
+        // Old clients must not ignore a two-server endpoint or an explicit conflict policy.
+        version: if tasks
+            .iter()
+            .any(|task| task.direction == "copy" || task.conflict_policy.is_some())
+        {
+            JOURNAL_VERSION
+        } else {
+            1
+        },
         transfers: select_journal_tasks(tasks, JOURNAL_MAX_TASKS),
     };
     let json = serde_json::to_vec_pretty(&journal)
@@ -455,12 +474,13 @@ fn read_journal_at(path: &Path, backup: &Path) -> Result<Vec<TransferTask>, AppE
                 continue;
             }
         };
-        if journal.version != JOURNAL_VERSION {
+        if !matches!(journal.version, 1 | JOURNAL_VERSION) {
             // A newer application may have written this file. Falling back
             // and rewriting it with an older schema would lose its state.
             return Err(AppError::Storage(format!(
                 "不支持的传输日志版本 {}：{}；日志已保留",
-                journal.version, candidate.display()
+                journal.version,
+                candidate.display()
             )));
         }
         for task in &mut journal.transfers {
@@ -482,7 +502,8 @@ fn read_journal_at(path: &Path, backup: &Path) -> Result<Vec<TransferTask>, AppE
         Ok(Vec::new())
     } else {
         Err(AppError::Storage(format!(
-            "无法恢复传输日志，原文件已保留：{}", failures.join("；")
+            "无法恢复传输日志，原文件已保留：{}",
+            failures.join("；")
         )))
     }
 }

@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useState } from 'react'
 import type { SshKeyFileSelection, SshKeyImportSource } from '@fileterm/core'
 import { AppIcon } from '../common/app-icon'
@@ -146,9 +147,7 @@ export function SshKeyNoteDialog({
                       className={`ssh-key-import-dialog__file-name${selectedFile ? ' has-file' : ''}`}
                       title={selectedFile?.sourcePath}
                     >
-                      <span aria-hidden="true" className="material-symbols-outlined">
-                        description
-                      </span>
+                      <MaterialIcon name="description" aria-hidden="true" className="material-symbols-outlined" />
                       <span>{selectedFile?.fileName ?? t.sshKeyNoteNoFile}</span>
                     </div>
                     <button
@@ -169,9 +168,7 @@ export function SshKeyNoteDialog({
                   </div>
                   {selectedFile?.existingKey ? (
                     <div className="ssh-key-import-dialog__duplicate-notice">
-                      <span aria-hidden="true" className="material-symbols-outlined">
-                        info
-                      </span>
+                      <MaterialIcon name="info" aria-hidden="true" className="material-symbols-outlined" />
                       <div>
                         <strong>{t.sshKeyNoteDuplicateTitle}</strong>
                         <span>

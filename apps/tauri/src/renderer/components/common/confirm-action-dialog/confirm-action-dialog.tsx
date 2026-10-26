@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, type ReactNode } from 'react'
 import { Button } from '../button/button'
 import { t } from '../../../i18n'
-import { StableButtonContent } from '../../../features/common/stable-button-content'
+import { StableButtonLabel } from '../../../features/common/stable-button-content'
 
 export function ConfirmActionDialog({
   cancelLabel = t.cancel,
@@ -106,13 +106,15 @@ export function ConfirmActionDialog({
           {guardedExtraActions}
           <Button
             variant={confirmVariant}
+            loading={isSubmitting}
+            reserveLoadingSpace
             aria-busy={isSubmitting}
             className={confirmButtonClassName}
             disabled={isSubmitting || confirmDisabled}
             onClick={onConfirm}
             type="button"
           >
-            <StableButtonContent busy={isSubmitting} label={confirmLabel} />
+            <StableButtonLabel label={confirmLabel} />
           </Button>
         </div>
       </div>

@@ -108,6 +108,16 @@ fn journal_missing_corrupt_and_backup_recovery_are_distinct() {
     std::fs::write(
         &path,
         serde_json::to_vec(&TransferJournal {
+            version: 1,
+            transfers: vec![task("legacy", "paused", true, false)],
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(read_journal_at(&path, &backup).unwrap()[0].id, "legacy");
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&TransferJournal {
             version: JOURNAL_VERSION + 1,
             transfers: vec![],
         })

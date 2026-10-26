@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../../../components/common/material-icon/material-icon'
 import type { Dispatch, SetStateAction } from 'react'
 import type { AiProviderDraft, AiProviderKind, AiProviderSummary, FileTermDesktopApi } from '@fileterm/core'
 import { AppIcon } from '../../../common/app-icon'
@@ -93,9 +94,7 @@ export function AiSettingsPanel() {
         <p className="settings-tools-hint">{t.aiSettingsProviderDescription}</p>
 
         <div className="ai-settings-provider-card">
-          <span aria-hidden="true" className="material-symbols-outlined">
-            auto_awesome
-          </span>
+          <MaterialIcon name="auto_awesome" aria-hidden="true" className="material-symbols-outlined" />
           <div>
             <strong>
               {selectedAiProvider?.usable

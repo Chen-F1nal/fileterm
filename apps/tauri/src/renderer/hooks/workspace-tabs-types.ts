@@ -16,6 +16,7 @@ import type { AppLocale } from '../i18n'
 
 export type LocalTab =
   | { id: string; kind: 'home'; title: string }
+  | { id: string; kind: 'transfers'; title: string; initialTabId?: string; initialPath?: string }
   | { id: string; kind: 'system'; title: string; sessionTabId: string; sourceTabTitle: string }
 
 export type StoredMainTabUiState = {
@@ -47,7 +48,7 @@ export type ShortcutCloseConfirm = {
 export type WorkspaceTabContextAction =
   'copy' | 'clone' | 'connect' | 'connectAll' | 'disconnect' | 'saveSessionLog' | 'close' | 'closeOthers' | 'closeAll'
 
-export type WorkspaceStageKind = 'home' | 'session' | 'system'
+export type WorkspaceStageKind = 'home' | 'session' | 'system' | 'transfers'
 export type WorkspaceNavigationDirection = 'up' | 'down'
 
 export type UseWorkspaceTabsOptions = {

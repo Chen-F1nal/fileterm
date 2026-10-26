@@ -6,6 +6,7 @@
 enum DirectoryEntryAttempt {
     /// 本次尝试完成传输并提交（rename/finalize 已执行）。
     Transferred,
+    Skipped,
     /// 目标已存在且大小吻合，无需重传（断点恢复时的跳过路径）。
     AlreadyDone,
 }
@@ -21,6 +22,7 @@ async fn transfer_directory_entry_once(
     tab_id: &str,
     direction: &str,
     _session_type: Option<&str>,
+    conflict_policy: Option<TransferConflictPolicy>,
     cancel: &CancellationToken,
     resume_requested: bool,
     manifest: &mut TransferManifest,
@@ -30,6 +32,23 @@ async fn transfer_directory_entry_once(
     throttler: &mut DirectoryTransferThrottler,
 ) -> Result<DirectoryEntryAttempt, AppError> {
     let entry = manifest.files[index].clone();
+    if skip_existing_transfer_target(
+        app,
+        tab_id,
+        direction,
+        &entry.destination_path,
+        conflict_policy,
+        cancel,
+    )
+    .await?
+    {
+        if direction == "upload" {
+            remove_remote_transfer_file(app, tab_id, &entry.partial_path, Some(cancel)).await?;
+        } else {
+            remove_local_partial(&entry.partial_path).await?;
+        }
+        return Ok(DirectoryEntryAttempt::Skipped);
+    }
     let current_identity = if direction == "upload" {
         stat_local_transfer_file_result(&entry.source_path)
             .await
@@ -243,27 +262,51 @@ async fn transfer_directory_entry_once(
         )));
     }
 
-    if direction == "upload" {
-        finalize_remote_upload(
-            app,
-            tab_id,
-            RemoteUploadFinalize {
-                partial_path: &entry.partial_path,
-                staging_path: entry.staging_path.as_deref(),
-                destination_path: &entry.destination_path,
-                source_size: entry.source_identity.size,
-                partial_ready: upload_plan.partial_ready,
-            },
-            Some(cancel),
-        )
-        .await?;
+    let committed = if direction == "upload" {
+        if let Some(policy) = conflict_policy {
+            commit_remote_transfer(
+                app,
+                tab_id,
+                &entry.partial_path,
+                &entry.destination_path,
+                policy,
+            )
+            .await?
+        } else {
+            finalize_remote_upload(
+                app,
+                tab_id,
+                RemoteUploadFinalize {
+                    partial_path: &entry.partial_path,
+                    staging_path: entry.staging_path.as_deref(),
+                    destination_path: &entry.destination_path,
+                    source_size: entry.source_identity.size,
+                    partial_ready: upload_plan.partial_ready,
+                },
+                Some(cancel),
+            )
+            .await?;
+            true
+        }
     } else {
-        replace_local_file(
+        commit_local_transfer(
             Path::new(&entry.partial_path),
             Path::new(&entry.destination_path),
+            conflict_policy,
         )
-        .await?;
+        .await?
+    };
+    if !committed {
+        if direction == "upload" {
+            remove_remote_transfer_file(app, tab_id, &entry.partial_path, None).await?;
+        } else {
+            remove_local_partial(&entry.partial_path).await?;
+        }
     }
 
-    Ok(DirectoryEntryAttempt::Transferred)
+    Ok(if committed {
+        DirectoryEntryAttempt::Transferred
+    } else {
+        DirectoryEntryAttempt::Skipped
+    })
 }

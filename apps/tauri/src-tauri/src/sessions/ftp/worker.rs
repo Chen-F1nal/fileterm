@@ -132,6 +132,17 @@ async fn run_ftp_worker(
             initial_files.len()
         ),
     );
+    if let Some(session) = app
+        .state::<crate::services::workspace::WorkspaceState>()
+        .sessions
+        .write()
+        .await
+        .get_mut(tab_id)
+    {
+        session.transfer_endpoint = Some(crate::sessions::transfer_endpoint::fingerprint(
+            std::slice::from_ref(profile),
+        ));
+    }
     set_ftp_state(
         app,
         tab_id,
@@ -380,6 +391,29 @@ async fn run_ftp_worker(
                 .await;
                 respond_ftp_result!(respond_to, result);
             }
+            Some(WorkerCmd::RelayFile {
+                request,
+                mut stream,
+                cancellation,
+                respond_to,
+            }) => {
+                let profile = profile.clone();
+                let host = host.to_string();
+                transfer_jobs.spawn(async move {
+                    let result = async {
+                        let mut client = connect_ftp(&profile, &host, port).await?;
+                        let io_timeout = seconds_from_profile(&profile, "operationTimeoutSeconds", DEFAULT_FTP_OPERATION_TIMEOUT, Duration::from_secs(5), Duration::from_secs(3600));
+                        let result = tokio::select! {
+                            biased;
+                            _ = cancellation.cancelled() => Err(TRANSFER_CANCELED.to_string()),
+                            result = client_relay(&mut client, request, &mut stream, &cancellation, io_timeout) => result,
+                        };
+                        let _ = timeout(io_timeout, client_quit(&mut client)).await;
+                        result
+                    }.await;
+                    let _ = respond_to.send(result);
+                });
+            }
             Some(WorkerCmd::UploadLocalFile {
                 local_path,
                 source_size,
@@ -501,6 +535,27 @@ async fn run_ftp_worker(
                     .await;
                     let _ = respond_to.send(result);
                 });
+            }
+            Some(WorkerCmd::CommitRemoteFile {
+                partial_path,
+                destination_path,
+                replace_existing,
+                cancellation,
+                respond_to,
+            }) => {
+                let result = ftp_with_cancellation(
+                    profile,
+                    "commit",
+                    cancellation,
+                    client_commit(
+                        &mut client,
+                        &partial_path,
+                        &destination_path,
+                        replace_existing,
+                    ),
+                )
+                .await;
+                respond_ftp_result!(respond_to, result);
             }
             Some(WorkerCmd::ReplaceRemoteFile {
                 partial_path,

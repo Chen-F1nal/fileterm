@@ -11,10 +11,6 @@
   margin-right: var(--ai-copilot-panel-width);
 }
 
-.fs-shell.has-ai-copilot .terminal-right-frame {
-  display: none;
-}
-
 .fs-shell.has-ai-copilot::after {
   display: none;
 }
@@ -420,8 +416,8 @@
 }
 
 .ai-copilot-conversation-actions input:focus {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 2px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .ai-copilot-conversation-actions button {
@@ -557,8 +553,8 @@
 }
 
 .ai-copilot-conversation-search:focus-within {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 2px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .ai-copilot-conversation-search > .material-symbols-outlined {
@@ -2008,8 +2004,7 @@
 .ai-copilot-mode-select.dropdown-select-trigger:focus-visible,
 .ai-copilot-mode-select.ft-select-shell select:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 2px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .ai-copilot-mode-select.ft-select-shell select {
@@ -2249,8 +2244,7 @@
 .ai-copilot-composer-select.ft-select-shell select:focus,
 .ai-copilot-composer-select.ft-select-shell select:focus-visible {
   outline: none;
-  border-color: var(--border-dark);
-  box-shadow: none;
+  box-shadow: var(--input-focus-shadow);
   color: var(--text-main);
   background: var(--bg-hover);
 }
@@ -2278,8 +2272,7 @@
 
 .ai-copilot-composer-select.ft-select-shell:focus-within {
   outline: none !important;
-  border-color: var(--border-dark) !important;
-  box-shadow: none !important;
+  box-shadow: var(--input-focus-shadow) !important;
   background: var(--bg-hover) !important;
   background-color: var(--bg-hover) !important;
 }
@@ -2360,14 +2353,15 @@
 }
 
 .ai-copilot-composer-select.ai-copilot-mode-select.dropdown-select-trigger[aria-expanded='true'] {
-  border-color: var(--focus-outline);
   background: var(--surface-inset);
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 .ai-copilot-composer-select.ai-copilot-mode-select.dropdown-select-trigger:focus-visible,
 .ai-copilot-composer-select.ai-copilot-mode-select.ft-select-shell select:focus-visible {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 2px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 /* Provider, model, and reasoning controls are inline metadata selectors. Keep
@@ -2544,8 +2538,8 @@
 }
 
 .ai-settings-provider-picker select:focus {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .ai-settings-preset-picker {
@@ -2599,8 +2593,7 @@
 .ai-settings-preset-select:focus-visible,
 .ai-settings-preset-select.ft-select-shell select:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .ai-settings-preset-select:disabled,
@@ -2797,8 +2790,8 @@
 }
 
 .ai-settings-model-add-input:focus {
-  border-color: var(--focus-outline);
   outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 .ai-settings-model-select.dropdown-select-trigger,
@@ -2844,8 +2837,7 @@
 .ai-settings-model-select:focus-visible,
 .ai-settings-model-select.ft-select-shell select:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .ai-settings-model-input {
@@ -3002,9 +2994,8 @@
 }
 
 .ai-model-capability-budget-list input:focus {
-  border-color: var(--focus-outline);
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .ai-model-capability-image-row {
@@ -3144,10 +3135,14 @@
   font-weight: 400;
 }
 
-.ai-settings-form input:not(.selection-control):focus,
+.ai-settings-form input:not(.selection-control):focus {
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
+}
+
 .ai-settings-form select:focus {
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
+  outline: none;
 }
 
 .ai-settings-form input:not(.selection-control)::placeholder {
@@ -3702,8 +3697,7 @@
 
 .agent-mcp-profile-search:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .agent-mcp-profile-list {
@@ -3813,8 +3807,7 @@
 .agent-mcp-select.dropdown-select-trigger:focus-visible,
 .agent-mcp-select.ft-select-shell select:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .agent-mcp-clients {

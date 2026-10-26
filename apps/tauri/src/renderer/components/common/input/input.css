@@ -22,11 +22,9 @@
 }
 
 .ft-input-wrapper:focus-within:not(.ft-input-wrapper--disabled) {
-  border-color: var(--border-focus);
-  box-shadow:
-    0 0 0 2px var(--surface-canvas),
-    0 0 0 4px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
   background-color: var(--surface-input-focus);
+  outline: none;
 }
 
 .ft-input-wrapper.ft-input-wrapper--error {
@@ -115,11 +113,9 @@
 }
 
 .ft-textarea:focus {
-  border-color: var(--border-focus);
-  box-shadow:
-    0 0 0 2px var(--surface-canvas),
-    0 0 0 4px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
   background-color: var(--surface-input-focus);
+  outline: none;
 }
 
 .ft-textarea.ft-textarea--error {

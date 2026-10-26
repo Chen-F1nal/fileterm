@@ -187,6 +187,7 @@ pub struct WorkspaceState {
     /// arrive concurrently from the main window and transfer popovers; this
     /// guard makes pause/resume/discard/clear/shutdown compare-and-set as one
     /// operation instead of allowing a new run between cancel and persist.
+    pub(crate) copy_io_gates: crate::services::transfers::CopyIoGates,
     pub transfer_lifecycle: Arc<Mutex<()>>,
     pub next_transfer_generation: Arc<AtomicU64>,
     pub transfer_journal_loaded: Arc<Mutex<bool>>,

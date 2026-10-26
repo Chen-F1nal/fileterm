@@ -130,18 +130,24 @@
 :root:not([data-theme]) .pane-path-bar input:hover,
 :root:not([data-theme*='light']) .pane-path-bar input:hover,
 :root[data-theme='default'] .pane-path-bar input:hover,
-:root:not([data-theme]) .pane-path-bar input:focus,
-:root:not([data-theme*='light']) .pane-path-bar input:focus,
-:root[data-theme='default'] .pane-path-bar input:focus,
 :root:not([data-theme]) .pane-filter-input-wrapper:hover,
 :root:not([data-theme*='light']) .pane-filter-input-wrapper:hover,
-:root[data-theme='default'] .pane-filter-input-wrapper:hover,
-:root:not([data-theme]) .pane-filter-input-wrapper:focus-within,
-:root:not([data-theme*='light']) .pane-filter-input-wrapper:focus-within,
-:root[data-theme='default'] .pane-filter-input-wrapper:focus-within {
+:root[data-theme='default'] .pane-filter-input-wrapper:hover {
   border-color: var(--border-light);
   background: var(--bg-main);
   color: var(--text-main);
+}
+
+:root:not([data-theme]) .pane-path-bar input:focus,
+:root:not([data-theme*='light']) .pane-path-bar input:focus,
+:root[data-theme='default'] .pane-path-bar input:focus,
+:root:not([data-theme]) .pane-filter-input-wrapper:focus-within,
+:root:not([data-theme*='light']) .pane-filter-input-wrapper:focus-within,
+:root[data-theme='default'] .pane-filter-input-wrapper:focus-within {
+  background: var(--bg-main);
+  color: var(--text-main);
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 :root:not([data-theme]) .pane-path-bar span,

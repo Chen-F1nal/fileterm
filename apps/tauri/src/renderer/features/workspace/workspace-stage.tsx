@@ -6,6 +6,7 @@ import type {
   ConnectionFolder,
   ConnectionProfile,
   FilePaneMode,
+  FileTermDesktopApi,
   McpAgentClientStatus,
   LocalFileItem,
   OverviewSectionId,
@@ -13,12 +14,15 @@ import type {
   SavedTheme,
   SessionSnapshot,
   ThemeConfig,
-  WorkspaceTab
+  WorkspaceTab,
+  WorkspaceSnapshot
 } from '@fileterm/core'
 import { useEffect, useState, type Dispatch, type DragEvent, type SetStateAction } from 'react'
 import type { SendScope, SessionSendTarget } from '../common/session-send-targets'
 import { peekHomeTabTransition } from './home-transition'
 import type { TabBarProps } from '../layout/tab-bar'
+import { FileTransferWorkspace } from '../file-transfer/file-transfer-workspace'
+import type { LocalTab } from '../../hooks/workspace-tabs-types'
 import { SystemInfoWorkspace } from '../system/system-info-workspace'
 import { resolveMonitoringSource } from '../system/shared-monitoring'
 import type { ThemeMode } from '../../app/theme-config'
@@ -32,12 +36,15 @@ const DEFAULT_FILE_PANEL_RATIO = 30
 const DEFAULT_COMMAND_PANE_WIDTH = 300
 
 type ActiveLocalTab = {
-  kind: 'home' | 'system'
+  kind: 'home' | 'system' | 'transfers'
   sessionTabId?: string
 } | null
 
 export function WorkspaceStage({
   activeLocalTab,
+  fileTransferTab,
+  desktopApi,
+  onApplySnapshot,
   activeHomeTabId,
   activeProfile,
   activeSession,
@@ -98,6 +105,7 @@ export function WorkspaceStage({
   onTerminalDockSendScopeChange,
   onTerminalDockSelectedTabIdsChange,
   onOpenCommandManager,
+  onOpenFileTransfers,
   onChooseUploadFiles,
   onDownloadFiles,
   onDownloadLocalNetworkFiles,
@@ -163,6 +171,9 @@ export function WorkspaceStage({
   onSetPaneWeights
 }: {
   activeLocalTab: ActiveLocalTab
+  fileTransferTab?: Extract<LocalTab, { kind: 'transfers' }>
+  desktopApi?: FileTermDesktopApi
+  onApplySnapshot?(snapshot: WorkspaceSnapshot): void
   activeHomeTabId: string | null
   activeProfile: ConnectionProfile | null
   activeSession: SessionSnapshot | null
@@ -230,6 +241,7 @@ export function WorkspaceStage({
   onTerminalDockSendScopeChange(scope: SendScope, rememberSelection: boolean): void
   onTerminalDockSelectedTabIdsChange(tabIds: string[], rememberSelection: boolean): void
   onOpenCommandManager(): void
+  onOpenFileTransfers(): void
   onChooseUploadFiles(): void
   onDownloadFiles(items: RemoteFileItem[], targetDirectory?: string): void
   onDownloadLocalNetworkFiles(items: LocalFileItem[]): void
@@ -298,6 +310,19 @@ export function WorkspaceStage({
   onActivatePane(paneTabId: string): void
   onSetPaneWeights(panePath: number[], weights: number[]): void
 }) {
+  if (activeLocalTab?.kind === 'transfers') {
+    return (
+      <FileTransferWorkspace
+        api={desktopApi}
+        onApplySnapshot={onApplySnapshot}
+        tabs={[]}
+        sessions={sessions}
+        initialTabId={fileTransferTab?.initialTabId}
+        initialPath={fileTransferTab?.initialPath}
+        isActive={Boolean(isWorkspaceActive)}
+      />
+    )
+  }
   const activeTabProfile = profiles.find((profile) => profile.id === activeTab?.profileId) ?? null
 
   if (activeLocalTab?.kind === 'system') {
@@ -385,6 +410,7 @@ export function WorkspaceStage({
         onTerminalDockSendScopeChange={onTerminalDockSendScopeChange}
         onTerminalDockSelectedTabIdsChange={onTerminalDockSelectedTabIdsChange}
         onOpenCommandManager={onOpenCommandManager}
+        onOpenFileTransfers={onOpenFileTransfers}
         onChooseUploadFiles={onChooseUploadFiles}
         onDownloadFiles={onDownloadFiles}
         onDownloadLocalNetworkFiles={onDownloadLocalNetworkFiles}
@@ -573,7 +599,7 @@ export function KeepAliveWorkspaceStage({
     entry.kind === 'local' && entry.tabKind === 'home' ? [entry.id] : []
   )
   const activeHomeId =
-    showBaseWorkspace && stageProps.activeLocalTab?.kind !== 'system' ? stageProps.activeHomeTabId : null
+    showBaseWorkspace && stageProps.activeLocalTab?.kind === 'home' ? stageProps.activeHomeTabId : null
   const [initialHomeEntrancePending, setInitialHomeEntrancePending] = useState(true)
   useEffect(() => {
     if (activeHomeId && initialHomeEntrancePending) setInitialHomeEntrancePending(false)
@@ -612,13 +638,33 @@ export function KeepAliveWorkspaceStage({
         </div>
       )
     })
-  const showUncachedBaseWorkspace = showBaseWorkspace && !homeTabIds.includes(activeHomeId ?? '')
+  const showUncachedBaseWorkspace =
+    showBaseWorkspace && stageProps.activeLocalTab?.kind !== 'transfers' && !homeTabIds.includes(activeHomeId ?? '')
 
   return (
     <div className="workspace-content-stack">
       {showUncachedBaseWorkspace ? (
         <div key="base-workspace" className="workspace-content-stack__item is-active" aria-hidden="false">
           <WorkspaceStage {...stageProps} />
+        </div>
+      ) : null}
+      {stageProps.fileTransferTab ? (
+        <div
+          className={
+            'workspace-content-stack__item ' + (stageProps.activeLocalTab?.kind === 'transfers' ? 'is-active' : '')
+          }
+          aria-hidden={stageProps.activeLocalTab?.kind !== 'transfers'}
+          inert={stageProps.activeLocalTab?.kind !== 'transfers'}
+        >
+          <FileTransferWorkspace
+            api={stageProps.desktopApi}
+            onApplySnapshot={stageProps.onApplySnapshot}
+            tabs={workspaceTabs}
+            sessions={stageProps.sessions}
+            initialTabId={stageProps.fileTransferTab.initialTabId}
+            initialPath={stageProps.fileTransferTab.initialPath}
+            isActive={stageProps.activeLocalTab?.kind === 'transfers'}
+          />
         </div>
       ) : null}
       {homeWorkspaceItems}

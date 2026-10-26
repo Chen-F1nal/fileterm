@@ -2,7 +2,7 @@ import {
   refreshTerminalRender,
   TERMINAL_ACTIVATION_RECOVERY_ATTEMPTS
 } from '../xterm-adapters/terminal-render-recovery'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
@@ -350,7 +350,7 @@ export function useTerminalView({
     runCloseTab
   })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isActive) {
       return
     }
@@ -370,13 +370,10 @@ export function useTerminalView({
       }
     }
 
-    const firstFrame = window.requestAnimationFrame(() => {
-      recoveryFrame = window.requestAnimationFrame(attemptRecovery)
-    })
+    attemptRecovery()
 
     return () => {
       disposed = true
-      window.cancelAnimationFrame(firstFrame)
       if (recoveryFrame !== null) {
         window.cancelAnimationFrame(recoveryFrame)
       }

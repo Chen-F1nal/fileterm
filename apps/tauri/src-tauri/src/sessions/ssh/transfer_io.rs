@@ -201,6 +201,17 @@ async fn replace_remote_file(
     partial_path: &str,
     destination_path: &str,
 ) -> Result<(), String> {
+    replace_remote_file_with_policy(sftp, partial_path, destination_path, None)
+        .await
+        .map(|_| ())
+}
+
+async fn replace_remote_file_with_policy(
+    sftp: &SftpSession,
+    partial_path: &str,
+    destination_path: &str,
+    replace_existing: Option<bool>,
+) -> Result<bool, String> {
     let partial_metadata = sftp
         .symlink_metadata(partial_path)
         .await
@@ -211,7 +222,22 @@ async fn replace_remote_file(
         Err(error) => return Err(format!("无法读取远端目标文件属性: {error}")),
     };
 
-    if destination_metadata.as_ref().is_some_and(|destination| {
+    if let Some(replace) = replace_existing {
+        if !partial_metadata.file_type().is_file() {
+            return Err("提交断点不是普通文件，已保留断点".into());
+        }
+        if destination_metadata.is_some() && !replace {
+            return Ok(false);
+        }
+        if destination_metadata
+            .as_ref()
+            .is_some_and(|metadata| !metadata.file_type().is_file())
+        {
+            return Err("目标不是普通文件，拒绝覆盖".into());
+        }
+    }
+
+    if replace_existing.is_none() && destination_metadata.as_ref().is_some_and(|destination| {
         destination.is_symlink()
             || matches!((destination.uid, partial_metadata.uid), (Some(left), Some(right)) if left != right)
     }) {
@@ -248,7 +274,7 @@ async fn replace_remote_file(
         sftp.remove_file(partial_path)
             .await
             .map_err(|error| format!("无法清理远端断点文件: {error}"))?;
-        return Ok(());
+        return Ok(true);
     }
 
     if let Some(permissions) = destination_metadata
@@ -285,9 +311,56 @@ async fn replace_remote_file(
     if moved_destination {
         let _ = sftp.remove_file(&backup_path).await;
     }
-    Ok(())
+    Ok(true)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // root-mode helpers (exec channel + `sudo` / `su`)
 // ─────────────────────────────────────────────────────────────────────────────
+
+async fn relay_sftp_file(
+    sftp: &SftpSession,
+    request: crate::sessions::relay_io::RelayRequest,
+    stream: &mut tokio::io::DuplexStream,
+    cancel: &tokio_util::sync::CancellationToken,
+    io_timeout: Duration,
+) -> Result<(), String> {
+    use crate::sessions::relay_io::copy_exact;
+    if request.upload {
+        ensure_transfer_parent_dir(sftp, &request.path).await?;
+    }
+    let metadata = sftp.symlink_metadata(&request.path).await;
+    match metadata {
+        Ok(metadata) if metadata.is_symlink() || metadata.is_dir() => {
+            return Err("中转路径必须是普通文件".into())
+        }
+        Err(error) if !(request.upload && request.offset == 0 && is_sftp_not_found(&error)) => {
+            return Err(error.to_string())
+        }
+        _ => {}
+    }
+    let flags = if request.upload {
+        if request.offset == 0 {
+            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE
+        } else {
+            OpenFlags::WRITE
+        }
+    } else {
+        OpenFlags::READ
+    };
+    let mut file = sftp
+        .open_with_flags(&request.path, flags)
+        .await
+        .map_err(|e| e.to_string())?;
+    file.seek(std::io::SeekFrom::Start(request.offset))
+        .await
+        .map_err(|e| e.to_string())?;
+    if request.upload {
+        copy_exact(stream, &mut file, request.length, cancel, io_timeout).await?;
+        file.flush().await.map_err(|e| e.to_string())?;
+        file.shutdown().await.map_err(|e| e.to_string())
+    } else {
+        copy_exact(&mut file, stream, request.length, cancel, io_timeout).await?;
+        stream.shutdown().await.map_err(|e| e.to_string())
+    }
+}

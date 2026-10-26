@@ -348,6 +348,43 @@ async fn replace_file<T: TokioTlsStream + Send>(
     partial: &str,
     destination: &str,
 ) -> Result<(), String> {
+    replace_file_with_policy(ftp, partial, destination, None)
+        .await
+        .map(|_| ())
+}
+
+async fn replace_file_with_policy<T: TokioTlsStream + Send>(
+    ftp: &mut ImplAsyncFtpStream<T>,
+    partial: &str,
+    destination: &str,
+    replace_existing: Option<bool>,
+) -> Result<bool, String> {
+    if let Some(replace) = replace_existing {
+        let entries = list_files(ftp, &parent_remote_path(destination)).await?;
+        let entry = |path: &str| {
+            entries
+                .iter()
+                .find(|entry| entry["path"].as_str() == Some(path))
+        };
+        let regular = |entry: &Value| entry["type"] == "file" && entry["isSymlink"] != true;
+        if !entry(partial).is_some_and(regular) {
+            return Err("提交断点不是普通文件".into());
+        }
+        if let Some(target) = entry(destination) {
+            if !replace {
+                return Ok(false);
+            }
+            if !regular(target) {
+                return Err("目标不是普通文件，拒绝覆盖".into());
+            }
+        }
+    }
+    if replace_existing == Some(false) {
+        ftp.rename(partial, destination)
+            .await
+            .map_err(|error| error.to_string())?;
+        return Ok(true);
+    }
     let backup = format!("{destination}.fileterm-backup-{}", uuid::Uuid::new_v4());
     let moved_destination = match ftp.rename(destination, backup.as_str()).await {
         Ok(()) => true,
@@ -378,7 +415,7 @@ async fn replace_file<T: TokioTlsStream + Send>(
     if moved_destination {
         let _ = ftp.rm(backup).await;
     }
-    Ok(())
+    Ok(true)
 }
 
 fn parent_remote_path(path: &str) -> String {
@@ -412,5 +449,74 @@ fn format_bytes(bytes: u64) -> String {
         format!("{} B", bytes)
     } else {
         format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+async fn relay_ftp_file<T: TokioTlsStream + Send + 'static>(
+    ftp: &mut ImplAsyncFtpStream<T>,
+    request: crate::sessions::relay_io::RelayRequest,
+    stream: &mut tokio::io::DuplexStream,
+    cancel: &tokio_util::sync::CancellationToken,
+    io_timeout: Duration,
+) -> Result<(), String> {
+    use crate::sessions::relay_io::copy_exact;
+    if request.upload {
+        ftp_io_with_timeout(
+            io_timeout,
+            "relay parent",
+            ensure_dir(ftp, &parent_remote_path(&request.path)),
+        )
+        .await?;
+        let mut remote = if request.offset > 0 {
+            // APPE preserves the verified prefix; never silently fall back to truncating STOR.
+            ftp_io_with_timeout(
+                io_timeout,
+                "relay append",
+                ftp.append_with_stream(&request.path),
+            )
+            .await?
+        } else {
+            ftp_io_with_timeout(
+                io_timeout,
+                "relay upload",
+                ftp.put_with_stream(&request.path),
+            )
+            .await?
+        };
+        copy_exact(stream, &mut remote, request.length, cancel, io_timeout).await?;
+        ftp_io_with_timeout(
+            io_timeout,
+            "relay upload close",
+            ftp.finalize_put_stream(remote),
+        )
+        .await
+    } else {
+        let total =
+            ftp_io_with_timeout(io_timeout, "relay size", ftp.size(&request.path)).await? as u64;
+        if request.offset > 0 {
+            let offset = usize::try_from(request.offset).map_err(|_| "FTP offset 超出范围")?;
+            ftp_io_with_timeout(io_timeout, "relay offset", ftp.resume_transfer(offset)).await?;
+        }
+        let mut remote = ftp_io_with_timeout(
+            io_timeout,
+            "relay download",
+            ftp.retr_as_stream(&request.path),
+        )
+        .await?;
+        copy_exact(&mut remote, stream, request.length, cancel, io_timeout).await?;
+        stream.shutdown().await.map_err(|e| e.to_string())?;
+        // Prefix verification deliberately stops before EOF. Closing this dedicated
+        // connection avoids leaving a partial RETR reply on the browsing connection.
+        if request.offset + request.length == total {
+            ftp_io_with_timeout(
+                io_timeout,
+                "relay download close",
+                ftp.finalize_retr_stream(remote),
+            )
+            .await
+        } else {
+            drop(remote);
+            Ok(())
+        }
     }
 }

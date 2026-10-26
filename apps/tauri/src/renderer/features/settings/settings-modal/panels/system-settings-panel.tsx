@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../../../components/common/material-icon/material-icon'
 import { DiagnosticLogSettings } from './diagnostic-log-settings'
 import type { FileTermDesktopApi } from '@fileterm/core'
 import { type LocaleMessages } from '../../../../i18n'
@@ -39,12 +40,11 @@ export function SystemSettingsPanel() {
         <div className="logs-shortcut-card">
           <p>{t.settingsLogsDescription}</p>
           <button className="flat-button compact" onClick={onOpenLogsDirectory} type="button">
-            <span
+            <MaterialIcon
+              name="folder_open"
               className="material-symbols-outlined"
               style={{ fontSize: '14px', marginRight: '4px', verticalAlign: 'middle' }}
-            >
-              folder_open
-            </span>
+            />
             {t.openLogsDirectory}
           </button>
         </div>

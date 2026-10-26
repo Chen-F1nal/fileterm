@@ -93,6 +93,7 @@ export function SessionWorkspace({
   onTerminalDockSendScopeChange,
   onTerminalDockSelectedTabIdsChange,
   onOpenCommandManager,
+  onOpenFileTransfers,
   onOpenLocalItem,
   onOpenLocalPath,
   onBackToLocalComputer,
@@ -182,6 +183,7 @@ export function SessionWorkspace({
   onTerminalDockSendScopeChange(scope: SendScope, rememberSelection: boolean): void
   onTerminalDockSelectedTabIdsChange(tabIds: string[], rememberSelection: boolean): void
   onOpenCommandManager(): void
+  onOpenFileTransfers(): void
   onOpenLocalItem(item: LocalFileItem): void
   onOpenLocalPath(path: string): void
   onBackToLocalComputer(): void
@@ -736,6 +738,7 @@ export function SessionWorkspace({
               onSaveTemporaryCommand={onSaveTemporaryCommand}
               onUpdateCommand={onUpdateCommand}
               onOpenCommandManager={onOpenCommandManager}
+              onOpenFileTransfers={onOpenFileTransfers}
               onOpenLocalItem={onOpenLocalItem}
               onOpenLocalPath={onOpenLocalPath}
               onBackToLocalComputer={onBackToLocalComputer}

@@ -283,11 +283,17 @@ mod tests {
                         .await
                         .unwrap();
                     let (mut data, _) = data_listener.take().unwrap().accept().await.unwrap();
-                    data.write_all(&stored.lock().await).await.unwrap();
+                    data.write_all(&stored.lock().await[rest_offset..])
+                        .await
+                        .unwrap();
+                    rest_offset = 0;
                     drop(data);
                     // A bad checkpoint must report its mismatch even if 226 never arrives.
                     if !stored.lock().await.ends_with(b"X") {
-                        writer.write_all(b"226 Transfer complete\r\n").await.unwrap();
+                        writer
+                            .write_all(b"226 Transfer complete\r\n")
+                            .await
+                            .unwrap();
                     }
                 }
                 "APPE" if supports_appe => {
@@ -372,6 +378,95 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn ftp_relay_streams_binary_files_and_resumes_without_truncation() {
+        for offset in [0, 3] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let content = b"ab\r\ncd\0tail";
+            let stored = Arc::new(Mutex::new(content[..offset].to_vec()));
+            let commands = Arc::new(Mutex::new(Vec::new()));
+            let server = tokio::spawn(run_resumable_upload_server(
+                listener,
+                true,
+                false,
+                stored.clone(),
+                commands,
+            ));
+            let profile = serde_json::json!({"type":"ftp", "username":"test", "password":"test", "securityMode":"none"});
+            let mut client = connect_ftp(&profile, "127.0.0.1", port).await.unwrap();
+            let (mut writer, mut stream) = tokio::io::duplex(3);
+            let cancel = tokio_util::sync::CancellationToken::new();
+            tokio::try_join!(
+                async {
+                    writer
+                        .write_all(&content[offset..])
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                super::client_relay(
+                    &mut client,
+                    crate::sessions::relay_io::RelayRequest {
+                        path: "/resume.bin".into(),
+                        offset: offset as u64,
+                        length: (content.len() - offset) as u64,
+                        upload: true
+                    },
+                    &mut stream,
+                    &cancel,
+                    std::time::Duration::from_secs(2)
+                )
+            )
+            .unwrap();
+            assert_eq!(*stored.lock().await, content);
+            super::client_quit(&mut client).await.unwrap();
+            server.await.unwrap();
+        }
+        for (offset, length) in [(0, 11), (2, 9), (0, 3)] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let content = b"ab\r\ncd\0tail";
+            let stored = Arc::new(Mutex::new(content.to_vec()));
+            let server = tokio::spawn(run_resumable_upload_server(
+                listener,
+                true,
+                false,
+                stored,
+                Arc::new(Mutex::new(Vec::new())),
+            ));
+            let profile = serde_json::json!({"type":"ftp", "username":"test", "password":"test", "securityMode":"none"});
+            let mut client = connect_ftp(&profile, "127.0.0.1", port).await.unwrap();
+            let (mut reader, mut stream) = tokio::io::duplex(3);
+            let mut output = Vec::new();
+            let cancel = tokio_util::sync::CancellationToken::new();
+            tokio::try_join!(
+                async {
+                    reader
+                        .read_to_end(&mut output)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| e.to_string())
+                },
+                super::client_relay(
+                    &mut client,
+                    crate::sessions::relay_io::RelayRequest {
+                        path: "/resume.bin".into(),
+                        offset,
+                        length,
+                        upload: false
+                    },
+                    &mut stream,
+                    &cancel,
+                    std::time::Duration::from_secs(2)
+                )
+            )
+            .unwrap();
+            assert_eq!(output, content[offset as usize..(offset + length) as usize]);
+            let _ = super::client_quit(&mut client).await;
+            server.await.unwrap();
+        }
+    }
+
     async fn assert_resumable_upload_strategy(
         supports_appe: bool,
         ignore_rest: bool,
@@ -453,7 +548,9 @@ mod tests {
         if offset == 0 {
             let commands = commands.lock().await;
             assert!(commands.iter().any(|command| command == "STOR"));
-            assert!(!commands.iter().any(|command| command == "RETR" || command == "APPE"));
+            assert!(!commands
+                .iter()
+                .any(|command| command == "RETR" || command == "APPE"));
             tokio::fs::remove_dir_all(root).await.unwrap();
             return;
         }
@@ -619,6 +716,14 @@ mod tests {
                     control
                         .get_mut()
                         .write_all(b"226 Transfer complete\r\n")
+                        .await
+                        .unwrap();
+                }
+                "SIZE" => {
+                    let length = stored.lock().await.len();
+                    control
+                        .get_mut()
+                        .write_all(format!("213 {length}\r\n").as_bytes())
                         .await
                         .unwrap();
                 }
@@ -799,6 +904,54 @@ mod tests {
                     .unwrap(),
                 "Tauri FTPS"
             );
+            let cancel = tokio_util::sync::CancellationToken::new();
+            let (mut writer, mut stream) = tokio::io::duplex(3);
+            tokio::try_join!(
+                async {
+                    writer
+                        .write_all(b"Tauri FTPS")
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                super::client_relay(
+                    &mut client,
+                    crate::sessions::relay_io::RelayRequest {
+                        path: "/roundtrip.txt".into(),
+                        offset: 0,
+                        length: 10,
+                        upload: true
+                    },
+                    &mut stream,
+                    &cancel,
+                    std::time::Duration::from_secs(2)
+                )
+            )
+            .unwrap();
+            let (mut reader, mut stream) = tokio::io::duplex(3);
+            let mut output = Vec::new();
+            tokio::try_join!(
+                async {
+                    reader
+                        .read_to_end(&mut output)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| e.to_string())
+                },
+                super::client_relay(
+                    &mut client,
+                    crate::sessions::relay_io::RelayRequest {
+                        path: "/roundtrip.txt".into(),
+                        offset: 0,
+                        length: 10,
+                        upload: false
+                    },
+                    &mut stream,
+                    &cancel,
+                    std::time::Duration::from_secs(2)
+                )
+            )
+            .unwrap();
+            assert_eq!(output, b"Tauri FTPS");
             client_quit(&mut client).await.unwrap();
             server.await.unwrap();
             assert_eq!(&*stored.lock().await, b"Tauri FTPS");

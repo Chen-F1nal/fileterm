@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { t } from '../../i18n'
 import { CloseButton } from '../common/close-button'
 
@@ -17,9 +18,11 @@ export function AiCopilotHeader({
   return (
     <header className="ai-copilot-header">
       <div className="ai-copilot-title">
-        <span aria-hidden="true" className="material-symbols-outlined ai-copilot-title-icon">
-          auto_awesome
-        </span>
+        <MaterialIcon
+          name="auto_awesome"
+          aria-hidden="true"
+          className="material-symbols-outlined ai-copilot-title-icon"
+        />
         <span>
           <strong>{t.aiCopilot}</strong>
         </span>
@@ -33,9 +36,7 @@ export function AiCopilotHeader({
           type="button"
           onClick={openNewConversation}
         >
-          <span aria-hidden="true" className="material-symbols-outlined">
-            add_comment
-          </span>
+          <MaterialIcon name="add_comment" aria-hidden="true" className="material-symbols-outlined" />
         </button>
         <button
           aria-label={t.aiCopilotConfigureProvider}
@@ -44,9 +45,7 @@ export function AiCopilotHeader({
           type="button"
           onClick={onOpenSettings}
         >
-          <span aria-hidden="true" className="material-symbols-outlined">
-            settings_suggest
-          </span>
+          <MaterialIcon name="settings_suggest" aria-hidden="true" className="material-symbols-outlined" />
         </button>
         <CloseButton aria-label={t.closeAiCopilot} onClick={onClose} size="compact" />
       </div>

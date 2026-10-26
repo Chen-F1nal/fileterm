@@ -4,12 +4,12 @@
 
 ## 项目结果
 
-| 入口                                                  | 原行数 | 优化后行数 |
-| ----------------------------------------------------- | ------ | ---------- |
-| `AGENTS.md`                                           | 217    | 73         |
-| `.agents/skills/common-components-skill/SKILL.md`     | 345    | 37         |
-| `.agents/skills/fileterm-release/SKILL.md`            | 221    | 127        |
-| `.agents/skills/multiplatform-desktop-skill/SKILL.md` | 163    | 30         |
+| 入口                                                     | 原行数 | 优化后行数 |
+| -------------------------------------------------------- | ------ | ---------- |
+| `AGENTS.md`                                              | 217    | 73         |
+| `.agents/skills/fileterm-common-components/SKILL.md`     | 345    | 37         |
+| `.agents/skills/fileterm-release/SKILL.md`               | 221    | 127        |
+| `.agents/skills/fileterm-multiplatform-desktop/SKILL.md` | 163    | 30         |
 
 - Git 分支前缀、当前目录工作、普通 Merge 与 Issue 生命周期要求持久化到 AGENTS.md。
 - 公共视觉组件目录、CSS 共址和规范语义变量统一；旧目录保留辅助组件与兼容导出的定位。

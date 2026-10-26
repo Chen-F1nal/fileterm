@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../../../components/common/material-icon/material-icon'
 import { type LocaleMessages } from '../../../../i18n'
 import { useSettingsModalContext } from '../context'
 
@@ -20,7 +21,7 @@ export function ToolsSettingsPanel() {
         <p className="settings-tools-hint">{managerToolsHint}</p>
         <div className="tools-shortcuts-grid">
           <div className="tool-shortcut-card">
-            <span className="material-symbols-outlined tool-card-icon">settings_ethernet</span>
+            <MaterialIcon name="settings_ethernet" className="material-symbols-outlined tool-card-icon" />
             <div className="tool-card-details">
               <strong>{t.connectionManager}</strong>
               <p>{t.settingsConnectionManagerDescription}</p>
@@ -30,7 +31,7 @@ export function ToolsSettingsPanel() {
             </div>
           </div>
           <div className="tool-shortcut-card">
-            <span className="material-symbols-outlined tool-card-icon">terminal</span>
+            <MaterialIcon name="terminal" className="material-symbols-outlined tool-card-icon" />
             <div className="tool-card-details">
               <strong>{t.commandManager}</strong>
               <p>{t.settingsCommandManagerDescription}</p>

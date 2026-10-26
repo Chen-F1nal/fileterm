@@ -135,19 +135,34 @@ body,
 }
 
 button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
+input:where(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='color'],
+    [type='file'],
+    [type='button'],
+    [type='submit'],
+    [type='reset'],
+    [type='image']
+  ):focus-visible,
 .fs-tab:focus-visible,
-.quick-row:focus-visible,
-.pane-filter-input-wrapper:focus-within {
+.quick-row:focus-visible {
   outline: 1px solid var(--focus-outline);
   outline-offset: -1px;
   border-color: var(--focus-outline);
 }
 
+.pane-filter-input-wrapper:focus-within {
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
+}
+
 .fs-shell {
-  grid-template-columns: var(--sidebar-width, 214px) minmax(0, 1fr) auto;
+  grid-template-columns: var(--workspace-left-width, var(--sidebar-width, 214px)) minmax(0, 1fr) var(
+      --workspace-right-width,
+      0px
+    );
   grid-template-rows: var(--window-tabbar-height) minmax(0, 1fr) 24px;
   transition: grid-template-columns 0.24s linear;
 }
@@ -169,6 +184,7 @@ textarea:focus-visible,
 
 .fs-shell.is-resizing-sidebar,
 .fs-shell.is-resizing-sidebar .fs-sidebar,
+.fs-shell.is-resizing-sidebar .home-workspace,
 .fs-shell.is-resizing-sidebar .home-sidebar,
 .fs-shell.is-resizing-sidebar .fs-tabbar,
 .fs-shell.is-resizing-sidebar .fs-tabs {
@@ -1548,7 +1564,10 @@ textarea:focus-visible,
 
 @media (max-width: 1100px) {
   .fs-shell {
-    grid-template-columns: var(--sidebar-width, 200px) minmax(0, 1fr) auto;
+    grid-template-columns: var(--workspace-left-width, var(--sidebar-width, 214px)) minmax(0, 1fr) var(
+        --workspace-right-width,
+        0px
+      );
   }
 
   .fs-tabbar {

@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { AiConversation } from '@fileterm/core'
 import { t } from '../../i18n'
 
@@ -40,9 +41,7 @@ export function AiCopilotChatMeta({
             type="button"
             onClick={onOpenConversationList}
           >
-            <span aria-hidden="true" className="material-symbols-outlined">
-              arrow_back
-            </span>
+            <MaterialIcon name="arrow_back" aria-hidden="true" className="material-symbols-outlined" />
           </button>
           <div className="ai-copilot-conversation-page-title">
             <span>{t.aiCopilotConversationLabel}</span>
@@ -69,9 +68,7 @@ export function AiCopilotChatMeta({
                   onChange={(event) => setConversationTitleDraft(event.target.value)}
                 />
                 <button disabled={isStreaming || !conversationTitleDraft.trim()} title={t.save} type="submit">
-                  <span aria-hidden="true" className="material-symbols-outlined">
-                    check
-                  </span>
+                  <MaterialIcon name="check" aria-hidden="true" className="material-symbols-outlined" />
                   {t.save}
                 </button>
                 <button
@@ -83,9 +80,7 @@ export function AiCopilotChatMeta({
                     setConversationTitleDraft(conversation.title)
                   }}
                 >
-                  <span aria-hidden="true" className="material-symbols-outlined">
-                    close
-                  </span>
+                  <MaterialIcon name="close" aria-hidden="true" className="material-symbols-outlined" />
                   {t.cancel}
                 </button>
               </form>
@@ -116,9 +111,7 @@ export function AiCopilotChatMeta({
                     setIsRenamingConversation(true)
                   }}
                 >
-                  <span aria-hidden="true" className="material-symbols-outlined">
-                    edit
-                  </span>
+                  <MaterialIcon name="edit" aria-hidden="true" className="material-symbols-outlined" />
                 </button>
                 <button
                   aria-label={t.aiCopilotDeleteConversation}
@@ -128,9 +121,7 @@ export function AiCopilotChatMeta({
                   type="button"
                   onClick={() => setIsDeleteConfirmationOpen(true)}
                 >
-                  <span aria-hidden="true" className="material-symbols-outlined">
-                    delete
-                  </span>
+                  <MaterialIcon name="delete" aria-hidden="true" className="material-symbols-outlined" />
                 </button>
               </div>
             )

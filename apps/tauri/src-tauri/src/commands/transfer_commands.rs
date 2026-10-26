@@ -28,6 +28,7 @@ pub async fn app_upload_file(
         local_path,
         remote_directory,
         target_name,
+        transfer_conflict_policy(options.as_ref())?,
     )
     .await?;
     get_workspace_snapshot(app).await
@@ -53,6 +54,7 @@ pub async fn app_download_file(
         remote_path,
         local_directory,
         target_name,
+        transfer_conflict_policy(options.as_ref())?,
     )
     .await?;
     get_workspace_snapshot(app).await
@@ -82,6 +84,7 @@ pub async fn app_download_remote_path(
                 remote_path,
                 local_directory,
                 target_name,
+                transfer_conflict_policy(options.as_ref())?,
             )
             .await?;
             get_workspace_snapshot(app).await
@@ -134,4 +137,45 @@ pub async fn app_clear_transfers(
 ) -> Result<serde_json::Value, AppError> {
     crate::services::transfers::clear(&app, transfer_ids).await?;
     get_workspace_snapshot(app).await
+}
+
+#[tauri::command]
+pub async fn app_browse_transfer_directory(
+    app: AppHandle,
+    tab_id: String,
+    path: String,
+) -> Result<Vec<serde_json::Value>, AppError> {
+    crate::services::transfers::browse_copy_directory(&app, &tab_id, &path).await
+}
+
+#[tauri::command]
+pub async fn app_copy_between_servers(
+    app: AppHandle,
+    source_tab_id: String,
+    target_tab_id: String,
+    source_path: String,
+    target_directory: String,
+    replace_existing: bool,
+) -> Result<String, AppError> {
+    crate::services::transfers::create_remote_copy(
+        &app,
+        source_tab_id,
+        target_tab_id,
+        source_path,
+        target_directory,
+        replace_existing,
+    )
+    .await
+}
+
+fn transfer_conflict_policy(
+    options: Option<&serde_json::Value>,
+) -> Result<Option<crate::services::transfers::TransferConflictPolicy>, AppError> {
+    options
+        .and_then(|options| options.get("conflictPolicy"))
+        .map(|value| {
+            serde_json::from_value(value.clone())
+                .map_err(|_| AppError::Command("无效的文件冲突策略".into()))
+        })
+        .transpose()
 }

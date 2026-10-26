@@ -307,8 +307,7 @@
 .ssh-key-note-dialog__field .ft-select-shell:focus-within,
 .ssh-key-note-dialog__field textarea:focus-visible {
   outline: none;
-  border-color: var(--focus-outline);
-  box-shadow: 0 0 0 2px var(--accent-focus-ring);
+  box-shadow: var(--input-focus-shadow);
 }
 
 .ssh-key-note-dialog__field textarea {

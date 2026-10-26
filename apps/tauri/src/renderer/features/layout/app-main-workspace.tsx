@@ -12,6 +12,7 @@ import type { AppViewModel } from './app-view-model'
 import { WindowMenubar } from './window-menubar'
 import { HostRail } from './host-rail'
 import { useHostNavigation } from './use-host-navigation'
+import { useWorkspaceTabShortcuts } from './use-workspace-tab-shortcuts'
 import { DEFAULT_SIDEBAR_WIDTH, STATUS_MESSAGE_TIMEOUT_MS } from '../../app/app-shell-utils'
 import { t, setLocale } from '../../i18n'
 import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
@@ -42,8 +43,6 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     filePanelRememberRatio,
     sidebarWidth,
     setSidebarWidth,
-    hostInfoWidth,
-    setHostInfoWidth,
     tabBarLayout,
     compactTabBar,
     aiCopilotWidth,
@@ -91,6 +90,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     closeHomeTab,
     closeSessionTab,
     openSystemInfo,
+    openFileTransfers,
     splitPane,
     closePane,
     closeActiveWorkspaceItem,
@@ -101,6 +101,8 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     activeFilePanelRatio,
     activeFilePanelSnapTarget,
     activeWorkspaceFocusKey,
+    activeSidebarWidth,
+    setActiveSidebarWidth,
     isWorkspaceFocusMode,
     activeWorkspaceView,
     activeCommandPaneWidth,
@@ -200,11 +202,11 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   const usesHostGroups = tabBarLayout === 'host-groups'
   const resolvedSidebarWidth = isSystemSidebarCollapsed
     ? 44
-    : isHomeWorkspaceVisible
-      ? resize.homeSidebarWidth
-      : usesHostGroups
-        ? hostInfoWidth
-        : sidebarWidth
+    : usesHostGroups && !isHomeWorkspaceVisible
+      ? activeSidebarWidth
+      : resize.expandedSidebarWidth
+  const showWorkspaceLeftFrame = !usesHostGroups && (isLocalTerminalWorkspace || activeLocalTab?.kind === 'transfers')
+  const showTerminalRightFrame = !isHomeWorkspaceVisible && !usesHostGroups && !shouldShowAiCopilot
   const activeJumpHosts =
     activeProfile?.type === 'ssh' ? resolveSshJumpRoute(activeProfile, workspace.profiles).jumpHosts : []
   const activeRouteTarget = activeJumpHosts.length && activeProfile?.type === 'ssh' ? activeProfile : undefined
@@ -230,6 +232,16 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     onActivateHome: activateHomeTab,
     onActivateSession: activateSession,
     onAddHomeTab: addHomeTab
+  })
+  useWorkspaceTabShortcuts({
+    tabs: usesHostGroups ? hostNavigation.activeEntries : orderedTabs,
+    activeKey: effectiveActiveLocalTabId
+      ? `home:${effectiveActiveLocalTabId}`
+      : visibleActiveSessionTabId
+        ? `session:${visibleActiveSessionTabId}`
+        : null,
+    onActivateHome: activateHomeTab,
+    onActivateSession: activateSession
   })
   // Sessions on one machine share a collector, so machine info shows the collecting tab's samples.
   const monitoringSource = resolveMonitoringSource(activeTab?.id ?? null, workspace.sessions)
@@ -278,7 +290,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         ...currentModes,
         [activeWorkspaceFocusKey]: nextFocusMode
       }))
-      if (!nextFocusMode) (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)
+      if (!nextFocusMode) setActiveSidebarWidth(DEFAULT_SIDEBAR_WIDTH)
     },
     orderedTabs,
     hostNavigation: usesHostGroups ? hostNavigation : undefined
@@ -287,7 +299,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
   return (
     <>
       <div
-        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${compactTabBar ? 'is-compact-tabbar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${showHostRail ? 'has-host-rail' : ''} ${shouldShowSystemSidebar ? 'has-system-sidebar' : ''} ${isResizingSidebar || isResizingHostRail ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
+        className={`fs-shell ${usesCustomWindowChrome ? 'has-window-menubar' : ''} ${compactTabBar ? 'is-compact-tabbar' : ''} ${isMaximized ? 'is-window-maximized' : ''} ${isHomeWorkspaceVisible ? 'is-home-active' : ''} ${isLocalTerminalWorkspace ? 'is-local-terminal' : ''} ${isSystemSidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${showHostRail ? 'has-host-rail' : ''} ${showWorkspaceLeftFrame ? 'has-workspace-left-frame' : ''} ${shouldShowSystemSidebar ? 'has-system-sidebar' : ''} ${isResizingSidebar || isResizingHostRail ? 'is-resizing-sidebar' : ''} ${isResizingAiCopilot ? 'is-resizing-copilot' : ''} ${shouldShowAiCopilot ? 'has-ai-copilot' : ''} ${usesCustomWindowChrome && sessionSecurity.isLocked ? 'is-session-locked' : ''}`}
         style={
           {
             '--sidebar-width': `${resolvedSidebarWidth}px`,
@@ -348,7 +360,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
             onMonitoringSnapshot={shell.applySnapshot}
             onOpenSystemInfo={openSystemInfo}
             onResizeStart={startSidebarResize}
-            onRestoreWidth={() => (usesHostGroups ? setHostInfoWidth : setSidebarWidth)(DEFAULT_SIDEBAR_WIDTH)}
+            onRestoreWidth={() => setActiveSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
             onToggleCollapsed={setIsSystemSidebarCollapsed}
           />
         ) : null}
@@ -390,7 +402,10 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
               data-nav-direction={workspaceNavDirection}
             >
               <KeepAliveWorkspaceStage
+                onApplySnapshot={shell.applySnapshot}
                 activeLocalTab={activeLocalTab}
+                fileTransferTab={workspaceState.localTabs.find((tab) => tab.kind === 'transfers')}
+                desktopApi={desktopApi}
                 activeHomeTabId={effectiveActiveLocalTabId}
                 activeProfile={activeProfile}
                 activeSession={activeSession}
@@ -451,6 +466,7 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
                 onTerminalDockSendScopeChange={updateTerminalDockSendScope}
                 onTerminalDockSelectedTabIdsChange={updateTerminalDockSelectedTabIds}
                 onOpenCommandManager={openCommandManager}
+                onOpenFileTransfers={openFileTransfers}
                 profiles={workspace.profiles}
                 backgroundTabs={backgroundWorkspaceTabs}
                 onAttachBackgroundSession={attachBackgroundSession}
@@ -564,11 +580,11 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
         </main>
 
         {/* Machine info borders the terminal in the host-groups layout, so the edge frame would be a stray strip. */}
-        {!isHomeWorkspaceVisible && !isLocalTerminalWorkspace && !showHostRail && (
-          <div className="terminal-right-frame" aria-hidden="true" />
-        )}
+        <div className="workspace-left-frame" aria-hidden="true" />
+        <div className={`terminal-right-frame ${showTerminalRightFrame ? 'is-visible' : ''}`} aria-hidden="true" />
 
         <TransferCenterHost
+          showAll={activeLocalTab?.kind === 'transfers'}
           activeProfileId={activeTab?.profileId}
           activeTabId={activeTab?.id ?? null}
           activeTabStatus={activeTab?.status ?? null}

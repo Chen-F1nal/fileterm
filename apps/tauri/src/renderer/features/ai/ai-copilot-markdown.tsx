@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { isValidElement, useRef, type MouseEvent, type ReactNode } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -86,9 +87,7 @@ const markdownComponents: Components = {
         onClick={(event) => openExternalLink(event, safeHref)}
       >
         {children}
-        <span aria-hidden="true" className="material-symbols-outlined">
-          open_in_new
-        </span>
+        <MaterialIcon name="open_in_new" aria-hidden="true" className="material-symbols-outlined" />
       </a>
     )
   },

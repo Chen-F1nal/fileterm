@@ -264,6 +264,7 @@ async fn run_directory_transfer(
                 tab_id,
                 &task.direction,
                 task.session_type.as_deref(),
+                task.conflict_policy,
                 &cancel,
                 resume_requested,
                 &mut manifest,
@@ -274,8 +275,8 @@ async fn run_directory_transfer(
             )
             .await;
             match outcome {
-                Ok(DirectoryEntryAttempt::Transferred) => {
-                    manifest.files[index].status = "done".to_string();
+                Ok(outcome @ (DirectoryEntryAttempt::Transferred | DirectoryEntryAttempt::Skipped)) => {
+                    manifest.files[index].status = if matches!(outcome, DirectoryEntryAttempt::Skipped) { "skipped" } else { "done" }.to_string();
                     current_transferred = current_transferred
                         .saturating_sub(manifest.files[index].transferred_bytes)
                         .saturating_add(entry.source_identity.size);

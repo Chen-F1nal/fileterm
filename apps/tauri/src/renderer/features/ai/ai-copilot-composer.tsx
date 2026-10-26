@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { MutableRefObject } from 'react'
 import type { AiCopilotMode, AiProviderSummary, AiReasoningEffort } from '@fileterm/core'
 import { t } from '../../i18n'
@@ -94,9 +95,10 @@ export function AiCopilotComposer({
                   {isContextPreviewing ? (
                     <span className="button-spinner" />
                   ) : (
-                    <span className="material-symbols-outlined">
-                      {referenceTerminal ? 'visibility' : 'visibility_off'}
-                    </span>
+                    <MaterialIcon
+                      name={referenceTerminal ? 'visibility' : 'visibility_off'}
+                      className="material-symbols-outlined"
+                    />
                   )}
                 </span>
                 <span>{t.aiCopilotReferenceTerminal}</span>
@@ -249,9 +251,7 @@ export function AiCopilotComposer({
                   type="button"
                   onClick={() => void stop()}
                 >
-                  <span aria-hidden="true" className="material-symbols-outlined">
-                    stop
-                  </span>
+                  <MaterialIcon name="stop" aria-hidden="true" className="material-symbols-outlined" />
                 </button>
               ) : (
                 <button

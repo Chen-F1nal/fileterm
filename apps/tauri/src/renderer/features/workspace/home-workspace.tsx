@@ -1,3 +1,4 @@
+import { MaterialIcon, type MaterialIconName } from '../../components/common/material-icon/material-icon'
 import './home-workspace.css'
 import type {
   CommandFolder,
@@ -249,7 +250,7 @@ export function HomeWorkspace({
     }
   }
 
-  const updateHint =
+  const updateHint: { icon: MaterialIconName; label: string; title: string } | null =
     updateStatus?.state === 'available'
       ? {
           icon: 'system_update_alt',
@@ -294,7 +295,7 @@ export function HomeWorkspace({
             title={t.overview}
             type="button"
           >
-            <span className="material-symbols-outlined">dashboard</span>
+            <MaterialIcon name="dashboard" className="material-symbols-outlined" />
             <span>{t.overview}</span>
           </button>
           <button
@@ -304,7 +305,7 @@ export function HomeWorkspace({
             title={t.connectionManager}
             type="button"
           >
-            <span className="material-symbols-outlined">settings_ethernet</span>
+            <MaterialIcon name="settings_ethernet" className="material-symbols-outlined" />
             <span>{t.connectionManager}</span>
           </button>
           <button
@@ -324,7 +325,7 @@ export function HomeWorkspace({
             title={t.commandManager}
             type="button"
           >
-            <span className="material-symbols-outlined">terminal</span>
+            <MaterialIcon name="terminal" className="material-symbols-outlined" />
             <span>{t.commandManager}</span>
           </button>
           <button
@@ -334,7 +335,7 @@ export function HomeWorkspace({
             title={t.sshKeyManager}
             type="button"
           >
-            <span className="material-symbols-outlined">key</span>
+            <MaterialIcon name="key" className="material-symbols-outlined" />
             <span>{t.sshKeyManager}</span>
           </button>
           <button
@@ -354,7 +355,7 @@ export function HomeWorkspace({
             title={t.settings}
             type="button"
           >
-            <span className="material-symbols-outlined">settings</span>
+            <MaterialIcon name="settings" className="material-symbols-outlined" />
             <span>{t.settings}</span>
           </button>
           {/* Quick Connect sidebar button hidden — code preserved in QuickLinksPage.tsx */}
@@ -377,7 +378,7 @@ export function HomeWorkspace({
             title="GitHub"
             type="button"
           >
-            <span className="material-symbols-outlined">star</span>
+            <MaterialIcon name="star" className="material-symbols-outlined" />
             <span>GitHub</span>
           </button>
           {updateHint ? (
@@ -389,9 +390,7 @@ export function HomeWorkspace({
               title={updateHint.title}
               type="button"
             >
-              <span aria-hidden="true" className="material-symbols-outlined">
-                {updateHint.icon}
-              </span>
+              <MaterialIcon name={updateHint.icon} aria-hidden="true" className="material-symbols-outlined" />
               <span>{updateHint.label}</span>
             </button>
           ) : null}

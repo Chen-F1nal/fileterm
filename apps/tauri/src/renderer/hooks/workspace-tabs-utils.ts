@@ -187,6 +187,12 @@ export function parseStoredMainTabUiState(raw: string | null | undefined): Store
             if (!tab || typeof tab !== 'object' || typeof tab.id !== 'string' || typeof tab.title !== 'string') {
               return false
             }
+            if (tab.kind === 'transfers') {
+              return (
+                (tab.initialTabId === undefined || typeof tab.initialTabId === 'string') &&
+                (tab.initialPath === undefined || typeof tab.initialPath === 'string')
+              )
+            }
             if (tab.kind === 'home') {
               return true
             }

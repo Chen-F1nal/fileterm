@@ -1,8 +1,11 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useState } from 'react'
 import { CloseButton } from '../common/close-button'
 import { DropdownSelect } from '../common/dropdown-select'
-import { StableButtonContent } from '../common/stable-button-content'
+import { StableButtonLabel } from '../common/stable-button-content'
+import { Button } from '../../components/common/button/button'
 import { t } from '../../i18n'
+import './root-access-modal.css'
 
 const SAVED_PASSWORD_MASK = '••••••••••••'
 
@@ -62,12 +65,10 @@ export function RootAccessModal({
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-card root-access-modal">
+      <div className="modal-card root-access-modal root-access-entry-modal">
         <div className="root-access-modal__header">
           <span className="root-access-modal__title">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              admin_panel_settings
-            </span>
+            <MaterialIcon name="admin_panel_settings" aria-hidden="true" className="material-symbols-outlined" />
             <span>{t.fileRootAccessTitle}</span>
           </span>
           <CloseButton className="root-access-modal__close" disabled={isSubmitting} onClick={onClose} />
@@ -144,18 +145,19 @@ export function RootAccessModal({
         </div>
 
         <div className="form-actions root-access-modal__actions">
-          <button className="flat-button" disabled={isSubmitting} onClick={onClose} type="button">
+          <Button variant="secondary" disabled={isSubmitting} onClick={onClose} type="button">
             {t.cancel}
-          </button>
-          <button
-            aria-busy={isSubmitting}
-            className="primary-button file-action-submit-button"
+          </Button>
+          <Button
+            loading={isSubmitting}
+            reserveLoadingSpace
+            variant="primary"
             disabled={isSubmitting}
             onClick={submit}
             type="button"
           >
-            <StableButtonContent busy={isSubmitting} label={t.fileRootAccessConfirm} />
-          </button>
+            <StableButtonLabel label={t.fileRootAccessConfirm} />
+          </Button>
         </div>
       </div>
     </div>

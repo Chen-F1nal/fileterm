@@ -646,12 +646,18 @@
 }
 
 :root[data-theme*='light'] .pane-path-bar input:hover,
-:root[data-theme*='light'] .pane-path-bar input:focus,
-:root[data-theme*='light'] .pane-filter-input-wrapper:hover,
-:root[data-theme*='light'] .pane-filter-input-wrapper:focus-within {
+:root[data-theme*='light'] .pane-filter-input-wrapper:hover {
   border-color: var(--border-light);
   background: var(--surface-hover);
   color: var(--text-main);
+}
+
+:root[data-theme*='light'] .pane-path-bar input:focus,
+:root[data-theme*='light'] .pane-filter-input-wrapper:focus-within {
+  background: var(--surface-hover);
+  color: var(--text-main);
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
 }
 
 :root[data-theme*='light'] .pane-path-bar span {
@@ -945,11 +951,15 @@
   color: var(--text-main);
 }
 
-:root[data-theme*='light'] .command-form-standalone-page input:not([type='checkbox']):focus,
+:root[data-theme*='light'] .command-form-standalone-page input:not([type='checkbox']):focus {
+  box-shadow: var(--input-focus-shadow);
+  background: var(--surface-card);
+  outline: none;
+}
+
 :root[data-theme*='light'] .command-form-standalone-page select:focus,
 :root[data-theme*='light'] .command-form-standalone-page textarea:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-secondary) 15%, transparent);
+  box-shadow: var(--input-focus-shadow);
   background: var(--surface-card);
   outline: none;
 }
