@@ -38,9 +38,9 @@
     - `network/`：连接与终端（终端模拟、局域网、DNS、云同步等）
     - `security/`：安全与权限（锁、密钥、盾牌、指纹、可见性等）
     - `system/`：系统与偏好（设置、调色板、语言、更新、日志等）
-- **矢量就地化与样式规范**：
-  - 所有 UI SVG 统一设置 `fill="currentColor"`，使其自然跟随父级 CSS 语义文字色、`--folder-accent` 或交互伪类变色。
-  - 图标组件优先使用离线预置的 `<AppIcon />`，禁止新增 `<span className="material-symbols-outlined">` 等依赖外部 WebFont 的实现，彻底消除 FOUT 连字字符闪烁。
+- **本地 SVG 规则**：应用自身的静态 UI 图标必须来自仓库内独立 SVG 文件，存放在 `apps/tauri/src/renderer/assets/icons/<功能域>/`；优先复用 `<AppIcon />` 或 `<MaterialIcon />` 已注册的素材。缺少素材时新增 SVG 并接入对应注册表，保留原有图形与显示尺寸。
+  - 禁止在 TSX/CSS 中直接画静态图标路径、用字符或 emoji 代替，也禁止用 WebFont、网络/CDN 作为图标来源。SVG 应继承 `currentColor`；有意使用多色或固定品牌色的现有素材保留原设计。动态图表和第三方编辑器内部图标不属于静态 UI 图标。
+  - 操作系统 Dock、任务栏、启动器和托盘图标仍按应用身份资产管理，不放入 renderer UI 图标目录。
 
 ### 滚动区域
 

@@ -1,5 +1,5 @@
 ---
-name: multiplatform-desktop-skill
+name: fileterm-multiplatform-desktop
 description: 修改 FileTerm 的平台差异、原生窗口/菜单、终端快捷键、手势或字体度量时使用。
 ---
 
@@ -19,7 +19,7 @@ description: 修改 FileTerm 的平台差异、原生窗口/菜单、终端快�
 ## 按需细节
 
 - 窗口、菜单、复制粘贴、选择、快捷键、pinch 或字体变更：读 [窗口与终端交互](references/windows-and-terminal.md) 对应章节。
-- UI 控件和 CSS：使用 [通用组件 skill](../common-components-skill/SKILL.md)，不另立目录或颜色规范。
+- UI 控件和 CSS：使用 [通用组件 skill](../fileterm-common-components/SKILL.md)，不另立目录或颜色规范。
 - Dock/tray、CWD 或远端平台探测：读 [平台与协议约束](../../../docs/quality/agent-platform-contracts.md)。
 - macOS 标题栏几何、Windows 建窗线程及启动显窗行为：按需查 `docs/design.md` 与 `docs/architecture.md` 对应章节，保留原生校准算法。
 

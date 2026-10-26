@@ -18,8 +18,8 @@ FileTerm 是 Rust + Tauri + React + TypeScript 桌面远程工作台。仅维护
 | 任务                                                           | 入口                                                                                                               |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | 跨 Rust / bridge / renderer / packages 层，或改变服务边界      | [架构](docs/architecture.md) 与相关 [进行中计划](docs/plans/active/)                                               |
-| React/TSX、组件 CSS、主题、控件或独立窗口 UI                   | [通用组件 skill](.agents/skills/common-components-skill/SKILL.md)；视觉设计另见 [设计规范](docs/design.md)         |
-| 平台差异、原生窗口/菜单、快捷键、终端手势/字体                 | [跨平台 skill](.agents/skills/multiplatform-desktop-skill/SKILL.md)                                                |
+| React/TSX、组件 CSS、主题、控件或独立窗口 UI                   | [通用组件 skill](.agents/skills/fileterm-common-components/SKILL.md)；视觉设计另见 [设计规范](docs/design.md)      |
+| 平台差异、原生窗口/菜单、快捷键、终端手势/字体                 | [跨平台 skill](.agents/skills/fileterm-multiplatform-desktop/SKILL.md)                                             |
 | FileTerm 应用图标、Dock、任务栏、Linux 启动器、tray 与尺寸问题 | [应用图标 skill](.agents/skills/fileterm-app-icons/SKILL.md)；[平台约束](docs/quality/agent-platform-contracts.md) |
 | SSH 平台探测、CWD、sudo/root、凭据与旧 Comware                 | [平台与协议约束](docs/quality/agent-platform-contracts.md)                                                         |
 | 运行或截图验证桌面 UI                                          | [开发版识别与预览](docs/quality/desktop-ui-preview.md)                                                             |

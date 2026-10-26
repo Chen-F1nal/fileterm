@@ -1,6 +1,6 @@
 ---
-name: common-components-skill
-description: 修改 FileTerm renderer 的 React/TSX、组件 CSS、主题 token 或公共控件时使用；维护组件复用、语义颜色和 CSS contract。
+name: fileterm-common-components
+description: 修改 FileTerm renderer 的 React/TSX、组件 CSS、主题 token、公共控件或 UI 图标时使用；统一组件复用、主题变量和本地 SVG 规则。
 ---
 
 # FileTerm 通用组件与主题
@@ -22,14 +22,14 @@ description: 修改 FileTerm renderer 的 React/TSX、组件 CSS、主题 token 
 
 - 修改 token、自定义主题、颜色迁移、首屏主题或编辑器主题时，读 [主题实现与迁移](references/theme-contract.md) 对应章节。
 - 修改具体控件、图标、选择状态或系统指标时，读 [公共控件与资产约束](references/controls.md) 对应条目。
-- 原生窗口、平台差异与快捷键另读 [跨平台 skill](../multiplatform-desktop-skill/SKILL.md)。
+- 原生窗口、平台差异与快捷键另读 [跨平台 skill](../fileterm-multiplatform-desktop/SKILL.md)。
 
 ## 验证与完成
 
 组件/CSS 改动前后运行（仓库根目录）：
 
 ```bash
-bash .agents/skills/common-components-skill/scripts/check-css-contract.sh
+bash .agents/skills/fileterm-common-components/scripts/check-css-contract.sh
 ```
 
 对比已有债务与本次新增问题，不为通过检查顺手重写无关样式。检查器全量检查 semantic.css 和公共组件；feature CSS 只阻塞相对 `CSS_CONTRACT_BASE`（默认 `origin/main`）的 merge-base 变更文件及未跟踪文件，避免历史债务阻塞。需要其他基准时设置该环境变量。它也检查十六进制、颜色函数和 CSS 命名颜色；四个主题文件检查是否缺失。feature TSX 行内颜色、原生 select/confirm 和自定义主题映射需另外检查。
