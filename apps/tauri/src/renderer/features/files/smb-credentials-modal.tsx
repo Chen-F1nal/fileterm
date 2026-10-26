@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useState } from 'react'
 import { CloseButton } from '../common/close-button'
 import { StableButtonContent } from '../common/stable-button-content'
@@ -39,9 +40,7 @@ export function SmbCredentialsModal({
       <div className="modal-card ssh-interaction-modal network-share-credentials-modal">
         <div className="network-share-modal__header">
           <span className="network-share-modal__title">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              folder_shared
-            </span>
+            <MaterialIcon name="folder_shared" aria-hidden="true" className="material-symbols-outlined" />
             <span>{t.networkShareCredentialsTitle}</span>
           </span>
           <CloseButton className="network-share-modal__close" disabled={isSubmitting} onClick={onCancel} />

@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { RefObject } from 'react'
 import type { AiConversation, AiMessage, AiToolActivity, ActionApprovalRequest } from '@fileterm/core'
 import { t } from '../../i18n'
@@ -44,9 +45,7 @@ export function AiCopilotMessageList({
       >
         {!conversation?.messages.length ? (
           <section className="ai-copilot-empty-chat">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              forum
-            </span>
+            <MaterialIcon name="forum" aria-hidden="true" className="material-symbols-outlined" />
             <h2>{t.aiCopilotWelcomeTitle}</h2>
             <p>{t.aiCopilotL0Boundary}</p>
           </section>
@@ -96,9 +95,7 @@ export function AiCopilotMessageList({
         )}
         {isStreaming ? (
           <div className="ai-copilot-streaming-indicator">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              more_horiz
-            </span>
+            <MaterialIcon name="more_horiz" aria-hidden="true" className="material-symbols-outlined" />
             {t.aiCopilotThinking}
           </div>
         ) : null}
@@ -107,9 +104,7 @@ export function AiCopilotMessageList({
             <span>{errorMessage}</span>
             {canRetry ? (
               <button disabled={isStreaming} type="button" onClick={() => void onRetryLastRequest()}>
-                <span aria-hidden="true" className="material-symbols-outlined">
-                  refresh
-                </span>
+                <MaterialIcon name="refresh" aria-hidden="true" className="material-symbols-outlined" />
                 {t.aiCopilotRetry}
               </button>
             ) : null}

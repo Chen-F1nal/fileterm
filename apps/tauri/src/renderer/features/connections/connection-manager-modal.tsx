@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { ConnectionProfile, ConnectionFolder } from '@fileterm/core'
 import { useState, useMemo, useRef, useEffect, type DragEvent } from 'react'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
@@ -579,7 +580,7 @@ export function ConnectionManagerModal({
     >
       <div className="connection-manager-header" data-tauri-drag-region={standalone ? 'deep' : undefined}>
         <span className="connection-manager-title">
-          <span className="material-symbols-outlined">settings_ethernet</span>
+          <MaterialIcon name="settings_ethernet" className="material-symbols-outlined" />
           <span>{t.connectionManager}</span>
         </span>
         <label className="connection-manager-search">
@@ -683,7 +684,7 @@ export function ConnectionManagerModal({
                       setIsActionsExpanded(false)
                     }}
                   >
-                    <span className="material-symbols-outlined">upload_file</span>
+                    <MaterialIcon name="upload_file" className="material-symbols-outlined" />
                     <span>{t.importConnections}</span>
                   </button>
                   <button
@@ -694,7 +695,7 @@ export function ConnectionManagerModal({
                       setIsActionsExpanded(false)
                     }}
                   >
-                    <span className="material-symbols-outlined">folder_open</span>
+                    <MaterialIcon name="folder_open" className="material-symbols-outlined" />
                     <span>{t.importFolder}</span>
                   </button>
                 </>
@@ -708,7 +709,7 @@ export function ConnectionManagerModal({
                     setIsActionsExpanded(false)
                   }}
                 >
-                  <span className="material-symbols-outlined">download</span>
+                  <MaterialIcon name="download" className="material-symbols-outlined" />
                   <span>{t.exportConnections}</span>
                 </button>
               ) : null}

@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { CommandFolder, CommandTemplate, CommandTemplateInput } from '@fileterm/core'
 import { t } from '../../i18n'
@@ -42,7 +43,7 @@ function CommandDialogShell({
     <div className="modal-card command-dialog command-editor-page" onClick={(event) => event.stopPropagation()}>
       <div className="connection-manager-header">
         <span className="connection-manager-title">
-          <span className="material-symbols-outlined">terminal</span>
+          <MaterialIcon name="terminal" className="material-symbols-outlined" />
           <span>{title}</span>
         </span>
         <div className="connection-manager-header-actions">
@@ -220,7 +221,7 @@ export function CommandEditorModal({
         <div className="modal-card command-form-standalone">
           <div className="connection-manager-header" data-tauri-drag-region="deep">
             <span className="connection-manager-title">
-              <span className="material-symbols-outlined">terminal</span>
+              <MaterialIcon name="terminal" className="material-symbols-outlined" />
               <span>{title}</span>
             </span>
             <div className="connection-manager-header-actions">

@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type {
   AiCopilotMode,
@@ -427,9 +428,7 @@ export function AiCopilotPanel({
       >
         {isLoading ? (
           <div className="ai-copilot-loading" role="status">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              progress_activity
-            </span>
+            <MaterialIcon name="progress_activity" aria-hidden="true" className="material-symbols-outlined" />
             {t.aiCopilotLoading}
           </div>
         ) : !canChat ? (

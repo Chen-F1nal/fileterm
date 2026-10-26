@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useState, useMemo, useRef, useEffect, type DragEvent } from 'react'
 import type { CommandFolder, CommandTemplate, CommandTemplateInput } from '@fileterm/core'
 import { ConfirmActionDialog } from '../common/confirm-action-dialog'
@@ -591,7 +592,7 @@ export function CommandManagerModal({
     >
       <div className="connection-manager-header" data-tauri-drag-region={standalone ? 'deep' : undefined}>
         <span className="connection-manager-title">
-          <span className="material-symbols-outlined">terminal</span>
+          <MaterialIcon name="terminal" className="material-symbols-outlined" />
           <span>{t.commandManager}</span>
         </span>
         <label className="connection-manager-search">

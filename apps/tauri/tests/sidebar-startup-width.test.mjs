@@ -191,6 +191,7 @@ function renderWorkspace({
         return { useState: (value) => [value, () => {}], useEffect() {} }
       }
       if (name.endsWith('/use-host-navigation')) return { useHostNavigation: () => ({ groups: [] }) }
+      if (name.endsWith('/use-workspace-tab-shortcuts')) return { useWorkspaceTabShortcuts() {} }
       if (name.endsWith('/shared-monitoring')) return { resolveMonitoringSource: () => ({ peers: [] }) }
       if (name.endsWith('/app-shell-utils')) return utils
       if (name.endsWith('/i18n')) return { t: {} }

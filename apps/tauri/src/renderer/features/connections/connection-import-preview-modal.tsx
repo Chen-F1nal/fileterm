@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useMemo, useRef, useState } from 'react'
 import type { ConnectionImportConflictStrategy, ConnectionImportPlan } from '@fileterm/core'
 import { formatMessage, t } from '../../i18n'
@@ -49,7 +50,7 @@ export function ConnectionImportPreviewModal({
       <section className="modal-card connection-import-preview" onClick={(event) => event.stopPropagation()}>
         <header className="connection-manager-header">
           <span className="connection-manager-title">
-            <span className="material-symbols-outlined">preview</span>
+            <MaterialIcon name="preview" className="material-symbols-outlined" />
             <span>{t.connectionImportPreviewTitle}</span>
           </span>
           <CloseButton disabled={isSubmitting} onClick={onClose} />

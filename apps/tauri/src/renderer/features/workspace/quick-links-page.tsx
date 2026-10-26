@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { ConnectionProfile, ConnectionFolder } from '@fileterm/core'
 import { useState, useMemo } from 'react'
 import { t } from '../../i18n'
@@ -63,13 +64,14 @@ export function QuickLinksPage({
           tabIndex={0}
         >
           <div className={`col-icon ${isFolder ? 'folder' : 'profile'}`}>
-            <span className="material-symbols-outlined">{isFolder ? 'folder' : 'dns'}</span>
+            <MaterialIcon name={isFolder ? 'folder' : 'dns'} className="material-symbols-outlined" />
           </div>
           <div className="col-name" style={{ paddingLeft: `${depth * 20}px` }}>
             {isFolder && (
-              <span className={`folder-chevron material-symbols-outlined ${isExpanded ? 'expanded' : ''}`}>
-                chevron_right
-              </span>
+              <MaterialIcon
+                name="chevron_right"
+                className={`folder-chevron material-symbols-outlined ${isExpanded ? 'expanded' : ''}`}
+              />
             )}
             <strong>{node.name}</strong>
           </div>
@@ -91,7 +93,7 @@ export function QuickLinksPage({
               }}
               type="button"
             >
-              <span className="material-symbols-outlined">{isFolder ? 'arrow_forward' : 'terminal'}</span>
+              <MaterialIcon name={isFolder ? 'arrow_forward' : 'terminal'} className="material-symbols-outlined" />
             </button>
           </div>
         </div>
@@ -101,7 +103,7 @@ export function QuickLinksPage({
             {node.children.length === 0 && (
               <div className="flat-grid-row empty-folder-row">
                 <div className="col-icon folder">
-                  <span className="material-symbols-outlined">folder</span>
+                  <MaterialIcon name="folder" className="material-symbols-outlined" />
                 </div>
                 <div className="col-name" style={{ paddingLeft: `${(depth + 1) * 20}px` }}>
                   <span>{t.emptyFolder}</span>
@@ -129,7 +131,7 @@ export function QuickLinksPage({
           <p className="header-subtitle">{t.quickLinksDescription}</p>
         </div>
         <button className="btn-new-connection" onClick={onOpenNewConnection} type="button">
-          <span className="material-symbols-outlined">add</span>
+          <MaterialIcon name="add" className="material-symbols-outlined" />
           <span>{t.newConnection}</span>
         </button>
       </header>

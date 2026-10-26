@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { AiConversation, AiConversationSummary } from '@fileterm/core'
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
@@ -37,16 +38,12 @@ export function AiCopilotConversationList({
           type="button"
           onClick={openNewConversation}
         >
-          <span aria-hidden="true" className="material-symbols-outlined">
-            add
-          </span>
+          <MaterialIcon name="add" aria-hidden="true" className="material-symbols-outlined" />
           {t.aiCopilotNewChat}
         </button>
       </header>
       <label className="ai-copilot-conversation-search">
-        <span aria-hidden="true" className="material-symbols-outlined">
-          search
-        </span>
+        <MaterialIcon name="search" aria-hidden="true" className="material-symbols-outlined" />
         <span className="ai-copilot-visually-hidden">{t.aiCopilotHistorySearch}</span>
         <input
           aria-label={t.aiCopilotHistorySearch}
@@ -75,9 +72,7 @@ export function AiCopilotConversationList({
                   void loadConversation(item.id)
                 }}
               >
-                <span aria-hidden="true" className="material-symbols-outlined">
-                  forum
-                </span>
+                <MaterialIcon name="forum" aria-hidden="true" className="material-symbols-outlined" />
                 <span className="ai-copilot-conversation-list-item-copy">
                   <strong>{item.title}</strong>
                   <small>
@@ -86,9 +81,7 @@ export function AiCopilotConversationList({
                       : t.aiCopilotConversationNoMessages}
                   </small>
                 </span>
-                <span aria-hidden="true" className="material-symbols-outlined">
-                  chevron_right
-                </span>
+                <MaterialIcon name="chevron_right" aria-hidden="true" className="material-symbols-outlined" />
               </button>
               <button
                 aria-label={`${t.aiCopilotDeleteConversation}: ${item.title}`}
@@ -104,9 +97,7 @@ export function AiCopilotConversationList({
           ))
         ) : (
           <div className="ai-copilot-conversation-list-empty">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              forum
-            </span>
+            <MaterialIcon name="forum" aria-hidden="true" className="material-symbols-outlined" />
             <strong>{t.aiCopilotConversationListEmpty}</strong>
             <p>{t.aiCopilotConversationListDescription}</p>
           </div>

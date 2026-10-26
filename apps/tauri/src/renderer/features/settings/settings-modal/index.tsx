@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../../components/common/material-icon/material-icon'
 import type { McpAgentClientStatus, SavedTheme, ThemeConfig } from '@fileterm/core'
 import type { ThemeMode } from '../../../app/theme-config'
 import { t } from '../../../i18n'
@@ -93,7 +94,7 @@ export function SettingsModal({
       >
         <div className="connection-manager-header">
           <span className="connection-manager-title">
-            <span className="material-symbols-outlined">settings</span>
+            <MaterialIcon name="settings" className="material-symbols-outlined" />
             <span>{t.settings}</span>
           </span>
           <label className="connection-manager-search settings-search">
@@ -125,7 +126,7 @@ export function SettingsModal({
                   {item.appIcon ? (
                     <AppIcon name={item.appIcon} size={17} />
                   ) : (
-                    <span className="material-symbols-outlined">{item.materialIcon}</span>
+                    <MaterialIcon name={item.materialIcon} className="material-symbols-outlined" />
                   )}
                 </span>
                 <span className="connection-manager-sidebar-label">{t[item.labelKey]}</span>

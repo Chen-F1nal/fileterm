@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FileTermDesktopApi } from '@fileterm/core'
 import { CloseButton } from '../common/close-button'
+import { AppIcon } from '../common/app-icon'
 import { ContextMenu, type ContextMenuEntry } from '../common/context-menu'
 import { t } from '../../i18n'
 import { APP_EVENT, dispatchAppEvent } from '../../lib/app-events'
@@ -190,9 +191,7 @@ export function WindowMenubar({
             void desktopApi?.minimizeCurrentWindow()
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10">
-            <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
+          <AppIcon name="window-minimize" size={10} strokeWidth={1.5} />
         </button>
         <button
           aria-label={isMaximized ? t.windowRestore : t.windowMaximize}
@@ -201,20 +200,7 @@ export function WindowMenubar({
             void desktopApi?.toggleMaximizeCurrentWindow()
           }}
         >
-          {isMaximized ? (
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <path
-                d="M1.5,3.5 L6.5,3.5 L6.5,8.5 L1.5,8.5 Z M3.5,3.5 L3.5,1.5 L8.5,1.5 L8.5,6.5 L6.5,6.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              />
-            </svg>
-          ) : (
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          )}
+          <AppIcon name={isMaximized ? 'window-restore' : 'window-maximize'} size={10} strokeWidth={1.5} />
         </button>
         <CloseButton
           aria-label={t.windowClose}

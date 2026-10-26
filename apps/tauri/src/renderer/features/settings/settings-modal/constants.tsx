@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { MaterialIconName } from '../../../components/common/material-icon/material-icon'
 import {
   createCodexThemeConfig,
   createDefaultThemeConfig,
@@ -44,9 +45,7 @@ export type AiFeedback = {
 export type SettingsSidebarItem = {
   tab: SettingsTab
   labelKey: keyof LocaleMessages
-  materialIcon?: string
-  appIcon?: AppIconName
-}
+} & ({ materialIcon: MaterialIconName; appIcon?: never } | { appIcon: AppIconName; materialIcon?: never })
 
 export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
   { tab: 'interface', labelKey: 'interfaceSettings', materialIcon: 'palette' },

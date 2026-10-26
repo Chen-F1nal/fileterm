@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import {
   Fragment,
   type DragEvent,
@@ -127,9 +128,7 @@ export function SshKeyManagerMain({
     <>
       <header className="connection-manager-header ssh-key-manager-header">
         <span className="connection-manager-title ssh-key-manager-title">
-          <span aria-hidden="true" className="material-symbols-outlined">
-            key
-          </span>
+          <MaterialIcon name="key" aria-hidden="true" className="material-symbols-outlined" />
           <span>{t.sshKeyManager}</span>
         </span>
         <label className="connection-manager-search ssh-key-manager-search">
@@ -322,9 +321,7 @@ export function SshKeyManagerMain({
               {activeFolderId !== 'all' ? visibleKeys.map((key) => renderKeyRow(key)) : null}
               {!loading && !hasVisibleRows ? (
                 <div className="connection-manager-empty ssh-key-manager-empty">
-                  <span aria-hidden="true" className="material-symbols-outlined">
-                    key_off
-                  </span>
+                  <MaterialIcon name="key_off" aria-hidden="true" className="material-symbols-outlined" />
                   <strong>{query ? t.noMatchingKeys : t.noKeysImported}</strong>
                   <span>{query ? t.tryAnotherSearch : t.noKeysHint}</span>
                 </div>

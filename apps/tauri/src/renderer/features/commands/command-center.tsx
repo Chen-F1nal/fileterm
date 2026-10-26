@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import type {
   CommandExecutionOptions,
@@ -469,9 +470,7 @@ export function CommandCenter({
                     type="button"
                     onClick={() => setActiveFolderId(TEMPORARY_EDITOR_ID)}
                   >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      edit_note
-                    </span>
+                    <MaterialIcon name="edit_note" className="material-symbols-outlined" aria-hidden="true" />
                     <span>{t.commandTemporaryEditor}</span>
                   </button>
                   <button
@@ -513,9 +512,7 @@ export function CommandCenter({
                   <div className="command-temporary-history">
                     <div className="command-temporary-history-head">
                       <div className="command-temporary-history-title">
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          history
-                        </span>
+                        <MaterialIcon name="history" className="material-symbols-outlined" aria-hidden="true" />
                         <strong>{t.history}</strong>
                         <small>{temporaryHistory.length}</small>
                       </div>
@@ -527,9 +524,7 @@ export function CommandCenter({
                           title={t.clear}
                           onClick={handleTemporaryHistoryClear}
                         >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            delete_sweep
-                          </span>
+                          <MaterialIcon name="delete_sweep" className="material-symbols-outlined" aria-hidden="true" />
                           <span>{t.clear}</span>
                         </button>
                         <button
@@ -539,9 +534,7 @@ export function CommandCenter({
                           title={t.commandTemporaryHistoryNew}
                           onClick={handleTemporaryHistoryNew}
                         >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            add
-                          </span>
+                          <MaterialIcon name="add" className="material-symbols-outlined" aria-hidden="true" />
                           <span>{t.commandTemporaryHistoryNew}</span>
                         </button>
                       </div>
@@ -584,9 +577,7 @@ export function CommandCenter({
                         })
                       ) : (
                         <div className="command-temporary-history-empty">
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            history
-                          </span>
+                          <MaterialIcon name="history" className="material-symbols-outlined" aria-hidden="true" />
                           <span>{t.commandTemporaryHistoryEmpty}</span>
                         </div>
                       )}

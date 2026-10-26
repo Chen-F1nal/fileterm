@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import type { ConnectionFormMode, CreateProfileInput, FtpSecurityMode, SshConnectionDefaults } from '@fileterm/core'
 import { t } from '../../i18n'
 import { AppIcon } from '../common/app-icon'
@@ -252,9 +253,11 @@ export function ConnectionSshAuthSection({
         ) : null}
         {form.type === 'ssh' && mode === 'edit' && form.trustedHostFingerprint ? (
           <div className="span-2 saved-fingerprint-card">
-            <span aria-hidden="true" className="material-symbols-outlined saved-fingerprint-card__icon">
-              fingerprint
-            </span>
+            <MaterialIcon
+              name="fingerprint"
+              aria-hidden="true"
+              className="material-symbols-outlined saved-fingerprint-card__icon"
+            />
             <div className="saved-fingerprint-card__content">
               <strong>{t.savedHostFingerprint}</strong>
               <p>{t.clearSavedFingerprintHint}</p>
@@ -264,9 +267,7 @@ export function ConnectionSshAuthSection({
               onClick={onClearHostFingerprint}
               type="button"
             >
-              <span aria-hidden="true" className="material-symbols-outlined">
-                restart_alt
-              </span>
+              <MaterialIcon name="restart_alt" aria-hidden="true" className="material-symbols-outlined" />
               {t.clearSavedFingerprint}
             </button>
           </div>

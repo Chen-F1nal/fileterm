@@ -12,6 +12,7 @@ import type { AppViewModel } from './app-view-model'
 import { WindowMenubar } from './window-menubar'
 import { HostRail } from './host-rail'
 import { useHostNavigation } from './use-host-navigation'
+import { useWorkspaceTabShortcuts } from './use-workspace-tab-shortcuts'
 import { DEFAULT_SIDEBAR_WIDTH, STATUS_MESSAGE_TIMEOUT_MS } from '../../app/app-shell-utils'
 import { t, setLocale } from '../../i18n'
 import { resolveSshJumpRoute } from '../../app/ssh-jump-route'
@@ -231,6 +232,16 @@ export function AppMainWorkspace({ model }: { model: AppViewModel }) {
     onActivateHome: activateHomeTab,
     onActivateSession: activateSession,
     onAddHomeTab: addHomeTab
+  })
+  useWorkspaceTabShortcuts({
+    tabs: usesHostGroups ? hostNavigation.activeEntries : orderedTabs,
+    activeKey: effectiveActiveLocalTabId
+      ? `home:${effectiveActiveLocalTabId}`
+      : visibleActiveSessionTabId
+        ? `session:${visibleActiveSessionTabId}`
+        : null,
+    onActivateHome: activateHomeTab,
+    onActivateSession: activateSession
   })
   // Sessions on one machine share a collector, so machine info shows the collecting tab's samples.
   const monitoringSource = resolveMonitoringSource(activeTab?.id ?? null, workspace.sessions)

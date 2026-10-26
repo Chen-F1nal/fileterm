@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../../../components/common/material-icon/material-icon'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { FileTermDesktopApi, OverviewSectionId } from '@fileterm/core'
 import { managerDropClass } from '../../../common/manager-drag'
@@ -101,13 +102,12 @@ export function OverviewContentSettingsSection() {
                 }
               }}
             >
-              <span
+              <MaterialIcon
+                name="drag_indicator"
                 aria-label={t.overviewDragToReorder}
                 className="material-symbols-outlined overview-preference-drag-handle"
                 title={t.overviewDragToReorder}
-              >
-                drag_indicator
-              </span>
+              />
               <span className="overview-preference-copy">
                 <strong>{sectionMeta.title}</strong>
                 <p>{sectionMeta.hint}</p>

@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useMemo, useState } from 'react'
 import type { PermissionChangeOptions } from '@fileterm/core'
 import { AppIcon } from '../common/app-icon'
@@ -58,9 +59,7 @@ export function FilePermissionModal({
       <div className="modal-card file-permission-dialog">
         <div className="file-permission-dialog__header">
           <span className="file-permission-dialog__title">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              lock
-            </span>
+            <MaterialIcon name="lock" aria-hidden="true" className="material-symbols-outlined" />
             <span>{t.permissionDialogTitle}</span>
           </span>
           <CloseButton className="file-permission-dialog__close" disabled={isSubmitting} onClick={onClose} />

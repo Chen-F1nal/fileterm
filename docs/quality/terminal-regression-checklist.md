@@ -47,6 +47,8 @@ sudo nano /opt/docker/frpc/frpc.toml
 
 - `nano` 界面能正常出现
 - 底部快捷键栏完整可见
+- 标签切换：三平台 `Ctrl+Tab` / `Ctrl+Shift+Tab` 按显示顺序循环；Windows/Linux 支持 `Ctrl+PgDn/PgUp`，macOS 支持 `⌘⌥→/←`。Windows/Linux `Ctrl+1…8`、macOS `⌘1…8` 跳到指定位置，`Ctrl+9` / `⌘9` 跳到最后一页。主机分组模式只切当前组内标签。
+- 在终端和输入框聚焦时验证上述快捷键只切换一次、不向远端发送字符；连续使用组合键不误触发双击 Ctrl/Cmd 切换输入焦点。单独双击 Ctrl/Cmd 仍正常；弹窗、锁屏及输入法组合期间不切换标签。
 - 输入、保存、退出正常
 - 不出现整屏黑底只剩光标块的情况
 

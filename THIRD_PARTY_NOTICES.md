@@ -74,14 +74,15 @@ The bundled fonts and icon fonts below remain under their own licenses.
 - Source: https://github.com/google/fonts/tree/main/ofl/notosanssc
 - Packaged license: `licenses/noto-sans-sc/OFL.txt`
 
-## Bundled icon fonts
+## Bundled UI icon artwork and editor icon fonts
 
 ### Material Symbols Outlined
 
-- Files: `apps/tauri/src/renderer/assets/fonts/material-symbols/*`
+- Files: `apps/tauri/src/renderer/assets/icons/*/material-*.svg`
 - Copyright: Google LLC
 - License: Apache License 2.0
 - Source: https://github.com/google/material-design-icons
+- Changes: FileTerm extracted the used glyph outlines from the previously bundled static 400-weight font into individual SVG files, preserving the original outlines and font baseline. The SVG files replace the application's icon font dependency.
 - Packaged license: `licenses/material-symbols/LICENSE.txt`
 
 ### Codicons (via Monaco Editor)
@@ -95,8 +96,8 @@ The bundled fonts and icon fonts below remain under their own licenses.
 - Changes: FileTerm distributes the font from the installed Monaco Editor package without modifying its bytes; Vite changes only the output filename.
 - Monaco Editor code is MIT-licensed. Its license and third-party notices are included at `licenses/monaco-editor/LICENSE` and `licenses/monaco-editor/ThirdPartyNotices.txt`.
 
-Material Symbols are bundled as static weight instances. Their Apache 2.0 license
-is retained; FileTerm's MIT license does not replace it. The OFL font files also
+Material Symbols artwork retains its Apache 2.0 license; FileTerm's MIT license
+does not replace it. The OFL font files also
 retain their original copyright and license, including Noto Sans SC's Reserved
 Font Name notice. A build asset hash check verifies that packaging does not
 modify these checked-in fonts.

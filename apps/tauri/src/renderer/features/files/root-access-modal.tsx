@@ -1,3 +1,4 @@
+import { MaterialIcon } from '../../components/common/material-icon/material-icon'
 import { useEffect, useState } from 'react'
 import { CloseButton } from '../common/close-button'
 import { DropdownSelect } from '../common/dropdown-select'
@@ -65,9 +66,7 @@ export function RootAccessModal({
       <div className="modal-card root-access-modal">
         <div className="root-access-modal__header">
           <span className="root-access-modal__title">
-            <span aria-hidden="true" className="material-symbols-outlined">
-              admin_panel_settings
-            </span>
+            <MaterialIcon name="admin_panel_settings" aria-hidden="true" className="material-symbols-outlined" />
             <span>{t.fileRootAccessTitle}</span>
           </span>
           <CloseButton className="root-access-modal__close" disabled={isSubmitting} onClick={onClose} />
