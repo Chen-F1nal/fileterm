@@ -125,6 +125,18 @@ async fn open_session_hop(
         keepalive_max: keepalive.max_misses,
         ..build_ssh_algorithm_config(legacy_algorithms).map_err(|error| error.to_string())?
     };
+    crate::services::logging::session(
+        app,
+        "INFO",
+        "ssh",
+        tab_id,
+        format!(
+            "SSH algorithm policy legacy_algorithms={legacy_algorithms} gex_min={} gex_preferred={} gex_max={} (Comware SHA-1 may use a different preferred size)",
+            config.gex.min_group_size(),
+            config.gex.preferred_group_size(),
+            config.gex.max_group_size(),
+        ),
+    );
     let config = Arc::new(config);
 
     let remote_sshid = Arc::new(StdMutex::new(None));
